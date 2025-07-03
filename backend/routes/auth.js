@@ -242,6 +242,7 @@ router.post('/login', async (req, res) => {
     const normalizedEmail = email.trim().toLowerCase();
 
     // Only use database authentication - no mock data
+    const mockUsers = {
       'admin@dfashion.com': {
         id: '3',
         fullName: 'Admin User',
