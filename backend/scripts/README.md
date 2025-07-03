@@ -127,13 +127,13 @@ db.orders.findOne()
 ### 2. Test API Endpoints
 ```bash
 # Get all products
-curl http://localhost:5000/api/products
+curl http://localhost:3001/api/products
 
 # Get specific product
-curl http://localhost:5000/api/products/PRODUCT_ID
+curl http://localhost:3001/api/products/PRODUCT_ID
 
 # Get orders (if you have order API endpoints)
-curl http://localhost:5000/api/orders
+curl http://localhost:3001/api/orders
 ```
 
 ### 3. Verify Relationships

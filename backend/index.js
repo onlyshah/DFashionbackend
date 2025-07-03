@@ -49,114 +49,91 @@ app.use(cors({
             return callback(null, true);
         }
 
-        // Check allowed origins
-        if (allowedOrigins.includes(origin)) {
+        // Check if the origin is in the allowed list
+        if (allowedOrigins.indexOf(origin) !== -1) {
             return callback(null, true);
         }
 
-        // For development, allow localhost with any port
-        if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('10.0.2.2')) {
+        // Allow any localhost origin for development
+        if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
             return callback(null, true);
         }
 
-        // For development, allow all origins
-        console.log('CORS: Allowing origin:', origin);
-        return callback(null, true);
+        // Allow any IP address for mobile development
+        if (/^http:\/\/\d+\.\d+\.\d+\.\d+/.test(origin)) {
+            return callback(null, true);
+        }
+
+        console.log('❌ CORS blocked origin:', origin);
+        const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+        return callback(new Error(msg), false);
     },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+    exposedHeaders: ['Content-Range', 'X-Content-Range']
 }));
 
-// Import models for direct operations
+// Security middleware
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,PATCH,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    
+    if (req.method === 'OPTIONS') {
+        res.sendStatus(200);
+    } else {
+        next();
+    }
+});
+
+// Static file serving
+app.use('/uploads', express.static('uploads'));
+
+// Load models
 let User, Product, Order;
 try {
     User = require('./models/User');
     console.log('✅ User model loaded');
-} catch (err) {
-    console.log('⚠️ User model not found:', err.message);
-}
-
-try {
     Product = require('./models/Product');
     console.log('✅ Product model loaded');
-} catch (err) {
-    console.log('⚠️ Product model not found:', err.message);
-}
-
-try {
     Order = require('./models/Order');
     console.log('✅ Order model loaded');
-} catch (err) {
-    console.log('⚠️ Order model not found:', err.message);
+} catch (error) {
+    console.log('⚠️ Models not available, using mock data');
 }
 
-app.use('/uploads', express.static('uploads'));
-
-// Import Middleware (test basic functionality first)
-let auth, requireAdmin, requireRole;
+// Load middleware
 try {
-    const middleware = require('./middleware/auth');
-    auth = middleware.auth;
-    requireAdmin = middleware.requireAdmin;
-    requireRole = middleware.requireRole;
+    const { auth } = require('./middleware/auth');
     console.log('✅ Middleware loaded successfully');
 } catch (error) {
-    console.error('❌ Middleware loading error:', error.message);
-    // Create dummy middleware for testing
-    auth = (req, res, next) => next();
-    requireAdmin = (req, res, next) => next();
-    requireRole = () => (req, res, next) => next();
+    console.log('⚠️ Middleware not available');
 }
 
-// Request logging middleware (BEFORE routes)
-app.use((req, res, next) => {
-    console.log(`📡 ${new Date().toISOString()} - ${req.method} ${req.url}`);
-    if (req.body && Object.keys(req.body).length > 0) {
-        console.log('📦 Request Body:', req.body);
-    }
-    next();
-});
-
-// Basic API Routes (testing server functionality)
+// Test endpoint
 app.get('/api/test', (req, res) => {
     res.json({
         success: true,
-        message: 'Server is working!',
-        timestamp: new Date().toISOString()
+        message: 'DFashion API is working!',
+        timestamp: new Date().toISOString(),
+        environment: process.env.NODE_ENV || 'development'
     });
 });
 
-// Database Seeder Route (for development)
-app.post('/api/seed-database', async (req, res) => {
+// Seeding endpoint
+app.post('/api/seed', async (req, res) => {
     try {
         console.log('🌱 Starting database seeding...');
-
-        // Run the existing seeder
-        const { exec } = require('child_process');
-        const path = require('path');
-
-        const seederPath = path.join(__dirname, 'seeders', 'index.js');
-
-        exec(`node "${seederPath}"`, (error, stdout, stderr) => {
-            if (error) {
-                console.error('Seeding error:', error);
-                return res.status(500).json({
-                    success: false,
-                    message: 'Failed to seed database',
-                    error: error.message
-                });
-            }
-
-            console.log('Seeding output:', stdout);
-            if (stderr) console.error('Seeding stderr:', stderr);
-
-            res.json({
-                success: true,
-                message: 'Database seeded successfully!',
-                output: stdout,
-                timestamp: new Date().toISOString()
-            });
+        
+        // Import and run seeder
+        const seedDatabase = require('./scripts/seedRealData');
+        await seedDatabase();
+        
+        res.json({
+            success: true,
+            message: 'Database seeded successfully',
+            timestamp: new Date().toISOString()
         });
 
     } catch (error) {
