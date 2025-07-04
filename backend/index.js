@@ -11,9 +11,10 @@ require('dotenv').config();
 // Verify JWT_SECRET is loaded
 console.log('🔐 JWT_SECRET loaded:', !!process.env.JWT_SECRET);
 if (!process.env.JWT_SECRET) {
-    console.error('❌ CRITICAL: JWT_SECRET not found in environment variables!');
-    console.error('❌ Please check your .env file');
-    process.exit(1);
+    console.warn('⚠️  WARNING: JWT_SECRET not found in environment variables!');
+    console.warn('⚠️  Using fallback secret for development/testing');
+    console.warn('⚠️  Please set JWT_SECRET in production!');
+    process.env.JWT_SECRET = 'fallback-development-secret-key-not-for-production';
 }
 
 console.log('✅ All modules loaded successfully');
@@ -428,7 +429,7 @@ const startServer = async () => {
         socketService.initialize(server);
 
         // Start server
-        const PORT = process.env.PORT || 5000;
+        const PORT = process.env.PORT || 3001;
 
         server.listen(PORT, '0.0.0.0', () => {
             console.log('========================================');
