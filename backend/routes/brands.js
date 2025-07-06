@@ -29,7 +29,7 @@ router.get('/', async (req, res) => {
         max: brand.maxPrice,
         avg: Math.round(brand.avgPrice)
       },
-      logo: `https://via.placeholder.com/100x100?text=${encodeURIComponent(brand._id)}`,
+      logo: `/assets/images/brands/${brand._id.toLowerCase().replace(/\s+/g, '-')}.svg`,
       isPopular: brand.count > 5
     }));
 
@@ -72,7 +72,7 @@ router.get('/featured', async (req, res) => {
       avgPrice: Math.round(brand.avgPrice),
       totalViews: brand.totalViews || 0,
       totalLikes: brand.totalLikes || 0,
-      logo: `https://via.placeholder.com/100x100?text=${encodeURIComponent(brand._id)}`,
+      logo: `/assets/images/brands/${brand._id.toLowerCase().replace(/\s+/g, '-')}.svg`,
       isPopular: brand.count > 5,
       isFeatured: true
     }));

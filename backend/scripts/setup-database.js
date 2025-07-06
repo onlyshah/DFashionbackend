@@ -1,25 +1,9 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const User = require('../models/User'); // Import the actual User model
 
 // Database connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/dfashion';
-
-// User Schema (simplified)
-const userSchema = new mongoose.Schema({
-  fullName: { type: String, required: true },
-  email: { type: String, required: true, unique: true },
-  username: { type: String, required: true, unique: true },
-  password: { type: String, required: true },
-  role: { type: String, enum: ['user', 'vendor', 'admin'], default: 'user' },
-  avatar: { type: String, default: '/assets/images/default-avatar.svg' },
-  isVerified: { type: Boolean, default: false },
-  isInfluencer: { type: Boolean, default: false },
-  followerCount: { type: Number, default: 0 },
-  followingCount: { type: Number, default: 0 },
-  createdAt: { type: Date, default: Date.now }
-});
-
-const User = mongoose.model('User', userSchema);
 
 // Sample users data
 const sampleUsers = [
@@ -28,8 +12,9 @@ const sampleUsers = [
     email: 'rajesh@example.com',
     username: 'rajesh_kumar',
     password: 'password123',
-    role: 'user',
+    role: 'customer',
     isVerified: true,
+    isActive: true,
     followerCount: 1250
   },
   {
@@ -37,8 +22,9 @@ const sampleUsers = [
     email: 'priya@example.com',
     username: 'priya_sharma',
     password: 'password123',
-    role: 'user',
+    role: 'customer',
     isVerified: true,
+    isActive: true,
     isInfluencer: true,
     followerCount: 15420
   },
@@ -49,6 +35,7 @@ const sampleUsers = [
     password: 'password123',
     role: 'vendor',
     isVerified: true,
+    isActive: true,
     isInfluencer: true,
     followerCount: 25680
   },
@@ -57,8 +44,9 @@ const sampleUsers = [
     email: 'raj@example.com',
     username: 'style_guru_raj',
     password: 'password123',
-    role: 'user',
+    role: 'customer',
     isVerified: false,
+    isActive: true,
     followerCount: 8930
   },
   {
@@ -66,8 +54,9 @@ const sampleUsers = [
     email: 'admin@dfashion.com',
     username: 'admin',
     password: 'admin123',
-    role: 'admin',
+    role: 'super_admin',
     isVerified: true,
+    isActive: true,
     followerCount: 0
   }
 ];
@@ -85,20 +74,18 @@ async function setupDatabase() {
     // Create sample users
     console.log('👥 Creating sample users...');
     for (const userData of sampleUsers) {
-      const hashedPassword = await bcrypt.hash(userData.password, 10);
-      const user = new User({
-        ...userData,
-        password: hashedPassword
-      });
+      // Don't hash password manually - User model pre-save hook will handle it
+      const user = new User(userData);
       await user.save();
       console.log(`✅ Created user: ${userData.email}`);
     }
 
     console.log('🎉 Database setup completed successfully!');
     console.log('\n📋 Test Credentials:');
-    console.log('User: rajesh@example.com / password123');
+    console.log('Customer: rajesh@example.com / password123');
+    console.log('Customer (Influencer): priya@example.com / password123');
     console.log('Vendor: maya@example.com / password123');
-    console.log('Admin: admin@dfashion.com / admin123');
+    console.log('Super Admin: admin@dfashion.com / admin123');
 
   } catch (error) {
     console.error('❌ Database setup failed:', error);
