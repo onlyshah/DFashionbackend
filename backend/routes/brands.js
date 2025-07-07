@@ -145,7 +145,7 @@ router.get('/:name', async (req, res) => {
           name: cat._id,
           count: cat.count
         })),
-        logo: `https://via.placeholder.com/200x200?text=${encodeURIComponent(brand._id)}`,
+        logo: `/assets/images/brands/default-brand.svg`,
         isPopular: brand.productCount > 5
       }
     });

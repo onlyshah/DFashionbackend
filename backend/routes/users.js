@@ -238,7 +238,7 @@ router.get('/suggested', async (req, res) => {
       id: user._id,
       username: user.username,
       fullName: user.fullName,
-      avatar: user.avatar || '/api/placeholder/40/40',
+      avatar: user.avatar || '/assets/images/default-avatar.svg',
       followedBy: `Followed by ${Math.floor(Math.random() * 50) + 10} others`,
       isFollowing: false
     }));
@@ -299,7 +299,7 @@ router.get('/influencers', async (req, res) => {
       id: influencer._id,
       username: influencer.username,
       fullName: influencer.fullName,
-      avatar: influencer.avatar || '/api/placeholder/60/60',
+      avatar: influencer.avatar || '/assets/images/default-avatar.svg',
       followersCount: influencer.socialStats?.followersCount || Math.floor(Math.random() * 100000) + 10000,
       postsCount: influencer.socialStats?.postsCount || Math.floor(Math.random() * 500) + 50,
       engagement: Math.floor(Math.random() * 15) + 5, // 5-20% engagement rate
