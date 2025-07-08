@@ -241,47 +241,7 @@ router.post('/login', async (req, res) => {
     // Normalize email (same as User model)
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Only use database authentication - no mock data
-    const mockUsers = {
-      'admin@dfashion.com': {
-        id: '3',
-        fullName: 'Admin User',
-        email: 'admin@dfashion.com',
-        username: 'admin',
-        password: 'admin123',
-        role: 'admin',
-        isActive: true,
-        isVerified: true,
-        avatar: '/assets/images/default-avatar.svg',
-        followerCount: 0
-      }
-    };
-
-    // Check if user exists in mock data
-    const mockUser = mockUsers[normalizedEmail];
-    if (mockUser && mockUser.password === password) {
-      console.log('✅ Mock authentication successful for:', normalizedEmail);
-
-      const token = generateToken(mockUser.id);
-
-      return res.json({
-        success: true,
-        message: 'Login successful',
-        data: {
-          token,
-          user: {
-            id: mockUser.id,
-            fullName: mockUser.fullName,
-            email: mockUser.email,
-            username: mockUser.username,
-            role: mockUser.role,
-            avatar: mockUser.avatar,
-            isVerified: mockUser.isVerified,
-            followerCount: mockUser.followerCount
-          }
-        }
-      });
-    }
+    // Database-only authentication - no mock data
 
     // Database-only authentication (fallback)
     console.log('🔍 Checking database for user:', normalizedEmail);

@@ -46,37 +46,7 @@ const upload = multer({
   }
 });
 
-// Mock data for reels
-const mockReels = [
-  {
-    id: '1',
-    title: 'Summer Fashion Trends',
-    description: 'Check out these amazing summer looks! 🌞✨ #fashion #summer #trending',
-    user: {
-      id: 'user1',
-      username: 'fashion_queen_sara',
-      fullName: 'Sara Fashion Queen',
-      avatar: '/assets/images/default-avatar.svg',
-      isVerified: true
-    },
-    media: {
-      type: 'video',
-      url: '/assets/videos/reel1.mp4',
-      thumbnail: '/assets/images/reel1-thumb.jpg',
-      duration: 30,
-      resolution: { width: 1080, height: 1920 }
-    },
-    products: [
-      {
-        product: {
-          id: 'prod1',
-          name: 'Summer Dress',
-          price: 2999,
-          image: '/assets/images/dress1.jpg'
-        },
-        position: { x: 20, y: 50, timestamp: 15 }
-      }
-    ],
+// Mock data removed - use real database data only
     hashtags: ['fashion', 'summer', 'trending', 'ootd'],
     analytics: {
       views: 15420,

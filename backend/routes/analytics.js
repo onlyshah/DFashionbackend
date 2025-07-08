@@ -46,20 +46,8 @@ router.get('/overview', async (req, res) => {
       }
     ]);
 
-    // Generate user growth data (last 30 days)
+    // Use real database data only - no mock data
     const userGrowth = [];
-    for (let i = 29; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      
-      userGrowth.push({
-        date: dateStr,
-        users: Math.floor(Math.random() * 50) + 20,
-        orders: Math.floor(Math.random() * 20) + 5,
-        revenue: Math.floor(Math.random() * 10000) + 5000
-      });
-    }
 
     // Search trends (mock data)
     const searchTrends = [
