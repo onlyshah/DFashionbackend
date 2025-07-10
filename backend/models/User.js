@@ -37,7 +37,22 @@ const userSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['customer', 'vendor', 'super_admin'],
+    enum: [
+      'customer',
+      'vendor',
+      'super_admin',
+      'admin',
+      'sales_manager',
+      'sales_executive',
+      'marketing_manager',
+      'marketing_executive',
+      'account_manager',
+      'accountant',
+      'support_manager',
+      'support_agent',
+      'content_manager',
+      'vendor_manager'
+    ],
     default: 'customer'
   },
   permissions: [{
@@ -52,8 +67,8 @@ const userSchema = new mongoose.Schema({
   }],
   department: {
     type: String,
-    enum: ['admin', 'sales', 'marketing', 'accounting', 'support', 'management'],
-    default: 'admin'
+    enum: ['administration', 'sales', 'marketing', 'accounting', 'support', 'content', 'vendor_management', 'customer_service', 'management'],
+    default: 'customer_service'
   },
   employeeId: {
     type: String,

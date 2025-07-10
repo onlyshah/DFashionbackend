@@ -1,21 +1,38 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const crypto = require('crypto');
 
-// Verify JWT token
+// Track failed login attempts
+const loginAttempts = new Map();
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_DURATION = 15 * 60 * 1000; // 15 minutes
+
+// Track active sessions
+const activeSessions = new Map();
+
+// Enhanced JWT token verification with security features
 const auth = async (req, res, next) => {
   try {
     const token = req.header('Authorization')?.replace('Bearer ', '');
+    const clientIP = req.ip || req.connection.remoteAddress;
+
     console.log('🔐 Auth middleware - Token present:', !!token);
-    console.log('🔐 Auth middleware - JWT_SECRET available:', !!process.env.JWT_SECRET);
+    console.log('🔐 Auth middleware - Client IP:', clientIP);
 
     if (!token) {
       console.log('🔐 Auth middleware - No token provided');
-      return res.status(401).json({ message: 'No token, authorization denied' });
+      return res.status(401).json({
+        success: false,
+        message: 'No token, authorization denied'
+      });
     }
 
     if (!process.env.JWT_SECRET) {
       console.error('❌ JWT_SECRET not found in environment variables');
-      return res.status(500).json({ message: 'Server configuration error' });
+      return res.status(500).json({
+        success: false,
+        message: 'Server configuration error'
+      });
     }
 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -138,6 +155,74 @@ const optionalAuth = async (req, res, next) => {
   }
 };
 
+// Security enhancement functions
+const recordFailedLogin = (identifier) => {
+  const now = Date.now();
+  const attempts = loginAttempts.get(identifier) || { count: 0, lastAttempt: 0 };
+
+  // Reset count if last attempt was more than lockout duration ago
+  if (now - attempts.lastAttempt > LOCKOUT_DURATION) {
+    attempts.count = 0;
+  }
+
+  attempts.count++;
+  attempts.lastAttempt = now;
+  loginAttempts.set(identifier, attempts);
+
+  console.warn(`Failed login attempt ${attempts.count} for ${identifier}`);
+  return attempts.count;
+};
+
+const isAccountLocked = (identifier) => {
+  const attempts = loginAttempts.get(identifier);
+  if (!attempts) return false;
+
+  const now = Date.now();
+  const timeSinceLastAttempt = now - attempts.lastAttempt;
+
+  // Clear old attempts if lockout period has passed
+  if (timeSinceLastAttempt > LOCKOUT_DURATION) {
+    loginAttempts.delete(identifier);
+    return false;
+  }
+
+  return attempts.count >= MAX_LOGIN_ATTEMPTS;
+};
+
+const clearLoginAttempts = (identifier) => {
+  loginAttempts.delete(identifier);
+};
+
+const createSession = (userId, token, clientIP, userAgent) => {
+  const sessionKey = `${userId}_${token.slice(-10)}`;
+  activeSessions.set(sessionKey, {
+    userId,
+    ip: clientIP,
+    lastActivity: Date.now(),
+    userAgent,
+    createdAt: Date.now()
+  });
+  return sessionKey;
+};
+
+const destroySession = (sessionKey) => {
+  activeSessions.delete(sessionKey);
+};
+
+const cleanupExpiredSessions = () => {
+  const now = Date.now();
+  const SESSION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
+
+  for (const [key, session] of activeSessions.entries()) {
+    if (now - session.lastActivity > SESSION_TIMEOUT) {
+      activeSessions.delete(key);
+    }
+  }
+};
+
+// Run cleanup every 5 minutes
+setInterval(cleanupExpiredSessions, 5 * 60 * 1000);
+
 module.exports = {
   auth,
   isVendor,
@@ -146,5 +231,11 @@ module.exports = {
   requireRole,
   requireCustomer,
   isApprovedVendor,
-  optionalAuth
+  optionalAuth,
+  recordFailedLogin,
+  isAccountLocked,
+  clearLoginAttempts,
+  createSession,
+  destroySession,
+  cleanupExpiredSessions
 };

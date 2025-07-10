@@ -46,96 +46,7 @@ const upload = multer({
   }
 });
 
-// Mock data removed - use real database data only
-    hashtags: ['fashion', 'summer', 'trending', 'ootd'],
-    analytics: {
-      views: 15420,
-      likes: 1240,
-      comments: 89,
-      shares: 45,
-      saves: 156
-    },
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000) // 2 hours ago
-  },
-  {
-    id: '2',
-    title: 'Styling Tips for Office Wear',
-    description: 'Professional yet stylish! 💼✨ #officewear #professional #style',
-    user: {
-      id: 'user2',
-      username: 'style_guru_raj',
-      fullName: 'Raj Style Guru',
-      avatar: '/assets/images/default-avatar.svg',
-      isVerified: false
-    },
-    media: {
-      type: 'video',
-      url: '/assets/videos/reel2.mp4',
-      thumbnail: '/assets/images/reel2-thumb.jpg',
-      duration: 45,
-      resolution: { width: 1080, height: 1920 }
-    },
-    products: [
-      {
-        product: {
-          id: 'prod2',
-          name: 'Formal Blazer',
-          price: 4999,
-          image: '/assets/images/blazer1.jpg'
-        },
-        position: { x: 30, y: 60, timestamp: 10 }
-      }
-    ],
-    hashtags: ['officewear', 'professional', 'style', 'workwear'],
-    analytics: {
-      views: 8930,
-      likes: 567,
-      comments: 34,
-      shares: 23,
-      saves: 89
-    },
-    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000) // 5 hours ago
-  },
-  {
-    id: '3',
-    title: 'Casual Weekend Vibes',
-    description: 'Comfort meets style 😎 #weekend #casual #comfortable',
-    user: {
-      id: 'user3',
-      username: 'casual_chic_priya',
-      fullName: 'Priya Casual Chic',
-      avatar: '/assets/images/default-avatar.svg',
-      isVerified: true
-    },
-    media: {
-      type: 'video',
-      url: '/assets/videos/reel3.mp4',
-      thumbnail: '/assets/images/reel3-thumb.jpg',
-      duration: 25,
-      resolution: { width: 1080, height: 1920 }
-    },
-    products: [
-      {
-        product: {
-          id: 'prod3',
-          name: 'Casual T-Shirt',
-          price: 1299,
-          image: '/assets/images/tshirt1.jpg'
-        },
-        position: { x: 25, y: 75, timestamp: 8 }
-      }
-    ],
-    hashtags: ['weekend', 'casual', 'comfortable', 'relaxed'],
-    analytics: {
-      views: 12340,
-      likes: 890,
-      comments: 67,
-      shares: 34,
-      saves: 123
-    },
-    createdAt: new Date(Date.now() - 8 * 60 * 60 * 1000) // 8 hours ago
-  }
-];
+// All data comes from database via seeders - no mock data used
 
 // GET /api/reels - Get all reels (Instagram-style feed)
 router.get('/', async (req, res) => {
@@ -144,32 +55,27 @@ router.get('/', async (req, res) => {
 
     const { page = 1, limit = 10, trending = false } = req.query;
 
-    // Always use mock data for now (database not required)
-    console.log('📱 Reels: Using mock data');
-    return res.json({
-      success: true,
-      data: {
-        reels: mockReels,
-        pagination: {
-          currentPage: 1,
-          totalPages: 1,
-          totalReels: mockReels.length,
-          hasNext: false,
-          hasPrev: false
-        }
-      }
-    });
+    if (!Reel) {
+      return res.status(503).json({
+        success: false,
+        message: 'Reel service not available - database not connected'
+      });
+    }
 
-    let query = { status: 'published', visibility: { $in: ['public', 'followers'] } };
+    let query = { status: 'published' };
     let sort = trending ? { 'trending.score': -1 } : { createdAt: -1 };
+
+    console.log('📱 Reels: Executing query with:', query);
 
     const reels = await Reel.find(query)
       .populate('user', 'username fullName avatar isVerified')
       .populate('products.product', 'name price images')
       .sort(sort)
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit))
       .lean();
+
+    console.log(`📱 Reels: Found ${reels.length} reels`);
 
     const total = await Reel.countDocuments(query);
 
@@ -201,12 +107,11 @@ router.get('/', async (req, res) => {
 router.get('/trending', async (req, res) => {
   try {
     console.log('📱 Reels: Fetching trending reels...');
-    
+
     if (!Reel) {
-      const trendingReels = mockReels.sort((a, b) => b.analytics.views - a.analytics.views);
-      return res.json({
-        success: true,
-        data: { reels: trendingReels }
+      return res.status(503).json({
+        success: false,
+        message: 'Reel service not available - database not connected'
       });
     }
 
@@ -242,16 +147,9 @@ router.get('/:id', async (req, res) => {
     console.log(`📱 Reels: Fetching reel ${id}...`);
     
     if (!Reel) {
-      const reel = mockReels.find(r => r.id === id);
-      if (!reel) {
-        return res.status(404).json({
-          success: false,
-          message: 'Reel not found'
-        });
-      }
-      return res.json({
-        success: true,
-        data: { reel }
+      return res.status(503).json({
+        success: false,
+        message: 'Reel service not available - database not connected'
       });
     }
 
@@ -296,10 +194,9 @@ router.post('/:id/like', auth, async (req, res) => {
     console.log(`📱 Reels: User ${userId} toggling like on reel ${id}...`);
     
     if (!Reel) {
-      return res.json({
-        success: true,
-        message: 'Like toggled successfully',
-        data: { liked: true, likesCount: 1241 }
+      return res.status(503).json({
+        success: false,
+        message: 'Reel service not available - database not connected'
       });
     }
 
@@ -343,10 +240,9 @@ router.post('/:id/save', auth, async (req, res) => {
     console.log(`📱 Reels: User ${userId} toggling save on reel ${id}...`);
     
     if (!Reel) {
-      return res.json({
-        success: true,
-        message: 'Save toggled successfully',
-        data: { saved: true, savesCount: 157 }
+      return res.status(503).json({
+        success: false,
+        message: 'Reel service not available - database not connected'
       });
     }
 

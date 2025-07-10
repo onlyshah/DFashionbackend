@@ -6,7 +6,22 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "seed": "node scripts/seedRealData.js"
+    "seed": "node scripts/seedComplete.js",
+    "seed:complete": "node scripts/seedComplete.js",
+    "seed:real": "node scripts/seedRealData.js",
+    "seed:admin": "node scripts/createAdminUsers.js",
+    "seed:stories": "node scripts/seedStories.js",
+    "seed:products": "node scripts/seedProductsAndOrders.js",
+    "check:roles": "node scripts/checkRoles.js",
+    "check:collections": "node scripts/checkCollections.js",
+    "check:database": "node scripts/checkDatabaseData.js",
+    "verify:roles": "node scripts/verifyRoles.js",
+    "setup:customer": "node scripts/ensureCustomerRole.js",
+    "fix:departments": "node scripts/fixDepartmentAssignments.js",
+    "validate:role-users": "node scripts/validateRoleUserAssociation.js",
+    "create:all-users": "node scripts/createUsersForAllRoles.js",
+    "create:vendor": "node scripts/createVendorUser.js",
+    "test:api": "node scripts/testApiEndpoints.js"
   },
   "keywords": [
     "fashion",
@@ -22,14 +37,21 @@
     "cors": "2.8.5",
     "dotenv": "16.3.1",
     "express": "^4.21.2",
+    "express-mongo-sanitize": "^2.2.0",
     "express-rate-limit": "^7.5.0",
+    "express-slow-down": "^2.1.0",
     "express-validator": "6.15.0",
     "helmet": "6.1.5",
+    "hpp": "^0.2.3",
     "jsonwebtoken": "9.0.2",
     "mongoose": "^7.8.7",
     "multer": "^2.0.1",
     "razorpay": "^2.9.6",
-    "socket.io": "^4.8.1"
+    "socket.io": "^4.8.1",
+    "uuid": "^9.0.1",
+    "validator": "^13.11.0",
+    "winston": "^3.17.0",
+    "xss": "^1.0.15"
   },
   "devDependencies": {
     "nodemon": "3.0.1"

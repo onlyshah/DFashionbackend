@@ -267,6 +267,59 @@ async function seedRealData() {
           vendors: { create: true, read: true, update: true, delete: false }
         },
         isActive: true
+      },
+      {
+        name: 'customer',
+        displayName: 'Customer',
+        description: 'End user/buyer with full e-commerce and social features access',
+        department: 'customer_service',
+        level: 1,
+        permissions: {
+          // Dashboard Access (Limited)
+          dashboard: { view: true, analytics: false, reports: false },
+
+          // User Management (No access to other users)
+          users: { view: false, create: false, edit: false, delete: false, ban: false, roles: false },
+
+          // Product Management (Read-only access)
+          products: { view: true, create: false, edit: false, delete: false, approve: false, featured: false, inventory: false },
+
+          // Order Management (Full access to own orders)
+          orders: { view: true, edit: false, cancel: true, refund: false, shipping: false, reports: false },
+
+          // Financial Management (No access)
+          finance: { view: false, transactions: false, payouts: false, reports: false, taxes: false, reconciliation: false },
+
+          // Marketing & Content (Limited social access)
+          marketing: { campaigns: false, promotions: false, content: true, social: true, analytics: false, email: false },
+
+          // Support & Communication (Customer support access)
+          support: { tickets: true, chat: true, knowledge_base: true, announcements: true },
+
+          // Vendor Management (Read-only)
+          vendors: { view: true, approve: false, commission: false, performance: false, payouts: false },
+
+          // System Settings (No access)
+          settings: { general: false, security: false, integrations: false, backup: false, logs: false }
+        },
+        isActive: true
+      },
+      {
+        name: 'vendor',
+        displayName: 'Vendor',
+        description: 'Vendor with product management and order fulfillment access',
+        department: 'vendor_management',
+        level: 2,
+        permissions: {
+          users: { create: false, read: false, update: false, delete: false },
+          products: { create: true, read: true, update: true, delete: true },
+          orders: { create: false, read: true, update: true, delete: false },
+          categories: { create: false, read: true, update: false, delete: false },
+          vendors: { create: false, read: true, update: true, delete: false },
+          analytics: { create: false, read: true, update: false, delete: false },
+          inventory: { create: true, read: true, update: true, delete: false }
+        },
+        isActive: true
       }
     ]);
     console.log(`✅ Created ${roles.length} roles\n`);
@@ -281,6 +334,7 @@ async function seedRealData() {
         password: plainPassword,
         fullName: 'Rajesh Kumar',
         role: 'customer',
+        department: 'customer_service',
         isActive: true,
         isVerified: true,
         phone: '+91 9876543210',
@@ -301,6 +355,7 @@ async function seedRealData() {
         password: plainPassword,
         fullName: 'Priya Sharma',
         role: 'customer',
+        department: 'customer_service',
         isActive: true,
         isVerified: true,
         isInfluencer: true,
@@ -322,6 +377,7 @@ async function seedRealData() {
         password: plainPassword,
         fullName: 'Amit Singh',
         role: 'customer',
+        department: 'customer_service',
         isActive: true,
         isVerified: true,
         phone: '+91 9876543212',
@@ -342,6 +398,7 @@ async function seedRealData() {
         password: plainPassword,
         fullName: 'Kavya Reddy',
         role: 'customer',
+        department: 'customer_service',
         isActive: true,
         isVerified: true,
         isInfluencer: true,

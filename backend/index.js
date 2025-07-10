@@ -6,6 +6,12 @@ const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
 const http = require('http');
 const socketService = require('./services/socketService');
+// Use basic security middleware (no external dependencies)
+const BasicSecurity = require('./middleware/basicSecurity');
+// Comment out advanced security for now
+// const security = require('./middleware/security');
+// const ValidationService = require('./services/validationService');
+// const csrfService = require('./services/csrfService');
 require('dotenv').config();
 
 // Verify JWT_SECRET is loaded
@@ -24,23 +30,41 @@ const app = express();
 // Import database configuration
 const { connectDB } = require('./config/database');
 
-// Middleware
-app.use(express.urlencoded({ extended: false }));
-app.use(express.json());
+// Basic Security Middleware (Applied First)
+console.log('🔒 Applying basic security middleware...');
 
-const allowedOrigins = [
-    'http://localhost:4200',
-    'http://localhost:8100',
-    'http://localhost:3001',
-    'http://localhost:5000',
-    'capacitor://localhost',  // For Capacitor apps
-    'ionic://localhost',      // For Ionic apps
-    'https://onlyshah.github.io'
-];
+// Trust proxy for accurate IP addresses
+app.set('trust proxy', 1);
 
-app.use(cors({
+// Basic security headers
+app.use(BasicSecurity.securityHeaders);
+
+// Helmet for additional security headers
+app.use(BasicSecurity.helmet);
+
+// Request logging
+app.use(BasicSecurity.requestLogger);
+
+// Rate limiting
+app.use('/api/auth', BasicSecurity.authLimiter);
+app.use('/api', BasicSecurity.generalLimiter);
+
+// CORS configuration - Comprehensive setup for development and production
+const corsOptions = {
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps, Postman, or local files)
+        const allowedOrigins = [
+            'http://localhost:4200',      // Angular dev server
+            'http://localhost:8100',      // Ionic dev server
+            'http://127.0.0.1:4200',      // Alternative localhost
+            'http://127.0.0.1:8100',      // Alternative localhost
+            'http://localhost:3000',      // React dev server (if needed)
+            'http://localhost:5000',      // Additional dev server
+            'capacitor://localhost',      // Capacitor apps
+            'ionic://localhost',          // Ionic apps
+            'https://onlyshah.github.io'  // Production domain
+        ];
+
+        // Allow requests with no origin (mobile apps, Postman, etc.)
         if (!origin) {
             return callback(null, true);
         }
@@ -51,7 +75,7 @@ app.use(cors({
         }
 
         // Check if the origin is in the allowed list
-        if (allowedOrigins.indexOf(origin) !== -1) {
+        if (allowedOrigins.includes(origin)) {
             return callback(null, true);
         }
 
@@ -71,17 +95,43 @@ app.use(cors({
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
-    exposedHeaders: ['Content-Range', 'X-Content-Range']
-}));
+    allowedHeaders: [
+        'Origin',
+        'X-Requested-With',
+        'Content-Type',
+        'Accept',
+        'Authorization',
+        'Cache-Control',
+        'Pragma'
+    ],
+    exposedHeaders: ['Content-Range', 'X-Content-Range'],
+    optionsSuccessStatus: 200 // For legacy browser support
+};
 
-// Security middleware
+app.use(cors(corsOptions));
+
+// Body parsing middleware
+app.use(express.urlencoded({ extended: false, limit: '10mb' }));
+app.use(express.json({ limit: '10mb' }));
+
+// Basic input sanitization
+app.use(BasicSecurity.sanitizeInput);
+
+// Custom input validation
+app.use(BasicSecurity.validateInput);
+
+console.log('✅ Basic security middleware applied successfully');
+
+// Additional CORS headers for preflight requests
 app.use((req, res, next) => {
+    // Set CORS headers for all responses
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,PATCH,OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-    
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma');
+
+    // Handle preflight OPTIONS requests
     if (req.method === 'OPTIONS') {
+        console.log('✅ Handling OPTIONS preflight request for:', req.url);
         res.sendStatus(200);
     } else {
         next();
@@ -90,6 +140,38 @@ app.use((req, res, next) => {
 
 // Static file serving
 app.use('/uploads', express.static('uploads'));
+
+// Basic Security Routes
+console.log('🔒 Setting up basic security routes...');
+
+// Basic CSRF token endpoint (simplified)
+app.get('/api/csrf-token', (req, res) => {
+  res.json({
+    success: true,
+    token: Date.now().toString(36) + Math.random().toString(36).substr(2),
+    message: 'CSRF token generated'
+  });
+});
+
+// Security status endpoint
+app.get('/api/security/status', (req, res) => {
+  res.json({
+    success: true,
+    security: {
+      status: 'active',
+      timestamp: new Date().toISOString(),
+      environment: process.env.NODE_ENV || 'development'
+    }
+  });
+});
+
+// CSP violation reporting endpoint
+app.post('/api/security/csp-violation', (req, res) => {
+  console.warn('CSP Violation Report:', req.body);
+  res.status(204).send();
+});
+
+console.log('✅ Basic security routes configured');
 
 // Load models
 let User, Product, Order;
@@ -364,6 +446,24 @@ app.get('/api/health', (req, res) => {
         message: 'DFashion API Server Running',
         database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'
     });
+});
+
+// Quick fix: Handle missing endpoints that frontend is calling
+app.get('/me', (req, res) => {
+    res.redirect(301, '/api/auth/me');
+});
+
+app.get('/api/me', (req, res) => {
+    res.redirect(301, '/api/auth/me');
+});
+
+// Handle missing login endpoint (should be /api/auth/login)
+app.post('/login', (req, res) => {
+    res.redirect(307, '/api/auth/login');
+});
+
+app.post('/api/login', (req, res) => {
+    res.redirect(307, '/api/auth/login');
 });
 
 // Database Collections Check Endpoint (simplified)

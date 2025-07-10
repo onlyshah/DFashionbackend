@@ -5,7 +5,7 @@ const roleSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
-    enum: ['super_admin', 'admin', 'sales_manager', 'sales_executive', 'marketing_manager', 'marketing_executive', 'account_manager', 'accountant', 'support_manager', 'support_agent', 'content_manager', 'vendor_manager', 'customer']
+    enum: ['super_admin', 'admin', 'sales_manager', 'sales_executive', 'marketing_manager', 'marketing_executive', 'account_manager', 'accountant', 'support_manager', 'support_agent', 'content_manager', 'vendor_manager', 'customer', 'vendor']
   },
   displayName: {
     type: String,
