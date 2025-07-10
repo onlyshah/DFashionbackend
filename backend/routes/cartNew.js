@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Cart = require('../models/Cart');
 const Product = require('../models/Product');
-const { auth, requireRole } = require('../middleware/auth');
+const { auth, requireRole, optionalAuth } = require('../middleware/auth');
 
 
 
@@ -167,7 +167,7 @@ router.post('/recalculate', auth, requireRole(['customer']), async (req, res) =>
 });
 
 // Get combined cart and wishlist total count for specific user
-router.get('/total-count', auth, requireRole(['customer']), async (req, res) => {
+router.get('/total-count', auth, requireRole(['customer', 'vendor', 'admin', 'super_admin']), async (req, res) => {
   try {
     console.log('🔢 Getting total count for user:', req.user._id, 'Username:', req.user.username);
 
@@ -233,7 +233,7 @@ router.get('/total-count', auth, requireRole(['customer']), async (req, res) => 
 });
 
 // Get user's cart
-router.get('/', auth, requireRole(['customer']), async (req, res) => {
+router.get('/', auth, requireRole(['customer', 'vendor', 'admin', 'super_admin']), async (req, res) => {
   try {
     console.log('🛒 Getting cart for user:', req.user._id);
     console.log('🛒 User object:', req.user);

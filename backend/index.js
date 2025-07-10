@@ -49,7 +49,7 @@ app.use(BasicSecurity.requestLogger);
 app.use('/api/auth', BasicSecurity.authLimiter);
 app.use('/api', BasicSecurity.generalLimiter);
 
-// CORS configuration - Comprehensive setup for development and production
+// CORS configuration - Production ready
 const corsOptions = {
     origin: function (origin, callback) {
         const allowedOrigins = [
@@ -89,7 +89,6 @@ const corsOptions = {
             return callback(null, true);
         }
 
-        console.log('❌ CORS blocked origin:', origin);
         const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
         return callback(new Error(msg), false);
     },
@@ -102,10 +101,13 @@ const corsOptions = {
         'Accept',
         'Authorization',
         'Cache-Control',
-        'Pragma'
+        'Pragma',
+        'X-CSRF-Token',
+        'X-Request-ID'
     ],
-    exposedHeaders: ['Content-Range', 'X-Content-Range'],
-    optionsSuccessStatus: 200 // For legacy browser support
+    exposedHeaders: ['Content-Range', 'X-Content-Range', 'X-Request-ID'],
+    optionsSuccessStatus: 200, // For legacy browser support
+    preflightContinue: false
 };
 
 app.use(cors(corsOptions));
@@ -122,17 +124,22 @@ app.use(BasicSecurity.validateInput);
 
 console.log('✅ Basic security middleware applied successfully');
 
-// Additional CORS headers for preflight requests
+// Enhanced CORS headers for preflight requests
 app.use((req, res, next) => {
+    const origin = req.headers.origin;
+
     // Set CORS headers for all responses
+    if (origin) {
+        res.header('Access-Control-Allow-Origin', origin);
+    }
     res.header('Access-Control-Allow-Credentials', 'true');
     res.header('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,PATCH,OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control, Pragma, X-CSRF-Token, X-Request-ID');
+    res.header('Access-Control-Expose-Headers', 'Content-Range, X-Content-Range, X-Request-ID');
 
     // Handle preflight OPTIONS requests
     if (req.method === 'OPTIONS') {
-        console.log('✅ Handling OPTIONS preflight request for:', req.url);
-        res.sendStatus(200);
+        return res.status(200).end();
     } else {
         next();
     }
@@ -298,14 +305,16 @@ try {
 
 try {
     app.use('/api/cart-new', require('./routes/cartNew'));
-    console.log('✅ New Cart routes loaded');
+    app.use('/api/v1/cart-new', require('./routes/cartNew')); // Add v1 prefix
+    console.log('✅ New Cart routes loaded at /api/cart-new and /api/v1/cart-new');
 } catch (error) {
     console.error('❌ Error loading new cart routes:', error.message);
 }
 
 try {
     app.use('/api/wishlist-new', require('./routes/wishlistNew'));
-    console.log('✅ New Wishlist routes loaded');
+    app.use('/api/v1/wishlist-new', require('./routes/wishlistNew')); // Add v1 prefix
+    console.log('✅ New Wishlist routes loaded at /api/wishlist-new and /api/v1/wishlist-new');
 } catch (error) {
     console.error('❌ Error loading new wishlist routes:', error.message);
 }
@@ -353,15 +362,19 @@ try {
 }
 
 try {
+    // Mount admin auth routes at both paths for compatibility
     app.use('/api/admin/auth', require('./routes/adminAuth'));
-    console.log('✅ Admin auth routes loaded');
+    app.use('/api/auth/admin', require('./routes/adminAuth'));
+    console.log('✅ Admin auth routes loaded at /api/admin/auth and /api/auth/admin');
 } catch (error) {
     console.error('❌ Error loading admin auth routes:', error.message);
 }
 
 try {
+    // Mount admin dashboard routes at both paths for compatibility
     app.use('/api/admin/dashboard', require('./routes/adminDashboard'));
-    console.log('✅ Admin dashboard routes loaded');
+    app.use('/api/admin', require('./routes/adminDashboard'));
+    console.log('✅ Admin dashboard routes loaded at /api/admin/dashboard and /api/admin');
 } catch (error) {
     console.error('❌ Error loading admin dashboard routes:', error.message);
 }

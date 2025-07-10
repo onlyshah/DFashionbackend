@@ -221,85 +221,44 @@ router.post('/register', async (req, res) => {
 // @access  Public
 router.post('/login', async (req, res) => {
   try {
-    console.log('🔐 LOGIN REQUEST RECEIVED');
-    console.log('📧 Email:', req.body.email);
-    console.log('🔑 Password:', req.body.password ? '***' : 'MISSING');
-    console.log('📋 Full body:', req.body);
-    console.log('📋 Headers:', req.headers);
-
     const { email, password } = req.body;
 
     // Validate input
     if (!email || !password) {
-      console.log('❌ Missing email or password');
       return res.status(400).json({
         success: false,
         message: 'Email and password are required'
       });
     }
 
-    // Normalize email (same as User model)
+    // Normalize email
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Database-only authentication - no mock data
-
-    // Database-only authentication (fallback)
-    console.log('🔍 Checking database for user:', normalizedEmail);
-    console.log('🔍 Original email:', email);
-    console.log('🔍 Normalized email:', normalizedEmail);
-
+    // Find user in database
     const user = await User.findOne({ email: normalizedEmail });
-    console.log('👤 Database user found:', !!user);
 
     if (!user) {
-      // Try to find any user with similar email for debugging
-      const allUsers = await User.find({}, 'email username').limit(5);
-      console.log('📋 Available users in database:', allUsers.map(u => ({ email: u.email, username: u.username })));
-      console.log('❌ User not found in database');
       return res.status(400).json({
         success: false,
         message: 'Invalid credentials'
       });
     }
 
-    console.log('🔐 User password hash:', user.password ? 'EXISTS' : 'MISSING');
-    console.log('🔐 Input password:', password ? 'PROVIDED' : 'MISSING');
-    console.log('👤 User object keys:', Object.keys(user.toObject ? user.toObject() : user));
-    console.log('👤 User role:', user.role);
-    console.log('👤 User email:', user.email);
-    console.log('🔧 comparePassword method exists:', typeof user.comparePassword === 'function');
-
     // Check if account is active
-    console.log('👤 User isActive status:', user.isActive);
     if (!user.isActive) {
-      console.log('❌ Account is deactivated for user:', normalizedEmail);
       return res.status(400).json({
         success: false,
         message: 'Account is deactivated'
       });
     }
-    console.log('✅ Account is active for user:', normalizedEmail);
 
     // Check password
-    console.log('🔐 Comparing passwords using user.comparePassword...');
-    try {
-      const isMatch = await user.comparePassword(password);
-      console.log('🔐 Password match result:', isMatch);
+    const isMatch = await user.comparePassword(password);
 
-      if (!isMatch) {
-        console.log('❌ Password does not match for user:', normalizedEmail);
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid credentials'
-        });
-      }
-
-      console.log('✅ Password match successful for user:', normalizedEmail);
-    } catch (passwordError) {
-      console.error('❌ Error during password comparison:', passwordError);
-      return res.status(500).json({
+    if (!isMatch) {
+      return res.status(400).json({
         success: false,
-        message: 'Server error during authentication'
+        message: 'Invalid credentials'
       });
     }
 
@@ -323,9 +282,7 @@ router.post('/login', async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('❌ Login error occurred:', error.message);
-    console.error('❌ Full error:', error);
-    console.error('❌ Error stack:', error.stack);
+    console.error('Login error:', error.message);
     res.status(500).json({
       success: false,
       message: 'Server error during login'
