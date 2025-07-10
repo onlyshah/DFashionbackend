@@ -70,9 +70,16 @@ const isVendor = (req, res, next) => {
 
 // Check if user is admin
 const isAdmin = (req, res, next) => {
-  if (req.user.role !== 'super_admin') {
-    return res.status(403).json({ message: 'Access denied. Admin role required.' });
+  const adminRoles = ['super_admin', 'admin'];
+  if (!adminRoles.includes(req.user.role)) {
+    console.log('🔐 isAdmin middleware - Access denied for role:', req.user.role);
+    return res.status(403).json({
+      message: 'Access denied. Admin role required.',
+      userRole: req.user.role,
+      requiredRoles: adminRoles
+    });
   }
+  console.log('🔐 isAdmin middleware - Access granted for role:', req.user.role);
   next();
 };
 

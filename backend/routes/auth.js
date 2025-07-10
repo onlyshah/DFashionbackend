@@ -82,10 +82,10 @@ router.post('/admin/login', async (req, res) => {
       });
     }
 
-    // Find admin user
+    // Find admin user (accept both super_admin and admin roles)
     const user = await User.findOne({
       email: email.toLowerCase(),
-      role: 'super_admin'
+      role: { $in: ['super_admin', 'admin'] }
     });
 
     if (!user) {
