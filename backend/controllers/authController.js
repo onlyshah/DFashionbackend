@@ -89,12 +89,17 @@ const login = async (req, res) => {
     if (!email || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide email and password'
+        message: 'Please provide email/username and password'
       });
     }
 
-    // Find user
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+    // Find user by email or username
+    const user = await User.findOne({
+      $or: [
+        { email: email.toLowerCase() },
+        { username: email.toLowerCase() }
+      ]
+    }).select('+password');
 
     if (!user) {
       return res.status(401).json({

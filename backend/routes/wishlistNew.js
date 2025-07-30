@@ -2,11 +2,26 @@ const express = require('express');
 const router = express.Router();
 const Wishlist = require('../models/Wishlist');
 const Product = require('../models/Product');
-const { auth, requireRole } = require('../middleware/auth');
+const { auth, requireRole, optionalAuth } = require('../middleware/auth');
 
 // Get user's wishlist
-router.get('/', auth, requireRole(['customer']), async (req, res) => {
+router.get('/', optionalAuth, async (req, res) => {
   try {
+    // If user is not authenticated, return empty wishlist
+    if (!req.user) {
+      return res.json({
+        success: true,
+        data: {
+          wishlist: {
+            _id: null,
+            user: null,
+            items: [],
+            totalItems: 0
+          }
+        }
+      });
+    }
+
     // findOrCreateForUser now handles population internally
     const wishlist = await Wishlist.findOrCreateForUser(req.user._id, true);
 
@@ -26,7 +41,7 @@ router.get('/', auth, requireRole(['customer']), async (req, res) => {
 });
 
 // Add item to wishlist
-router.post('/add', auth, requireRole(['customer']), async (req, res) => {
+router.post('/add', auth, requireRole(['end_user']), async (req, res) => {
   try {
     const { productId, size, color, addedFrom = 'manual', notes, priority = 'medium' } = req.body;
 
@@ -84,7 +99,7 @@ router.post('/add', auth, requireRole(['customer']), async (req, res) => {
 });
 
 // Update wishlist item
-router.put('/update/:itemId', auth, requireRole(['customer']), async (req, res) => {
+router.put('/update/:itemId', auth, requireRole(['end_user']), async (req, res) => {
   try {
     const { itemId } = req.params;
     const { size, color, notes, priority } = req.body;
@@ -133,7 +148,7 @@ router.put('/update/:itemId', auth, requireRole(['customer']), async (req, res) 
 });
 
 // Remove item from wishlist
-router.delete('/remove/:itemId', auth, requireRole(['customer']), async (req, res) => {
+router.delete('/remove/:itemId', auth, requireRole(['end_user']), async (req, res) => {
   try {
     const { itemId } = req.params;
 
@@ -321,7 +336,7 @@ router.post('/comment/:itemId', auth, async (req, res) => {
 });
 
 // Move item from wishlist to cart
-router.post('/move-to-cart/:itemId', auth, requireRole(['customer']), async (req, res) => {
+router.post('/move-to-cart/:itemId', auth, requireRole(['end_user']), async (req, res) => {
   try {
     const { itemId } = req.params;
     const { quantity = 1 } = req.body;

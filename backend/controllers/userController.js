@@ -396,6 +396,209 @@ const getUserStats = async (req, res) => {
   }
 };
 
+// @desc    Get all users with stats for management (Super Admin/Admin)
+// @route   GET /api/users/management/all
+// @access  Private/Admin
+const getAllUsersForManagement = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 50,
+      search = '',
+      role = '',
+      status = '',
+      department = ''
+    } = req.query;
+
+    // Build filter
+    const filter = {};
+
+    if (search) {
+      filter.$or = [
+        { fullName: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { username: { $regex: search, $options: 'i' } }
+      ];
+    }
+
+    if (role) filter.role = role;
+    if (department) filter.department = department;
+    if (status === 'active') filter.isActive = true;
+    if (status === 'inactive') filter.isActive = false;
+
+    // Pagination
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    // Get users
+    const users = await User.find(filter)
+      .select('-password')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    // Get stats
+    const totalUsers = await User.countDocuments(filter);
+    const activeUsers = await User.countDocuments({ ...filter, isActive: true });
+
+    // Get new users this month
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const newUsersThisMonth = await User.countDocuments({
+      ...filter,
+      createdAt: { $gte: startOfMonth }
+    });
+
+    // Get users by role
+    const usersByRole = await User.aggregate([
+      { $match: filter },
+      { $group: { _id: '$role', count: { $sum: 1 } } }
+    ]);
+
+    const usersByRoleObj = {};
+    usersByRole.forEach(item => {
+      usersByRoleObj[item._id] = item.count;
+    });
+
+    const stats = {
+      totalUsers,
+      activeUsers,
+      inactiveUsers: totalUsers - activeUsers,
+      newUsersThisMonth,
+      usersByRole: usersByRoleObj
+    };
+
+    res.json({
+      success: true,
+      data: { users, stats },
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: totalUsers,
+        pages: Math.ceil(totalUsers / parseInt(limit))
+      }
+    });
+
+  } catch (error) {
+    console.error('Get all users for management error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch users data'
+    });
+  }
+};
+
+// @desc    Get customer data for customer dashboard
+// @route   GET /api/users/customer/:id/profile
+// @access  Private/Customer
+const getCustomerData = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Verify user can access this data
+    if (req.user.role !== 'super_admin' && req.user.role !== 'admin' && req.user._id.toString() !== id) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied'
+      });
+    }
+
+    // Get customer basic data
+    const customer = await User.findById(id).select('-password');
+
+    if (!customer) {
+      return res.status(404).json({
+        success: false,
+        message: 'Customer not found'
+      });
+    }
+
+    // Add mock data for customer stats (replace with actual data when available)
+    const customerWithStats = {
+      ...customer.toObject(),
+      totalOrders: 0,
+      totalSpent: 0,
+      wishlistCount: 0,
+      cartCount: 0
+    };
+
+    const stats = {
+      totalOrders: 0,
+      totalSpent: 0,
+      averageOrderValue: 0,
+      lastOrderDate: null
+    };
+
+    res.json({
+      success: true,
+      data: {
+        customer: customerWithStats,
+        orderHistory: [],
+        stats
+      }
+    });
+
+  } catch (error) {
+    console.error('Get customer data error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch customer data'
+    });
+  }
+};
+
+// @desc    Get limited user data based on role
+// @route   GET /api/users/management/limited/:role
+// @access  Private
+const getLimitedUserData = async (req, res) => {
+  try {
+    const { role } = req.params;
+    const userRole = req.user.role;
+
+    let filter = {};
+    let projection = { password: 0 };
+
+    // Define what each role can see
+    switch (userRole) {
+      case 'manager':
+        // Managers can see users in their department
+        filter = { department: req.user.department };
+        break;
+      case 'vendor':
+        // Vendors can only see their own data
+        filter = { _id: req.user._id };
+        break;
+      default:
+        // Other roles get minimal data
+        filter = { _id: req.user._id };
+    }
+
+    const users = await User.find(filter, projection)
+      .sort({ createdAt: -1 })
+      .limit(10);
+
+    const stats = {
+      totalUsers: users.length,
+      activeUsers: users.filter(u => u.isActive).length,
+      newUsersThisMonth: 0,
+      usersByRole: {}
+    };
+
+    res.json({
+      success: true,
+      data: { users, stats }
+    });
+
+  } catch (error) {
+    console.error('Get limited user data error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch user data'
+    });
+  }
+};
+
 module.exports = {
   getAllUsers,
   getUserById,
@@ -404,5 +607,8 @@ module.exports = {
   deleteUser,
   toggleUserBlock,
   updateUserPermissions,
-  getUserStats
+  getUserStats,
+  getAllUsersForManagement,
+  getCustomerData,
+  getLimitedUserData
 };

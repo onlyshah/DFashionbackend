@@ -386,4 +386,42 @@ router.get('/liked-posts', auth, async (req, res) => {
   }
 });
 
+// Import user management controller functions
+const {
+  getAllUsersForManagement,
+  getCustomerData,
+  getLimitedUserData
+} = require('../controllers/userController');
+
+// User Management Routes
+
+// @route   GET /api/users/management/all
+// @desc    Get all users with stats for management dashboard
+// @access  Private/Admin
+router.get('/management/all', auth, async (req, res) => {
+  // Check if user has admin privileges
+  if (!['super_admin', 'admin'].includes(req.user.role)) {
+    return res.status(403).json({
+      success: false,
+      message: 'Access denied. Admin privileges required.'
+    });
+  }
+
+  await getAllUsersForManagement(req, res);
+});
+
+// @route   GET /api/users/customer/:id/profile
+// @desc    Get customer data for customer dashboard
+// @access  Private
+router.get('/customer/:id/profile', auth, async (req, res) => {
+  await getCustomerData(req, res);
+});
+
+// @route   GET /api/users/management/limited/:role
+// @desc    Get limited user data based on role
+// @access  Private
+router.get('/management/limited/:role', auth, async (req, res) => {
+  await getLimitedUserData(req, res);
+});
+
 module.exports = router;

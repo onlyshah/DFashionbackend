@@ -38,22 +38,12 @@ const userSchema = new mongoose.Schema({
   role: {
     type: String,
     enum: [
-      'customer',
-      'vendor',
       'super_admin',
       'admin',
-      'sales_manager',
-      'sales_executive',
-      'marketing_manager',
-      'marketing_executive',
-      'account_manager',
-      'accountant',
-      'support_manager',
-      'support_agent',
-      'content_manager',
-      'vendor_manager'
+      'vendor',
+      'end_user'
     ],
-    default: 'customer'
+    default: 'end_user'
   },
   permissions: [{
     module: {
@@ -96,6 +86,25 @@ const userSchema = new mongoose.Schema({
   isActive: {
     type: Boolean,
     default: true
+  },
+  vendorVerification: {
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected', 'suspended'],
+      default: 'pending'
+    },
+    verifiedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    verifiedAt: Date,
+    rejectionReason: String,
+    businessInfo: {
+      businessName: String,
+      businessType: String,
+      registrationNumber: String,
+      taxId: String
+    }
   },
   isInfluencer: {
     type: Boolean,
@@ -245,7 +254,43 @@ const userSchema = new mongoose.Schema({
       type: Date,
       default: Date.now
     }
-  }]
+  }],
+
+  // Enhanced Reward System
+  rewards: {
+    totalCredits: { type: Number, default: 0 },
+    availableCredits: { type: Number, default: 0 },
+    usedCredits: { type: Number, default: 0 },
+    totalEarnings: { type: Number, default: 0 },
+    referralCode: { type: String, unique: true, sparse: true },
+    referredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    referralCount: { type: Number, default: 0 },
+    lastRewardDate: { type: Date }
+  },
+
+  // Enhanced Analytics tracking
+  analytics: {
+    totalPosts: { type: Number, default: 0 },
+    totalLikes: { type: Number, default: 0 },
+    totalShares: { type: Number, default: 0 },
+    totalViews: { type: Number, default: 0 },
+    engagementRate: { type: Number, default: 0 },
+    lastActiveDate: { type: Date, default: Date.now },
+    purchaseHistory: {
+      totalOrders: { type: Number, default: 0 },
+      totalSpent: { type: Number, default: 0 },
+      averageOrderValue: { type: Number, default: 0 }
+    }
+  },
+
+  // Content creation tracking
+  contentStats: {
+    storiesPosted: { type: Number, default: 0 },
+    reelsPosted: { type: Number, default: 0 },
+    postsPosted: { type: Number, default: 0 },
+    productsTagged: { type: Number, default: 0 },
+    salesGenerated: { type: Number, default: 0 }
+  }
 }, {
   timestamps: true
 });

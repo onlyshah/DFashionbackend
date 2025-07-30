@@ -126,14 +126,79 @@ router.get('/user/:userId', optionalAuth, async (req, res) => {
   }
 });
 
+// Middleware to validate story creation
+const validateStoryCreation = async (req, res, next) => {
+  try {
+    const { products } = req.body;
+
+    // Ensure at least one product is tagged
+    if (!products || !Array.isArray(products) || products.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one product must be tagged in the story'
+      });
+    }
+
+    // If user is a vendor, check if they're verified
+    if (req.user.role === 'vendor') {
+      const User = require('../models/User');
+      const vendor = await User.findById(req.user.userId);
+
+      if (!vendor || vendor.vendorVerification.status !== 'approved') {
+        return res.status(403).json({
+          success: false,
+          message: 'Vendor verification required to create stories'
+        });
+      }
+
+      // Vendors can only create stories about their own products
+      const Product = require('../models/Product');
+      const productIds = products.map(p => p.product);
+      const vendorProducts = await Product.find({
+        _id: { $in: productIds },
+        vendor: req.user.userId
+      });
+
+      if (vendorProducts.length !== productIds.length) {
+        return res.status(403).json({
+          success: false,
+          message: 'Vendors can only create stories about their own products'
+        });
+      }
+    }
+
+    // Validate that all product IDs exist
+    const Product = require('../models/Product');
+    const productIds = products.map(p => p.product);
+    const validProducts = await Product.find({ _id: { $in: productIds } });
+
+    if (validProducts.length !== productIds.length) {
+      return res.status(400).json({
+        success: false,
+        message: 'One or more invalid product IDs provided'
+      });
+    }
+
+    next();
+  } catch (error) {
+    console.error('Story validation error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
 // @route   POST /api/stories
-// @desc    Create new story
-// @access  Private
+// @desc    Create new story (must include product tags)
+// @access  Private (Verified vendors for own products, end users for any products)
 router.post('/', [
   auth,
+  validateStoryCreation,
   body('media.type').isIn(['image', 'video']).withMessage('Invalid media type'),
   body('media.url').isURL().withMessage('Invalid media URL'),
-  body('caption').optional().isLength({ max: 500 }).withMessage('Caption too long')
+  body('caption').optional().isLength({ max: 500 }).withMessage('Caption too long'),
+  body('products').isArray({ min: 1 }).withMessage('At least one product must be tagged')
 ], async (req, res) => {
   try {
     const errors = validationResult(req);

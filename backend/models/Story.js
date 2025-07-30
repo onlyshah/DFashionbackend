@@ -42,12 +42,14 @@ const storySchema = new mongoose.Schema({
     maxlength: 500
   },
 
-  // Product Integration (E-commerce)
-  products: [{
-    product: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Product'
-    },
+  // Product Integration (E-commerce) - MANDATORY
+  products: {
+    type: [{
+      product: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Product',
+        required: true
+      },
     position: {
       x: Number, // X coordinate percentage
       y: Number  // Y coordinate percentage
@@ -58,7 +60,14 @@ const storySchema = new mongoose.Schema({
       type: Number,
       default: 3 // seconds to show product tag
     }
-  }],
+    }],
+    validate: {
+      validator: function(products) {
+        return products && products.length > 0;
+      },
+      message: 'At least one product must be tagged in the story'
+    }
+  },
 
   // Instagram-style Features
   hashtags: [{

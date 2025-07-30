@@ -7,7 +7,7 @@ const { auth, requireRole, optionalAuth } = require('../middleware/auth');
 
 
 // Debug endpoint to see raw cart data
-router.get('/debug', auth, requireRole(['customer']), async (req, res) => {
+router.get('/debug', auth, requireRole(['end_user']), async (req, res) => {
   try {
     const cart = await Cart.findOne({ user: req.user._id, isActive: true });
 
@@ -43,7 +43,7 @@ router.get('/debug', auth, requireRole(['customer']), async (req, res) => {
 });
 
 // Get cart count only (lightweight endpoint)
-router.get('/count', auth, requireRole(['customer']), async (req, res) => {
+router.get('/count', auth, requireRole(['end_user']), async (req, res) => {
   try {
     const cart = await Cart.findOne({ user: req.user._id, isActive: true })
       .select('totalItems items totalAmount');
@@ -108,7 +108,7 @@ router.get('/count', auth, requireRole(['customer']), async (req, res) => {
 });
 
 // Recalculate cart totals (fix inconsistent data)
-router.post('/recalculate', auth, requireRole(['customer']), async (req, res) => {
+router.post('/recalculate', auth, requireRole(['end_user']), async (req, res) => {
   try {
     const cart = await Cart.findOne({ user: req.user._id, isActive: true });
 
@@ -166,9 +166,23 @@ router.post('/recalculate', auth, requireRole(['customer']), async (req, res) =>
   }
 });
 
-// Get combined cart and wishlist total count for specific user
-router.get('/total-count', auth, requireRole(['customer', 'vendor', 'admin', 'super_admin']), async (req, res) => {
+// Get combined cart and wishlist total count for specific user (no auth required)
+router.get('/total-count', optionalAuth, async (req, res) => {
   try {
+    // If user is not authenticated, return zero counts
+    if (!req.user) {
+      return res.json({
+        success: true,
+        data: {
+          cartItemCount: 0,
+          cartQuantityTotal: 0,
+          cartTotalAmount: 0,
+          wishlistItemCount: 0,
+          combinedTotal: 0
+        }
+      });
+    }
+
     console.log('🔢 Getting total count for user:', req.user._id, 'Username:', req.user.username);
 
     // Get cart data for this specific user
@@ -233,8 +247,25 @@ router.get('/total-count', auth, requireRole(['customer', 'vendor', 'admin', 'su
 });
 
 // Get user's cart
-router.get('/', auth, requireRole(['customer', 'vendor', 'admin', 'super_admin']), async (req, res) => {
+router.get('/', optionalAuth, async (req, res) => {
   try {
+    // If user is not authenticated, return empty cart
+    if (!req.user) {
+      return res.json({
+        success: true,
+        data: {
+          cart: {
+            _id: null,
+            user: null,
+            items: [],
+            totalItems: 0,
+            totalAmount: 0,
+            isActive: false
+          }
+        }
+      });
+    }
+
     console.log('🛒 Getting cart for user:', req.user._id);
     console.log('🛒 User object:', req.user);
 
@@ -300,7 +331,7 @@ router.get('/', auth, requireRole(['customer', 'vendor', 'admin', 'super_admin']
 });
 
 // Add item to cart
-router.post('/add', auth, requireRole(['customer']), async (req, res) => {
+router.post('/add', auth, requireRole(['end_user']), async (req, res) => {
   try {
     const { productId, quantity = 1, size, color, addedFrom = 'manual', notes } = req.body;
 
@@ -373,7 +404,7 @@ router.post('/add', auth, requireRole(['customer']), async (req, res) => {
 });
 
 // Update item quantity in cart
-router.put('/update/:itemId', auth, requireRole(['customer']), async (req, res) => {
+router.put('/update/:itemId', auth, requireRole(['end_user']), async (req, res) => {
   try {
     const { itemId } = req.params;
     const { quantity, size, color, notes } = req.body;
@@ -440,7 +471,7 @@ router.put('/update/:itemId', auth, requireRole(['customer']), async (req, res) 
 });
 
 // Remove item from cart
-router.delete('/remove/:itemId', auth, requireRole(['customer']), async (req, res) => {
+router.delete('/remove/:itemId', auth, requireRole(['end_user']), async (req, res) => {
   try {
     const { itemId } = req.params;
 
@@ -482,7 +513,7 @@ router.delete('/remove/:itemId', auth, requireRole(['customer']), async (req, re
 });
 
 // Bulk remove items from cart
-router.delete('/bulk-remove', auth, requireRole(['customer']), async (req, res) => {
+router.delete('/bulk-remove', auth, requireRole(['end_user']), async (req, res) => {
   try {
     const { itemIds } = req.body;
 
@@ -541,7 +572,7 @@ router.delete('/bulk-remove', auth, requireRole(['customer']), async (req, res) 
 });
 
 // Clear entire cart
-router.delete('/clear', auth, requireRole(['customer']), async (req, res) => {
+router.delete('/clear', auth, requireRole(['end_user']), async (req, res) => {
   try {
     const cart = await Cart.findOne({ user: req.user._id, isActive: true });
     if (!cart) {
@@ -573,7 +604,7 @@ router.delete('/clear', auth, requireRole(['customer']), async (req, res) => {
 });
 
 // Get cart items grouped by vendor
-router.get('/vendors', auth, requireRole(['customer']), async (req, res) => {
+router.get('/vendors', auth, requireRole(['end_user']), async (req, res) => {
   try {
     const cart = await Cart.findOrCreateForUser(req.user._id)
       .populate({
@@ -603,7 +634,7 @@ router.get('/vendors', auth, requireRole(['customer']), async (req, res) => {
 });
 
 // Move item from cart to wishlist
-router.post('/move-to-wishlist/:itemId', auth, requireRole(['customer']), async (req, res) => {
+router.post('/move-to-wishlist/:itemId', auth, requireRole(['end_user']), async (req, res) => {
   try {
     const { itemId } = req.params;
     const Wishlist = require('../models/Wishlist');

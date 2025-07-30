@@ -24,18 +24,30 @@ const postSchema = new mongoose.Schema({
     thumbnail: String, // For videos
     alt: String
   }],
-  products: [{
-    product: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Product'
-    },
+  products: {
+    type: [{
+      product: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Product',
+        required: true
+      },
     position: {
       x: Number, // X coordinate percentage
       y: Number  // Y coordinate percentage
     },
     size: String,
-    color: String
-  }],
+    color: String,
+    isMainProduct: { type: Boolean, default: false },
+    clickCount: { type: Number, default: 0 },
+    purchaseCount: { type: Number, default: 0 }
+    }],
+    validate: {
+      validator: function(products) {
+        return products && products.length > 0;
+      },
+      message: 'At least one product must be tagged in the post'
+    }
+  },
   hashtags: [String],
   mentions: [{
     type: mongoose.Schema.Types.ObjectId,
@@ -153,6 +165,22 @@ const postSchema = new mongoose.Schema({
       type: Boolean,
       default: true
     }
+  },
+
+  // Enhanced engagement tracking
+  engagement: {
+    clickThroughs: { type: Number, default: 0 }, // Clicks on tagged products
+    purchasesGenerated: { type: Number, default: 0 },
+    revenueGenerated: { type: Number, default: 0 },
+    engagementRate: { type: Number, default: 0 },
+    conversionRate: { type: Number, default: 0 }
+  },
+
+  // Performance metrics
+  performance: {
+    reachScore: { type: Number, default: 0 },
+    viralityScore: { type: Number, default: 0 },
+    qualityScore: { type: Number, default: 0 }
   }
 }, {
   timestamps: true

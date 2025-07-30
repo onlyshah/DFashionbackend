@@ -123,11 +123,27 @@ const requireRole = (roles) => {
 };
 
 // Check if vendor is approved
-const isApprovedVendor = (req, res, next) => {
-  if (req.user.role === 'vendor' && !req.user.vendorInfo.isApproved) {
-    return res.status(403).json({ message: 'Vendor account not approved yet.' });
+const isApprovedVendor = async (req, res, next) => {
+  try {
+    if (req.user.role === 'vendor') {
+      const User = require('../models/User');
+      const vendor = await User.findById(req.user.userId);
+
+      if (!vendor || vendor.vendorVerification.status !== 'approved') {
+        return res.status(403).json({
+          success: false,
+          message: 'Vendor verification required. Please complete verification process.'
+        });
+      }
+    }
+    next();
+  } catch (error) {
+    console.error('Vendor verification check error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
   }
-  next();
 };
 
 // Check if user is customer

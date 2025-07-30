@@ -3,6 +3,7 @@ const router = express.Router();
 const { auth, requireCustomer } = require('../middleware/auth');
 const Order = require('../models/Order');
 const Product = require('../models/Product');
+// const invoiceService = require('../services/invoiceService');
 
 // All routes require authentication
 router.use(auth);
@@ -196,6 +197,33 @@ router.post('/', requireCustomer, async (req, res) => {
       .populate('customer', 'fullName email')
       .populate('items.product', 'name images price');
 
+    // Generate and send invoice (temporarily disabled)
+    // TODO: Re-enable invoice generation after fixing nodemailer issue
+    /*
+    try {
+      const orderData = {
+        ...populatedOrder.toObject(),
+        orderNumber: populatedOrder._id.toString().slice(-8).toUpperCase(),
+        customer: {
+          fullName: req.user.fullName,
+          email: req.user.email
+        },
+        shippingAddress,
+        totalAmount,
+        items: orderItems
+      };
+
+      const invoiceResult = await invoiceService.processOrderInvoice(orderData);
+
+      if (!invoiceResult.success) {
+        console.error('❌ Invoice generation failed:', invoiceResult.error);
+      }
+    } catch (invoiceError) {
+      console.error('❌ Invoice processing error:', invoiceError);
+      // Don't fail the order creation if invoice fails
+    }
+    */
+
     res.status(201).json({
       success: true,
       message: 'Order created successfully',
@@ -207,6 +235,57 @@ router.post('/', requireCustomer, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to create order'
+    });
+  }
+});
+
+// Generate invoice for existing order
+router.post('/:orderId/invoice', requireCustomer, async (req, res) => {
+  try {
+    const order = await Order.findOne({
+      _id: req.params.orderId,
+      customer: req.user.userId
+    }).populate('items.product', 'name description price');
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    const orderData = {
+      ...order.toObject(),
+      orderNumber: order._id.toString().slice(-8).toUpperCase(),
+      customer: {
+        fullName: req.user.fullName,
+        email: req.user.email
+      },
+      totalAmount: order.pricing.total,
+      items: order.items
+    };
+
+    const invoiceResult = await invoiceService.processOrderInvoice(orderData);
+
+    if (invoiceResult.success) {
+      res.json({
+        success: true,
+        message: 'Invoice generated and sent successfully',
+        data: invoiceResult
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: 'Failed to generate invoice',
+        error: invoiceResult.error
+      });
+    }
+
+  } catch (error) {
+    console.error('Generate invoice error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate invoice'
     });
   }
 });

@@ -225,26 +225,17 @@ router.get('/competitors', async (req, res) => {
   }
 });
 
-// Data Scraping Endpoints
+// Data Scraping Endpoints - REAL DATA ONLY
 router.post('/scrape/instagram', async (req, res) => {
   try {
     const { username } = req.body;
-    
-    // Mock Instagram scraping data
-    const instagramData = {
-      username,
-      followers: Math.floor(Math.random() * 100000) + 10000,
-      following: Math.floor(Math.random() * 1000) + 100,
-      posts: Math.floor(Math.random() * 500) + 50,
-      engagementRate: (Math.random() * 10 + 2).toFixed(2),
-      avgLikes: Math.floor(Math.random() * 5000) + 500,
-      avgComments: Math.floor(Math.random() * 200) + 20,
-      scrapedAt: new Date()
-    };
 
-    res.json({
-      success: true,
-      data: instagramData
+    // TODO: Implement real Instagram scraping using official API
+    // For now, return error since we don't use mock data
+    res.status(501).json({
+      success: false,
+      message: 'Instagram scraping not implemented - no mock data allowed',
+      error: 'Real Instagram API integration required'
     });
 
   } catch (error) {

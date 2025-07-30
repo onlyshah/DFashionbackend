@@ -1,6 +1,7 @@
 const express = require('express');
 const User = require('../models/User');
 const Product = require('../models/Product');
+const Category = require('../models/Category');
 const Story = require('../models/Story');
 const Post = require('../models/Post');
 const Order = require('../models/Order');
@@ -736,6 +737,176 @@ router.get('/analytics/orders', auth, isAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Get order analytics error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+});
+
+// @route   GET /api/admin/products
+// @desc    Get all products for admin
+// @access  Private (Admin only)
+router.get('/products', auth, async (req, res) => {
+  try {
+    const adminRoles = ['super_admin', 'admin', 'sales', 'marketing'];
+    if (!adminRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const filter = { isActive: true };
+    if (req.query.category) filter.category = req.query.category;
+    if (req.query.status) filter.status = req.query.status;
+    if (req.query.search) {
+      filter.$or = [
+        { name: { $regex: req.query.search, $options: 'i' } },
+        { description: { $regex: req.query.search, $options: 'i' } }
+      ];
+    }
+
+    const products = await Product.find(filter)
+      .populate('vendor', 'fullName email')
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Product.countDocuments(filter);
+
+    res.json({
+      success: true,
+      data: {
+        products,
+        pagination: {
+          currentPage: page,
+          totalPages: Math.ceil(total / limit),
+          totalProducts: total,
+          hasNextPage: page < Math.ceil(total / limit),
+          hasPrevPage: page > 1
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching admin products:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+});
+
+// @route   POST /api/admin/products
+// @desc    Create new product (admin)
+// @access  Private (Admin only)
+router.post('/products', auth, async (req, res) => {
+  try {
+    const adminRoles = ['super_admin', 'admin'];
+    if (!adminRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+
+    const product = new Product({
+      ...req.body,
+      vendor: req.body.vendor || req.user._id
+    });
+
+    await product.save();
+
+    res.json({
+      success: true,
+      data: product,
+      message: 'Product created successfully'
+    });
+  } catch (error) {
+    console.error('Error creating product:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+});
+
+// @route   PUT /api/admin/products/:id
+// @desc    Update product (admin)
+// @access  Private (Admin only)
+router.put('/products/:id', auth, async (req, res) => {
+  try {
+    const adminRoles = ['super_admin', 'admin'];
+    if (!adminRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+
+    const product = await Product.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { new: true, runValidators: true }
+    );
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: product,
+      message: 'Product updated successfully'
+    });
+  } catch (error) {
+    console.error('Error updating product:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+});
+
+// @route   DELETE /api/admin/products/:id
+// @desc    Delete product (admin)
+// @access  Private (Admin only)
+router.delete('/products/:id', auth, async (req, res) => {
+  try {
+    const adminRoles = ['super_admin', 'admin'];
+    if (!adminRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Admin access required'
+      });
+    }
+
+    const product = await Product.findByIdAndDelete(req.params.id);
+
+    if (!product) {
+      return res.status(404).json({
+        success: false,
+        message: 'Product not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Product deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting product:', error);
     res.status(500).json({
       success: false,
       message: 'Server error',

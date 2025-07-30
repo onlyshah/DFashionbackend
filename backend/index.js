@@ -436,6 +436,26 @@ try {
     console.error('❌ Error loading recommendations routes:', error.message);
 }
 
+// Enhanced Content Creation Routes
+try {
+    app.use('/api/content', require('./routes/contentRoutes'));
+    app.use('/api/v1/content', require('./routes/contentRoutes'));
+    console.log('✅ Enhanced content creation routes loaded');
+} catch (error) {
+    console.error('❌ Error loading content routes:', error.message);
+}
+
+// Reward System Routes
+try {
+    const rewardRoutes = require('./routes/rewardRoutes');
+    app.use('/api/rewards', rewardRoutes);
+    app.use('/api/v1/rewards', rewardRoutes);
+    console.log('✅ Reward system routes loaded');
+} catch (error) {
+    console.error('❌ Error loading reward routes:', error.message);
+    console.error('Full error:', error);
+}
+
 try {
     app.use('/api/v1/search', require('./routes/search'));
     console.log('✅ Search routes loaded');
@@ -449,6 +469,50 @@ try {
     console.log('✅ Main API routes with /v1 prefix loaded');
 } catch (error) {
     console.error('❌ Error loading main API routes:', error.message);
+}
+
+// New E-commerce Feature Routes
+try {
+    app.use('/api/role-management', require('./routes/roleManagement'));
+    console.log('✅ Role management routes loaded');
+} catch (error) {
+    console.error('❌ Error loading role management routes:', error.message);
+}
+
+try {
+    app.use('/api/modules', require('./routes/moduleManagement'));
+    console.log('✅ Module management routes loaded');
+} catch (error) {
+    console.error('❌ Error loading module management routes:', error.message);
+}
+
+try {
+    app.use('/api/vendor-verification', require('./routes/vendorVerification'));
+    console.log('✅ Vendor verification routes loaded');
+} catch (error) {
+    console.error('❌ Error loading vendor verification routes:', error.message);
+}
+
+// New E-commerce Feature Routes
+try {
+    app.use('/api/role-management', require('./routes/roleManagement'));
+    console.log('✅ Role management routes loaded');
+} catch (error) {
+    console.error('❌ Error loading role management routes:', error.message);
+}
+
+try {
+    app.use('/api/modules', require('./routes/moduleManagement'));
+    console.log('✅ Module management routes loaded');
+} catch (error) {
+    console.error('❌ Error loading module management routes:', error.message);
+}
+
+try {
+    app.use('/api/vendor-verification', require('./routes/vendorVerification'));
+    console.log('✅ Vendor verification routes loaded');
+} catch (error) {
+    console.error('❌ Error loading vendor verification routes:', error.message);
 }
 
 // Health Check Endpoint
@@ -542,7 +606,7 @@ const startServer = async () => {
         socketService.initialize(server);
 
         // Start server
-        const PORT = process.env.PORT || 3001;
+        const PORT = process.env.PORT || 9000;
 
         server.listen(PORT, '0.0.0.0', () => {
             console.log('========================================');

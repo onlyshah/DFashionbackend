@@ -145,18 +145,62 @@ router.get('/:slug/products', async (req, res) => {
   }
 });
 
-// @route   POST /api/categories
-// @desc    Create new category (Admin only)
-// @access  Private/Admin
-router.post('/', auth, async (req, res) => {
+// Middleware to check category creation permission
+const checkCategoryPermission = async (req, res, next) => {
   try {
-    // Check if user is admin
-    if (req.user.role !== 'admin') {
+    // Super admin always has permission
+    if (req.user.role === 'super_admin') {
+      return next();
+    }
+
+    // Check if user's role has category creation permission
+    const Role = require('../models/Role');
+    const Module = require('../models/Module');
+
+    const userRole = await Role.findOne({ name: req.user.role })
+      .populate('modulePermissions.module');
+
+    if (!userRole) {
       return res.status(403).json({
         success: false,
-        message: 'Access denied. Admin only.'
+        message: 'Role not found'
       });
     }
+
+    // Find category module
+    const categoryModule = await Module.findOne({ name: 'categories' });
+    if (!categoryModule) {
+      return res.status(403).json({
+        success: false,
+        message: 'Category module not found'
+      });
+    }
+
+    // Check if role has create permission for categories
+    const hasPermission = userRole.hasModulePermission(categoryModule._id, 'create');
+
+    if (!hasPermission) {
+      return res.status(403).json({
+        success: false,
+        message: 'Access denied. You do not have permission to create categories.'
+      });
+    }
+
+    next();
+  } catch (error) {
+    console.error('Category permission check error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error'
+    });
+  }
+};
+
+// @route   POST /api/categories
+// @desc    Create new category (Super Admin or Permitted Roles)
+// @access  Private/Super Admin or Permitted Roles
+router.post('/', auth, checkCategoryPermission, async (req, res) => {
+  try {
 
     const {
       name,

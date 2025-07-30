@@ -33,14 +33,32 @@ const categorySchema = new mongoose.Schema({
   subcategories: [{
     name: {
       type: String,
-      required: true
+      required: true,
+      trim: true
     },
     slug: {
       type: String,
-      required: true
+      required: true,
+      lowercase: true,
+      trim: true
     },
-    description: String,
-    image: String
+    description: {
+      type: String,
+      trim: true
+    },
+    image: String,
+    isActive: {
+      type: Boolean,
+      default: true
+    },
+    sortOrder: {
+      type: Number,
+      default: 0
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
   }],
   isActive: {
     type: Boolean,

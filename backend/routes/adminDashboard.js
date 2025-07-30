@@ -207,31 +207,65 @@ router.get('/roles',
   }
 );
 
-// Team Management Routes
-router.get('/team', 
+// Team Management Routes - REAL DATA ONLY
+router.get('/team',
   requirePermission('users', 'view'),
-  (req, res) => {
-    const teamMembers = [
-      {
-        id: '1',
-        name: 'Admin User',
-        email: 'admin@dfashion.com',
-        role: 'super_admin',
-        department: 'administration',
-        status: 'active',
-        last_login: new Date(Date.now() - 2 * 60 * 60 * 1000),
-        permissions: ['all']
-      },
-      {
-        id: '2',
-        name: 'Raj Kumar',
-        email: 'raj.sales@dfashion.com',
-        role: 'sales_manager',
-        department: 'sales',
-        status: 'active',
-        last_login: new Date(Date.now() - 30 * 60 * 1000),
-        permissions: ['dashboard.view', 'orders.view', 'orders.edit']
-      },
+  async (req, res) => {
+    try {
+      // Get real team members from database
+      const User = require('../models/User');
+      const teamMembers = await User.find({
+        role: { $in: ['super_admin', 'admin', 'sales_manager', 'marketing_manager', 'support_agent'] }
+      }).select('fullName email role isActive lastLogin createdAt').lean();
+
+      const formattedTeamMembers = teamMembers.map(member => ({
+        id: member._id,
+        name: member.fullName,
+        email: member.email,
+        role: member.role,
+        department: getDepartmentFromRole(member.role),
+        status: member.isActive ? 'active' : 'inactive',
+        last_login: member.lastLogin || member.createdAt,
+        permissions: getRolePermissions(member.role)
+      }));
+
+      res.json({
+        success: true,
+        data: formattedTeamMembers
+      });
+    } catch (error) {
+      console.error('Error fetching team members:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch team members',
+        error: error.message
+      });
+    }
+  }
+);
+
+// Helper functions
+function getDepartmentFromRole(role) {
+  const roleDepartmentMap = {
+    'super_admin': 'administration',
+    'admin': 'administration',
+    'sales_manager': 'sales',
+    'marketing_manager': 'marketing',
+    'support_agent': 'support'
+  };
+  return roleDepartmentMap[role] || 'general';
+}
+
+function getRolePermissions(role) {
+  const rolePermissionsMap = {
+    'super_admin': ['all'],
+    'admin': ['dashboard.view', 'users.view', 'products.manage', 'orders.manage'],
+    'sales_manager': ['dashboard.view', 'orders.view', 'orders.edit'],
+    'marketing_manager': ['dashboard.view', 'analytics.view', 'campaigns.manage'],
+    'support_agent': ['dashboard.view', 'orders.view', 'users.view']
+  };
+  return rolePermissionsMap[role] || [];
+}
       {
         id: '3',
         name: 'Priya Marketing',

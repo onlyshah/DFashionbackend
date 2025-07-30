@@ -26,18 +26,14 @@ const productSchema = new mongoose.Schema({
     default: 0
   },
   category: {
-    type: String,
-    required: true,
-    enum: ['men', 'women', 'children']
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Category',
+    required: true
   },
   subcategory: {
     type: String,
     required: true,
-    enum: [
-      'shirts', 'pants', 'dresses', 'shoes', 'accessories', 
-      'jackets', 'tops', 'bottoms', 'ethnic', 'sportswear',
-      'innerwear', 'bags', 'watches', 'jewelry'
-    ]
+    trim: true
   },
   brand: {
     type: String,
