@@ -1,3 +1,5 @@
+
+
 console.log('🚀 Starting DFashion Backend...');
 
 const express = require('express');
@@ -18,7 +20,7 @@ require('dotenv').config();
 console.log('🔐 JWT_SECRET loaded:', !!process.env.JWT_SECRET);
 if (!process.env.JWT_SECRET) {
     console.warn('⚠️  WARNING: JWT_SECRET not found in environment variables!');
-    console.warn('⚠️  Using fallback secret for development/testing');
+    // Removed fallback secret warning for production
     console.warn('⚠️  Please set JWT_SECRET in production!');
     process.env.JWT_SECRET = 'fallback-development-secret-key-not-for-production';
 }
@@ -85,9 +87,7 @@ const corsOptions = {
         }
 
         // Allow any IP address for mobile development
-        if (/^http:\/\/\d+\.\d+\.\d+\.\d+/.test(origin)) {
-            return callback(null, true);
-        }
+        // Removed legacy IP-based CORS for production
 
         const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
         return callback(new Error(msg), false);
@@ -106,7 +106,7 @@ const corsOptions = {
         'X-Request-ID'
     ],
     exposedHeaders: ['Content-Range', 'X-Content-Range', 'X-Request-ID'],
-    optionsSuccessStatus: 200, // For legacy browser support
+    optionsSuccessStatus: 200,
     preflightContinue: false
 };
 
@@ -190,7 +190,7 @@ try {
     Order = require('./models/Order');
     console.log('✅ Order model loaded');
 } catch (error) {
-    console.log('⚠️ Models not available, using mock data');
+    // Removed mock data log for production
 }
 
 // Load middleware
@@ -201,15 +201,7 @@ try {
     console.log('⚠️ Middleware not available');
 }
 
-// Test endpoint
-app.get('/api/test', (req, res) => {
-    res.json({
-        success: true,
-        message: 'DFashion API is working!',
-        timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'development'
-    });
-});
+
 
 // Seeding endpoint
 app.post('/api/seed', async (req, res) => {
@@ -217,7 +209,7 @@ app.post('/api/seed', async (req, res) => {
         console.log('🌱 Starting database seeding...');
         
         // Import and run seeder
-        const seedDatabase = require('./scripts/seedRealData');
+        const { seedDatabase } = require('./scripts/masterSeed');
         await seedDatabase();
         
         res.json({
@@ -424,6 +416,7 @@ try {
 
 try {
     app.use('/api/analytics', require('./routes/analytics'));
+    app.use('/api/v1/analytics', require('./routes/analytics')); // Add v1 prefix
     console.log('✅ Analytics routes loaded');
 } catch (error) {
     console.error('❌ Error loading analytics routes:', error.message);
@@ -431,6 +424,7 @@ try {
 
 try {
     app.use('/api/recommendations', require('./routes/recommendations'));
+    app.use('/api/v1/recommendations', require('./routes/recommendations')); // Add v1 prefix
     console.log('✅ Recommendations routes loaded');
 } catch (error) {
     console.error('❌ Error loading recommendations routes:', error.message);
@@ -563,11 +557,14 @@ app.get('/api/collections', (req, res) => {
 });
 
 
-// Note: Login handled by auth routes (/routes/auth.js)
 
-// Admin login handled by main auth routes
-
-// All routes handled by dedicated route files - no mock data
+// Register Smart Collections API after all other routes
+try {
+    app.use('/api/smart-collections', require('./routes/smartCollections'));
+    console.log('✅ Smart Collections routes loaded');
+} catch (error) {
+    console.error('❌ Error loading smart collections routes:', error.message);
+}
 
 // Error handling for unhandled promise rejections
 process.on('unhandledRejection', (reason, promise) => {
@@ -617,7 +614,7 @@ const startServer = async () => {
             console.log(`🔌 Socket.IO: Real-time notifications enabled`);
             console.log(`🛡️ Admin Dashboard: http://localhost:4200/admin`);
             console.log(`🌐 Health Check: http://localhost:${PORT}/api/health`);
-            console.log(`🌐 Test Endpoint: http://localhost:${PORT}/api/test`);
+            // Removed test endpoint log for production
             console.log(`📊 Database: ${mongoose.connection.readyState === 1 ? 'Connected' : 'Connecting...'}`);
             console.log('========================================');
         });

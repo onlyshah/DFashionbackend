@@ -17,10 +17,9 @@ router.get('/', async (req, res) => {
     const categoriesWithCount = await Promise.all(
       categories.map(async (category) => {
         const productCount = await Product.countDocuments({ 
-          category: category.slug,
+          category: category._id,
           isActive: true 
         });
-        
         return {
           ...category.toObject(),
           productCount

@@ -122,6 +122,10 @@ async function seedStories() {
 
     // Get some products for product tagging
     const products = await Product.find({}).limit(10);
+    if (products.length === 0) {
+      console.log('⚠️ No products found. Please run product seeding first.');
+      return;
+    }
 
     // Clear existing stories
     console.log('🗑️ Clearing existing stories...');
@@ -146,9 +150,15 @@ async function seedStories() {
       const createdAt = new Date(Date.now() - Math.random() * 24 * 60 * 60 * 1000);
       const expiresAt = new Date(createdAt.getTime() + 24 * 60 * 60 * 1000); // 24 hours from creation
 
-      // Randomly select products to tag (0-2 products per story)
-      const taggedProducts = products.length > 0 ? 
-        products.sort(() => 0.5 - Math.random()).slice(0, Math.floor(Math.random() * 3)) : [];
+      // Always tag at least one product per story
+      let taggedProducts = [];
+      if (products.length > 0) {
+        // Pick 1-2 products randomly
+        const count = Math.max(1, Math.floor(Math.random() * 3));
+        taggedProducts = products.sort(() => 0.5 - Math.random()).slice(0, count);
+      }
+      // Only create story if at least one product is tagged
+      if (taggedProducts.length === 0) continue;
 
       const story = {
         title: content.title,
@@ -165,7 +175,6 @@ async function seedStories() {
           }
         })),
         views: Math.floor(Math.random() * 500) + 50, // 50-550 views
-        likes: Math.floor(Math.random() * 100) + 10, // 10-110 likes
         isActive: true,
         createdAt: createdAt,
         expiresAt: expiresAt,
@@ -208,6 +217,13 @@ async function seedStories() {
         const content = additionalStories[i];
         const createdAt = new Date(Date.now() - Math.random() * 12 * 60 * 60 * 1000); // Last 12 hours
         
+        // Always tag at least one product for additional stories
+        let taggedProducts = [];
+        if (products.length > 0) {
+          taggedProducts = [products[Math.floor(Math.random() * products.length)]];
+        }
+        // Only create story if at least one product is tagged
+        if (taggedProducts.length === 0) continue;
         stories.push({
           title: content.title,
           user: user._id,
@@ -215,9 +231,14 @@ async function seedStories() {
           caption: content.caption,
           hashtags: content.hashtags,
           location: content.location,
-          products: [],
+          products: taggedProducts.map(product => ({
+            product: product._id,
+            position: {
+              x: Math.random() * 80 + 10,
+              y: Math.random() * 80 + 10
+            }
+          })),
           views: Math.floor(Math.random() * 200) + 20,
-          likes: Math.floor(Math.random() * 50) + 5,
           isActive: true,
           createdAt: createdAt,
           expiresAt: new Date(createdAt.getTime() + 24 * 60 * 60 * 1000),
