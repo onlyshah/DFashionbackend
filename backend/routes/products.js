@@ -7,7 +7,7 @@ const { SearchHistory, TrendingSearch, SearchSuggestion } = require('../models/S
 
 const router = express.Router();
 
-// @route   GET /api/v1/products/trending
+// @route   GET /api/products/trending
 // @desc    Get trending products
 // @access  Public
 router.get('/trending', async (req, res) => {
@@ -64,7 +64,7 @@ router.get('/trending', async (req, res) => {
   }
 });
 
-// @route   GET /api/v1/products/new-arrivals
+// @route   GET /api/products/new-arrivals
 // @desc    Get new arrival products
 // @access  Public
 router.get('/new-arrivals', async (req, res) => {
@@ -506,7 +506,7 @@ router.get('/category/:slug', async (req, res) => {
   }
 });
 
-// @route   GET /api/v1/products/featured-brands
+// @route   GET /api/products/featured-brands
 // @desc    Get featured brands with their top products
 // @access  Public
 router.get('/featured-brands', optionalAuth, async (req, res) => {

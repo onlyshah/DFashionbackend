@@ -12,7 +12,7 @@ const uploadRoutes = require('./upload');
 const searchRoutes = require('./search');
 
 // API version prefix
-const API_VERSION = '/api/v1';
+//const API_VERSION = '/api/';
 
 // Health check endpoint
 router.get('/health', (req, res) => {
@@ -61,71 +61,71 @@ router.get('/docs', (req, res) => {
     version: '1.0.0',
     endpoints: {
       authentication: {
-        'POST /api/v1/auth/admin/login': 'Admin login',
-        'POST /api/v1/auth/customer/login': 'Customer login',
-        'POST /api/v1/auth/customer/register': 'Customer registration',
-        'POST /api/v1/auth/logout': 'Logout',
-        'GET /api/v1/auth/verify': 'Verify token'
+        'POST /api/auth/admin/login': 'Admin login',
+        'POST /api/auth/customer/login': 'Customer login',
+        'POST /api/auth/customer/register': 'Customer registration',
+        'POST /api/auth/logout': 'Logout',
+        'GET /api/auth/verify': 'Verify token'
       },
       admin: {
-        'GET /api/v1/admin/dashboard': 'Admin dashboard stats',
-        'GET /api/v1/admin/users': 'Get all users',
-        'POST /api/v1/admin/users': 'Create admin user',
-        'PUT /api/v1/admin/users/:id': 'Update user',
-        'DELETE /api/v1/admin/users/:id': 'Delete user',
-        'GET /api/v1/admin/orders': 'Get all orders',
-        'PUT /api/v1/admin/orders/:id/status': 'Update order status'
+        'GET /api/admin/dashboard': 'Admin dashboard stats',
+        'GET /api/admin/users': 'Get all users',
+        'POST /api/admin/users': 'Create admin user',
+        'PUT /api/admin/users/:id': 'Update user',
+        'DELETE /api/admin/users/:id': 'Delete user',
+        'GET /api/admin/orders': 'Get all orders',
+        'PUT /api/admin/orders/:id/status': 'Update order status'
       },
       products: {
-        'GET /api/v1/products': 'Get all products',
-        'GET /api/v1/products/:id': 'Get product by ID',
-        'POST /api/v1/products': 'Create product',
-        'PUT /api/v1/products/:id': 'Update product',
-        'DELETE /api/v1/products/:id': 'Delete product'
+        'GET /api/products': 'Get all products',
+        'GET /api/products/:id': 'Get product by ID',
+        'POST /api/products': 'Create product',
+        'PUT /api/products/:id': 'Update product',
+        'DELETE /api/products/:id': 'Delete product'
       },
       orders: {
-        'GET /api/v1/orders': 'Get user orders',
-        'GET /api/v1/orders/:id': 'Get order by ID',
-        'POST /api/v1/orders': 'Create order',
-        'PUT /api/v1/orders/:id/cancel': 'Cancel order'
+        'GET /api/orders': 'Get user orders',
+        'GET /api/orders/:id': 'Get order by ID',
+        'POST /api/orders': 'Create order',
+        'PUT /api/orders/:id/cancel': 'Cancel order'
       },
       users: {
-        'GET /api/v1/users/profile': 'Get user profile',
-        'PUT /api/v1/users/profile': 'Update user profile',
-        'POST /api/v1/users/change-password': 'Change password'
+        'GET /api/users/profile': 'Get user profile',
+        'PUT /api/users/profile': 'Update user profile',
+        'POST /api/users/change-password': 'Change password'
       },
       upload: {
-        'POST /api/v1/upload/image': 'Upload image',
-        'POST /api/v1/upload/multiple': 'Upload multiple images'
+        'POST /api/upload/image': 'Upload image',
+        'POST /api/upload/multiple': 'Upload multiple images'
       },
       cart: {
-        'GET /api/v1/cart': 'Get user cart',
-        'POST /api/v1/cart': 'Add item to cart',
-        'PUT /api/v1/cart/:itemId': 'Update cart item',
-        'DELETE /api/v1/cart/:itemId': 'Remove item from cart',
-        'DELETE /api/v1/cart': 'Clear cart'
+        'GET /api/cart': 'Get user cart',
+        'POST /api/cart': 'Add item to cart',
+        'PUT /api/cart/:itemId': 'Update cart item',
+        'DELETE /api/cart/:itemId': 'Remove item from cart',
+        'DELETE /api/cart': 'Clear cart'
       },
       wishlist: {
-        'GET /api/v1/wishlist': 'Get user wishlist',
-        'POST /api/v1/wishlist': 'Add item to wishlist',
-        'DELETE /api/v1/wishlist/:productId': 'Remove item from wishlist',
-        'DELETE /api/v1/wishlist': 'Clear wishlist',
-        'POST /api/v1/wishlist/move-to-cart/:productId': 'Move item to cart'
+        'GET /api/wishlist': 'Get user wishlist',
+        'POST /api/wishlist': 'Add item to wishlist',
+        'DELETE /api/wishlist/:productId': 'Remove item from wishlist',
+        'DELETE /api/wishlist': 'Clear wishlist',
+        'POST /api/wishlist/move-to-cart/:productId': 'Move item to cart'
       }
     }
   });
 });
 
 // Mount route modules
-router.use(`${API_VERSION}/auth`, authRoutes);
-router.use(`${API_VERSION}/admin`, adminRoutes);
-router.use(`${API_VERSION}/vendor`, vendorRoutes);
-router.use(`${API_VERSION}/products`, productRoutes);
-router.use(`${API_VERSION}/orders`, orderRoutes);
-router.use(`${API_VERSION}/users`, userRoutes);
-router.use(`${API_VERSION}/user`, userRoutes); // Additional mounting for /user endpoints
-router.use(`${API_VERSION}/upload`, uploadRoutes);
-router.use(`${API_VERSION}/search`, searchRoutes);
+router.use(`/auth`, authRoutes);
+router.use(`/admin`, adminRoutes);
+router.use(`/vendor`, vendorRoutes);
+router.use(`/products`, productRoutes);
+router.use(`/orders`, orderRoutes);
+router.use(`/users`, userRoutes);
+router.use(`/user`, userRoutes); // Additional mounting for /user endpoints
+router.use(`/upload`, uploadRoutes);
+router.use(`/search`, searchRoutes);
 
 // Import additional routes
 const cartRoutes = require('./cart');
@@ -149,25 +149,25 @@ const analyticsRoutes = require('./analytics');
 const recommendationsRoutes = require('./recommendations');
 
 // Mount additional routes
-router.use(`${API_VERSION}/cart`, cartRoutes);
-router.use(`${API_VERSION}/wishlist`, wishlistRoutes);
-router.use(`${API_VERSION}/posts`, postRoutes);
-router.use(`${API_VERSION}/stories`, storyRoutes);
-router.use(`${API_VERSION}/cart-new`, cartNewRoutes);
-router.use(`${API_VERSION}/wishlist-new`, wishlistNewRoutes);
-router.use(`${API_VERSION}/payments`, paymentRoutes);
-router.use(`${API_VERSION}/checkout`, checkoutRoutes);
-router.use(`${API_VERSION}/notifications`, notificationRoutes);
-router.use(`${API_VERSION}/admin/auth`, adminAuthRoutes);
-router.use(`${API_VERSION}/admin/dashboard`, adminDashboardRoutes);
-router.use(`${API_VERSION}/product-comments`, productCommentsRoutes);
-router.use(`${API_VERSION}/product-shares`, productSharesRoutes);
-router.use(`${API_VERSION}/ecommerce`, ecommerceAPIRoutes);
-router.use(`${API_VERSION}/user`, userWishlistCartRoutes);
-router.use(`${API_VERSION}/categories`, categoriesRoutes);
-router.use(`${API_VERSION}/brands`, brandsRoutes);
-router.use(`${API_VERSION}/analytics`, analyticsRoutes);
-router.use(`${API_VERSION}/recommendations`, recommendationsRoutes);
+router.use(`/cart`, cartRoutes);
+router.use(`/wishlist`, wishlistRoutes);
+router.use(`/posts`, postRoutes);
+router.use(`/stories`, storyRoutes);
+router.use(`/cart-new`, cartNewRoutes);
+router.use(`/wishlist-new`, wishlistNewRoutes);
+router.use(`/payments`, paymentRoutes);
+router.use(`/checkout`, checkoutRoutes);
+router.use(`/notifications`, notificationRoutes);
+router.use(`/admin/auth`, adminAuthRoutes);
+router.use(`/admin/dashboard`, adminDashboardRoutes);
+router.use(`/product-comments`, productCommentsRoutes);
+router.use(`/product-shares`, productSharesRoutes);
+router.use(`/ecommerce`, ecommerceAPIRoutes);
+router.use(`/user`, userWishlistCartRoutes);
+router.use(`/categories`, categoriesRoutes);
+router.use(`/brands`, brandsRoutes);
+router.use(`/analytics`, analyticsRoutes);
+router.use(`/recommendations`, recommendationsRoutes);
 
 // 404 handler for API routes
 router.use('*', (req, res) => {
@@ -177,10 +177,10 @@ router.use('*', (req, res) => {
     availableEndpoints: [
       'GET /health',
       'GET /docs',
-      'POST /api/v1/auth/admin/login',
-      'POST /api/v1/auth/customer/login',
-      'GET /api/v1/products',
-      'GET /api/v1/admin/dashboard'
+      'POST /api/auth/admin/login',
+      'POST /api/auth/customer/login',
+      'GET /api/products',
+      'GET /api/admin/dashboard'
     ]
   });
 });

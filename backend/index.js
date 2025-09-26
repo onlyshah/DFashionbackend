@@ -213,9 +213,11 @@ const safeMount = (mountPath, routePath) => {
 
 // Core routes
 safeMount('/api/auth', './routes/auth');
+safeMount('/api/v1/cart-new', './routes/cartNew');
 safeMount('/api/cart-new', './routes/cartNew');
 safeMount('/api/wishlist-new', './routes/wishlistNew');
-safeMount('/api/wishlist-new', './routes/wishlistNew');
+safeMount('/api/v1/wishlist-new', './routes/wishlistNew');
+safeMount('/api/wishlist', './routes/wishlistNew');
 safeMount('/api/orders', './routes/orders');
 safeMount('/api/payments', './routes/payments');
 safeMount('/api/checkout', './routes/checkout');
@@ -230,17 +232,17 @@ safeMount('/api/product-shares', './routes/productShares');
 safeMount('/api/ecommerce', './routes/ecommerceAPI');
 safeMount('/api/user', './routes/userWishlistCart');
 safeMount('/api/categories', './routes/categories');
-safeMount('/api/categories', './routes/categories');
+safeMount('/api/v1/categories', './routes/categories');
 safeMount('/api/brands', './routes/brands');
 safeMount('/api/analytics', './routes/analytics');
-safeMount('/api/analytics', './routes/analytics');
+safeMount('/api/v1/analytics', './routes/analytics');
 safeMount('/api/recommendations', './routes/recommendations');
-safeMount('/api/recommendations', './routes/recommendations');
+safeMount('/api/v1/recommendations', './routes/recommendations');
 safeMount('/api/content', './routes/contentRoutes');
-safeMount('/api/content', './routes/contentRoutes');
+safeMount('/api/v1/content', './routes/contentRoutes');
 safeMount('/api/rewards', './routes/rewardRoutes');
-safeMount('/api/rewards', './routes/rewardRoutes');
-safeMount('/api/search', './routes/search');
+safeMount('/api/v1/rewards', './routes/rewardRoutes');
+safeMount('/api/v1/search', './routes/search');
 safeMount('/', './routes/index');
 safeMount('/api/role-management', './routes/roleManagement');
 safeMount('/api/modules', './routes/moduleManagement');

@@ -122,7 +122,7 @@ const moveFile = (tempPath, permanentPath) => {
   });
 };
 
-// @route   POST /api/v1/upload/image
+// @route   POST /api/upload/image
 // @desc    Upload single image
 // @access  Private
 router.post('/image', [auth], (req, res) => {
@@ -165,7 +165,7 @@ router.post('/image', [auth], (req, res) => {
   });
 });
 
-// @route   POST /api/v1/upload/multiple
+// @route   POST /api/upload/multiple
 // @desc    Upload multiple images
 // @access  Private
 router.post('/multiple', [auth], (req, res) => {
@@ -217,7 +217,7 @@ router.post('/multiple', [auth], (req, res) => {
   });
 });
 
-// @route   POST /api/v1/upload/product-images
+// @route   POST /api/upload/product-images
 // @desc    Upload product images
 // @access  Private (Vendor only)
 router.post('/product-images', [auth, isVendor], (req, res) => {
@@ -269,7 +269,7 @@ router.post('/product-images', [auth, isVendor], (req, res) => {
   });
 });
 
-// @route   POST /api/v1/upload/avatar
+// @route   POST /api/upload/avatar
 // @desc    Upload user avatar
 // @access  Private
 router.post('/avatar', [auth], (req, res) => {
@@ -324,7 +324,7 @@ router.post('/avatar', [auth], (req, res) => {
   });
 });
 
-// @route   POST /api/v1/upload/post-media
+// @route   POST /api/upload/post-media
 // @desc    Upload post media (images/videos)
 // @access  Private
 router.post('/post-media', [auth], (req, res) => {
@@ -381,7 +381,7 @@ router.post('/post-media', [auth], (req, res) => {
   });
 });
 
-// @route   POST /api/v1/upload/story-media
+// @route   POST /api/upload/story-media
 // @desc    Upload story media (single image/video)
 // @access  Private
 router.post('/story-media', [auth], (req, res) => {

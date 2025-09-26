@@ -35,7 +35,7 @@ async function createEssentialCategories() {
   const categories = realCategories.slice(0, 15).map((cat, i) => ({
     ...cat,
     isActive: true,
-    image: `/assets/images/categories/${cat.slug}.jpg`,
+    image: `/uploadscategories/${cat.slug}.jpg`,
     subcategories: [
       { name: `${cat.name} Subcat A`, slug: `${cat.slug}-subcat-a` },
       { name: `${cat.name} Subcat B`, slug: `${cat.slug}-subcat-b` }
@@ -512,7 +512,7 @@ async function seedDatabase() {
       category: categories[i % categories.length]._id,
       subcategory: `${categories[i % categories.length].name} Subcat A`,
       brand,
-      images: [{ url: `/assets/images/brands/${brand.toLowerCase().replace(/[^a-z0-9]/g, '-')}.png`, alt: `${brand} Trending Product` }],
+      images: [{ url: `/uploadsbrands/${brand.toLowerCase().replace(/[^a-z0-9]/g, '-')}.png`, alt: `${brand} Trending Product` }],
       sizes: [{ size: 'M', stock: 10 }],
       vendor: vendor._id,
       isActive: true,
@@ -530,7 +530,7 @@ async function seedDatabase() {
       category: categories[i % categories.length]._id,
       subcategory: `${categories[i % categories.length].name} Subcat B`,
       brand: brand2,
-      images: [{ url: `/assets/images/brands/${brand2.toLowerCase().replace(/[^a-z0-9]/g, '-')}.png`, alt: `${brand2} New Arrival` }],
+      images: [{ url: `/uploadsbrands/${brand2.toLowerCase().replace(/[^a-z0-9]/g, '-')}.png`, alt: `${brand2} New Arrival` }],
       sizes: [{ size: 'L', stock: 8 }],
       vendor: vendor._id,
       isActive: true,
@@ -548,7 +548,7 @@ async function seedDatabase() {
       category: categories[i % categories.length]._id,
       subcategory: `${categories[i % categories.length].name} Subcat A`,
       brand: brand3,
-      images: [{ url: `/assets/images/brands/${brand3.toLowerCase().replace(/[^a-z0-9]/g, '-')}.png`, alt: `${brand3} Suggested Product` }],
+      images: [{ url: `/uploadsbrands/${brand3.toLowerCase().replace(/[^a-z0-9]/g, '-')}.png`, alt: `${brand3} Suggested Product` }],
       sizes: [{ size: 'S', stock: 12 }],
       vendor: vendor._id,
       isActive: true,
@@ -572,7 +572,7 @@ async function seedDatabase() {
         user: user._id,
         media: {
           type: 'image',
-          url: '/assets/images/stories/default.png'
+          url: '/uploadsstories/default.png'
         },
         caption: `Story ${i} caption`,
         products: [{ product: product._id, position: { x: 50, y: 50 } }]

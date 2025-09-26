@@ -29,7 +29,7 @@ router.get('/', async (req, res) => {
         max: brand.maxPrice,
         avg: Math.round(brand.avgPrice)
       },
-      logo: `/assets/images/brands/${brand._id.toLowerCase().replace(/\s+/g, '-')}.svg`,
+      logo: `/uploadsbrands/${brand._id.toLowerCase().replace(/\s+/g, '-')}.svg`,
       isPopular: brand.count > 5
     }));
 
@@ -72,7 +72,7 @@ router.get('/featured', async (req, res) => {
       avgPrice: Math.round(brand.avgPrice),
       totalViews: brand.totalViews || 0,
       totalLikes: brand.totalLikes || 0,
-      logo: `/assets/images/brands/${brand._id.toLowerCase().replace(/\s+/g, '-')}.svg`,
+      logo: `/uploadsbrands/${brand._id.toLowerCase().replace(/\s+/g, '-')}.svg`,
       isPopular: brand.count > 5,
       isFeatured: true
     }));
@@ -145,7 +145,7 @@ router.get('/:name', async (req, res) => {
           name: cat._id,
           count: cat.count
         })),
-        logo: `/assets/images/brands/default-brand.svg`,
+        logo: `/uploadsbrands/default-brand.svg`,
         isPopular: brand.productCount > 5
       }
     });

@@ -29,7 +29,7 @@ const userSchema = new mongoose.Schema({
   },
   avatar: {
     type: String,
-    default: '/assets/images/default-avatar.svg'
+    default: '/uploads/default-avatar.svg'
   },
   bio: {
     type: String,
