@@ -3,6 +3,20 @@ const router = express.Router();
 const Wishlist = require('../models/Wishlist');
 const Product = require('../models/Product');
 const { auth, requireRole, optionalAuth } = require('../middleware/auth');
+// Clear entire wishlist for authenticated user
+router.delete('/', auth, requireRole(['end_user']), async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'User not authenticated' });
+    }
+    user.wishlist = [];
+    await user.save();
+    res.json({ success: true, message: 'Wishlist cleared' });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Failed to clear wishlist', error: err.message });
+  }
+});
 
 // Get user's wishlist
 router.get('/', optionalAuth, async (req, res) => {

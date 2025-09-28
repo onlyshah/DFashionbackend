@@ -106,21 +106,15 @@ app.use(
   '/uploads',
   express.static(uploadsPath, {
     setHeaders: (res, filePath) => {
-      // ✅ Images don’t need credentials, so use `*`
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-      res.setHeader(
-        'Access-Control-Allow-Headers',
-        'Origin, X-Requested-With, Content-Type, Accept'
-      );
-      // Fix Chrome CORB
+      res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     }
   })
 );
-
-// Legacy alias
-app.use('/upload', express.static(uploadsPath));
+// Ensure /uploads/brands is accessible
+app.use('/uploads/brands', express.static(path.join(uploadsPath, 'brands')));
 
 // -------- Convenience redirects --------
 app.get('/me', (req, res) => res.redirect(301, '/api/auth/me'));
@@ -213,6 +207,11 @@ const safeMount = (mountPath, routePath) => {
 
 // Core routes
 safeMount('/api/auth', './routes/auth');
+// Fix: Mount missing core API routes for stories, posts, products, users
+safeMount('/api/stories', './routes/stories');
+safeMount('/api/posts', './routes/posts');
+safeMount('/api/products', './routes/products');
+safeMount('/api/users', './routes/users');
 safeMount('/api/v1/cart-new', './routes/cartNew');
 safeMount('/api/cart-new', './routes/cartNew');
 safeMount('/api/wishlist-new', './routes/wishlistNew');
