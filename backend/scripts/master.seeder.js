@@ -1,5 +1,5 @@
 // Master Seeder Script
-// Usage: node scripts/master.seeder.js
+// Usage: node scripts/masterSeed.js
 
 const { execSync } = require('child_process');
 

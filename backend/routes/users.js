@@ -18,7 +18,10 @@ router.get('/profile/:username', optionalAuth, async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    res.json({ user });
+  // Add fallback for image/avatar
+  const userObj = user.toObject();
+  userObj.image = user.image || user.avatar || '/uploads/default-avatar.svg';
+  res.json({ user: userObj });
   } catch (error) {
     console.error('Get profile error:', error);
     res.status(500).json({ message: 'Server error' });
@@ -179,14 +182,15 @@ router.get('/:userId/follow-status', auth, async (req, res) => {
 // @access  Private
 router.put('/profile', auth, async (req, res) => {
   try {
-    const { fullName, bio, website, location, dateOfBirth } = req.body;
+  const { fullName, bio, website, location, dateOfBirth, image } = req.body;
 
-    const updateData = {};
-    if (fullName) updateData.fullName = fullName;
-    if (bio !== undefined) updateData.bio = bio;
-    if (website !== undefined) updateData.website = website;
-    if (location !== undefined) updateData.location = location;
-    if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth;
+  const updateData = {};
+  if (fullName) updateData.fullName = fullName;
+  if (bio !== undefined) updateData.bio = bio;
+  if (website !== undefined) updateData.website = website;
+  if (location !== undefined) updateData.location = location;
+  if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth;
+  if (image !== undefined) updateData.image = image;
 
     const user = await User.findByIdAndUpdate(
       req.user._id,
@@ -238,7 +242,7 @@ router.get('/suggested', async (req, res) => {
       id: user._id,
       username: user.username,
       fullName: user.fullName,
-      avatar: user.avatar || '/uploadsdefault-avatar.svg',
+      image: user.image || user.avatar || '/uploads/default-avatar.svg',
       followedBy: `Followed by ${Math.floor(Math.random() * 50) + 10} others`,
       isFollowing: false
     }));

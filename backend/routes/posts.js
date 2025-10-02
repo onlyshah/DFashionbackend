@@ -14,7 +14,7 @@ router.get('/', optionalAuth, async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    const posts = await Post.find({ isActive: true, visibility: 'public' })
+    let posts = await Post.find({ isActive: true, visibility: 'public' })
       .populate('user', 'username fullName avatar socialStats')
       .populate('products.product', 'name price images brand')
       .populate('comments.user', 'username fullName avatar')
@@ -22,7 +22,17 @@ router.get('/', optionalAuth, async (req, res) => {
       .skip(skip)
       .limit(limit);
 
-    const total = await Post.countDocuments({ isActive: true, visibility: 'public' });
+    // Set user: null if userId is invalid
+    posts = posts.map(post => {
+      if (!post.user || !post.user._id) {
+        post.user = null;
+      }
+      return post;
+    });
+    // Filter out posts with user: null
+    posts = posts.filter(post => post.user !== null);
+
+    const total = posts.length;
 
     res.json({
       success: true,

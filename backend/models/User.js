@@ -31,6 +31,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: '/uploads/default-avatar.svg'
   },
+    image: {
+      type: String,
+      default: '' // Real uploaded image path
+    },
   bio: {
     type: String,
     maxlength: 150
