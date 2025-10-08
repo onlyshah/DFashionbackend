@@ -33,6 +33,25 @@ DROP TABLE IF EXISTS users CASCADE;
 
 -- =====================================================
 -- CREATE TABLES
+
+-- ProductShares table
+CREATE TABLE productshares (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    product_id UUID REFERENCES products(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    platform VARCHAR(50) NOT NULL,
+    shared_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- StyleInspirations table
+CREATE TABLE styleinspirations (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    title VARCHAR(255) NOT NULL,
+    description TEXT,
+    image_url TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 -- =====================================================
 
 -- Users table
@@ -293,6 +312,19 @@ CREATE INDEX idx_wishlist_items_wishlist ON wishlist_items(wishlist_id);
 
 -- =====================================================
 -- INSERT SEEDER DATA
+
+-- Insert ProductShares
+INSERT INTO productshares (product_id, user_id, platform) VALUES
+('750e8400-e29b-41d4-a716-446655440001', '550e8400-e29b-41d4-a716-446655440001', 'facebook'),
+('750e8400-e29b-41d4-a716-446655440002', '550e8400-e29b-41d4-a716-446655440002', 'instagram'),
+('750e8400-e29b-41d4-a716-446655440003', '550e8400-e29b-41d4-a716-446655440003', 'twitter'),
+('750e8400-e29b-41d4-a716-446655440004', '550e8400-e29b-41d4-a716-446655440004', 'whatsapp');
+
+-- Insert StyleInspirations
+INSERT INTO styleinspirations (user_id, title, description, image_url) VALUES
+('550e8400-e29b-41d4-a716-446655440001', 'Summer Chic', 'Light and breezy summer styles for 2025.', 'https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?w=600'),
+('550e8400-e29b-41d4-a716-446655440002', 'Urban Streetwear', 'Trendy streetwear looks for city life.', 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600'),
+('550e8400-e29b-41d4-a716-446655440003', 'Minimalist Office', 'Clean and professional outfits for work.', 'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=600');
 -- =====================================================
 
 -- Insert Users

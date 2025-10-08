@@ -21,7 +21,9 @@ const seeders = [
   'reel.seeder.js',
   'session.seeder.js',
   'searchHistory.seeder.js',
-  'userBehavior.seeder.js'
+  'userBehavior.seeder.js',
+  'productShare.seeder.js',
+  'styleInspiration.seeder.js'
 ];
 
 (async () => {
