@@ -9,6 +9,17 @@ const DEFAULT_AVATAR = '/uploads/default/default-placeholder.png';
 
 const bcrypt = require('bcrypt');
 const users = [
+  // 1 Super Admin
+  {
+    username: 'superadmin',
+    email: 'superadmin@dfashion.com',
+    password: 'SuperAdmin123!',
+    fullName: 'Super Admin',
+    avatar: '/uploads/avatars/superadmin.jpg',
+    role: 'super_admin',
+    department: 'administration',
+    isActive: true
+  },
   // 5 Admins
   ...Array.from({ length: 5 }, (_, i) => ({
     username: `admin${i+1}`,

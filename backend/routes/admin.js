@@ -1,3 +1,10 @@
+// Compatibility route for frontend expecting /api/dashboard/metrics
+router.get('/dashboard/metrics', auth, (req, res, next) => {
+  // Forward to /api/admin/dashboard or /api/admin/dashboard/stats
+  // Option 1: Call the same logic as /dashboard
+  req.url = '/dashboard';
+  next();
+});
 const express = require('express');
 const User = require('../models/User');
 const Product = require('../models/Product');
@@ -10,6 +17,12 @@ const { auth, isAdmin } = require('../middleware/auth');
 
 const router = express.Router();
 
+// Compatibility: /api/admin/dashboard/stats should return the same as /api/admin/dashboard
+router.get('/dashboard/stats', auth, async (req, res, next) => {
+  // Call the same logic as /dashboard
+  req.url = '/dashboard';
+  next();
+});
 // @route   GET /api/admin/dashboard
 // @desc    Get admin dashboard data
 // @access  Private (Admin only)

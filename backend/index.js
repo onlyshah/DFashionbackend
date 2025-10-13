@@ -198,7 +198,15 @@ try {
 // -------- Load routes safely --------
 const safeMount = (mountPath, routePath) => {
   try {
-    app.use(mountPath, require(routePath));
+    const resolvedPath = require.resolve(routePath, { paths: [__dirname] });
+    console.log(`[safeMount] Attempting to mount ${mountPath} from ${resolvedPath}`);
+    const router = require(resolvedPath);
+    if (router && router.stack && router.stack.length > 0) {
+      console.log(`[safeMount] Router for ${mountPath} has ${router.stack.length} routes.`);
+    } else {
+      console.warn(`[safeMount] Router for ${mountPath} appears empty or invalid.`);
+    }
+    app.use(mountPath, router);
     console.log(`✅ ${mountPath} -> ${routePath} loaded`);
   } catch (err) {
     console.error(`❌ Error loading ${mountPath} from ${routePath}:`, err.message);
