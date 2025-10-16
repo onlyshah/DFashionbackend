@@ -27,6 +27,7 @@ const app = express();
 app.set('trust proxy', 1); // if behind proxy/load balancer
 
 // -------- Allowed origins --------
+
 const allowedOrigins = [
   'http://localhost:4200',
   'http://127.0.0.1:4200',
@@ -38,6 +39,9 @@ const allowedOrigins = [
   'ionic://localhost',
   'https://onlyshah.github.io'
 ];
+
+// Mount main router for all /api endpoints
+app.use('/api', require('./routes/index'));
 
 // -------- CORS --------
 const corsOptions = {
@@ -228,15 +232,12 @@ safeMount('/api/wishlist', './routes/wishlistNew');
 safeMount('/api/orders', './routes/orders');
 safeMount('/api/payments', './routes/payments');
 safeMount('/api/checkout', './routes/checkout');
-safeMount('/api/admin', './routes/admin');
 safeMount('/api/vendor', './routes/vendor');
 safeMount('/api/notifications', './routes/notifications');
-safeMount('/api/admin/auth', './routes/adminAuth');
-safeMount('/api/auth/admin', './routes/adminAuth');
-safeMount('/api/admin/dashboard', './routes/adminDashboard');
+safeMount('/api/admin/auth', './routes/auth');
+safeMount('/api/auth/admin', './routes/auth');
 safeMount('/api/product-comments', './routes/productComments');
 safeMount('/api/product-shares', './routes/productShares');
-safeMount('/api/ecommerce', './routes/ecommerceAPI');
 safeMount('/api/user', './routes/userWishlistCart');
 safeMount('/api/categories', './routes/categories');
 safeMount('/api/categories', './routes/categories');
@@ -320,10 +321,9 @@ const startServer = async () => {
       console.log(`\n⚠️  Received ${signal}. Shutting down gracefully...`);
       server.close(() => {
         console.log('HTTP server closed.');
-        mongoose.connection.close(false, () => {
-          console.log('MongoDB connection closed.');
-          process.exit(0);
-        });
+        mongoose.connection.close(false);
+        console.log('MongoDB connection closed.');
+        process.exit(0);
       });
 
       setTimeout(() => {
