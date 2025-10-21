@@ -305,3 +305,24 @@ exports.getSupportTickets = async (req, res) => {
     res.status(500).json({ success: false, message: 'Error fetching support tickets', error: error.message });
   }
 };
+
+// ✅ Get quick actions for admin navbar (stored in DB)
+exports.getQuickActions = async (req, res) => {
+  try {
+    const QuickAction = require('../models/QuickAction');
+    const role = req.user?.role || 'admin';
+
+    // Fetch active quick actions and filter by role if specified
+    const actions = await QuickAction.find({ isActive: true }).sort({ order: 1 }).lean();
+
+    // If actions have roles defined, filter; otherwise include
+    const filtered = actions.filter(a => {
+      if (!a.roles || a.roles.length === 0) return true;
+      return a.roles.includes(role) || a.roles.includes('all');
+    });
+
+    res.json({ success: true, data: { quickActions: filtered } });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error fetching quick actions', error: error.message });
+  }
+};

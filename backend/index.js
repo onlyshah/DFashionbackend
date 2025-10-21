@@ -27,7 +27,6 @@ const app = express();
 app.set('trust proxy', 1); // if behind proxy/load balancer
 
 // -------- Allowed origins --------
-
 const allowedOrigins = [
   'http://localhost:4200',
   'http://127.0.0.1:4200',
@@ -40,13 +39,10 @@ const allowedOrigins = [
   'https://onlyshah.github.io'
 ];
 
-// Mount main router for all /api endpoints
-app.use('/api', require('./routes/index'));
-
 // -------- CORS --------
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin) return callback(null, true); // Postman / mobile
+    if (!origin) return callback(null, true); // Postman / mobile / server-to-server
 
     if (
       allowedOrigins.includes(origin) ||
@@ -56,10 +52,7 @@ const corsOptions = {
       return callback(null, true);
     }
 
-    return callback(
-      new Error('The CORS policy does not allow access from this origin.'),
-      false
-    );
+    return callback(new Error('The CORS policy does not allow access from this origin.'), false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
@@ -78,7 +71,7 @@ const corsOptions = {
   optionsSuccessStatus: 200
 };
 
-app.use(cors(corsOptions)); // global CORS
+app.use(cors(corsOptions)); // apply CORS globally
 
 // -------- Request body parsing --------
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));
@@ -98,7 +91,7 @@ app.use('/api', BasicSecurity.generalLimiter);
 
 console.log('✅ Basic security middleware applied successfully');
 
-// -------- CORS preflight --------
+// -------- CORS preflight shortcut --------
 app.options('*', (req, res) => {
   res.sendStatus(200);
 });
@@ -181,13 +174,11 @@ app.post('/api/seed', async (req, res) => {
     });
   } catch (error) {
     console.error('Seeding error:', error);
-    res
-      .status(500)
-      .json({ success: false, message: 'Failed to seed database', error: error.message });
+    res.status(500).json({ success: false, message: 'Failed to seed database', error: error.message });
   }
 });
 
-// -------- Load models --------
+// -------- Load models (informational) --------
 try {
   require('./models/User');
   console.log('✅ User model loaded');
@@ -199,7 +190,7 @@ try {
   console.warn('⚠️ Some models could not be loaded during startup:', err.message);
 }
 
-// -------- Load routes safely --------
+// -------- Safe mount helper (keeps server resilient) --------
 const safeMount = (mountPath, routePath) => {
   try {
     const resolvedPath = require.resolve(routePath, { paths: [__dirname] });
@@ -217,16 +208,16 @@ const safeMount = (mountPath, routePath) => {
   }
 };
 
-// Core routes
-safeMount('/api/auth', './routes/auth');
-// Fix: Mount missing core API routes for stories, posts, products, users
+// -------- Mount specific route files (unique, no duplicates) --------
+// Core auth
+// safeMount('/api/auth', './routes/auth'); // Removed duplicate mounting; handled by /api router
+
+// Features & content
 safeMount('/api/stories', './routes/stories');
 safeMount('/api/posts', './routes/posts');
 safeMount('/api/products', './routes/products');
 safeMount('/api/users', './routes/users');
 safeMount('/api/cart-new', './routes/cartNew');
-safeMount('/api/cart-new', './routes/cartNew');
-safeMount('/api/wishlist-new', './routes/wishlistNew');
 safeMount('/api/wishlist-new', './routes/wishlistNew');
 safeMount('/api/wishlist', './routes/wishlistNew');
 safeMount('/api/orders', './routes/orders');
@@ -234,31 +225,43 @@ safeMount('/api/payments', './routes/payments');
 safeMount('/api/checkout', './routes/checkout');
 safeMount('/api/vendor', './routes/vendor');
 safeMount('/api/notifications', './routes/notifications');
-safeMount('/api/admin/auth', './routes/auth');
-safeMount('/api/auth/admin', './routes/auth');
+
+// Admin / role / modules
+safeMount('/api/admin', './routes/admin'); // admin routes
+safeMount('/api/role-management', './routes/roleManagement');
+safeMount('/api/modules', './routes/moduleManagement');
+safeMount('/api/vendor-verification', './routes/vendorVerification');
+
+// Collections & search
 safeMount('/api/product-comments', './routes/productComments');
 safeMount('/api/product-shares', './routes/productShares');
 safeMount('/api/user', './routes/userWishlistCart');
 safeMount('/api/categories', './routes/categories');
-safeMount('/api/categories', './routes/categories');
 safeMount('/api/brands', './routes/brands');
+safeMount('/api/search', './routes/search');
+
+// Analytics, recommendations & content
 safeMount('/api/analytics', './routes/analytics');
-safeMount('/api/analytics', './routes/analytics');
-safeMount('/api/recommendations', './routes/recommendations');
+safeMount('/api/analytics/overview', './routes/analyticsOverview');
 safeMount('/api/recommendations', './routes/recommendations');
 safeMount('/api/content', './routes/content');
+
+// Rewards & style inspiration
 safeMount('/api/rewards', './routes/rewardRoutes');
-safeMount('/api/rewards', './routes/rewardRoutes');
-safeMount('/api/search', './routes/search');
-safeMount('/', './routes/index');
-safeMount('/api/role-management', './routes/roleManagement');
-safeMount('/api/modules', './routes/moduleManagement');
-safeMount('/api/vendor-verification', './routes/vendorVerification');
+safeMount('/api/style-inspiration', './routes/styleInspiration');
+
+// Smart collections & plugins
 safeMount('/api/smart-collections', './routes/smartCollections');
 
-// Integrate new analytics overview and style inspiration routes
-safeMount('/api/analytics/overview', './routes/analyticsOverview');
-safeMount('/api/style-inspiration', './routes/styleInspiration');
+// -------- Mount the aggregated /api index as a fallback (last) --------
+// This provides catch-all aggregated routes and is mounted last to avoid shadowing specific routes.
+try {
+  const apiIndex = require('./routes/index');
+  app.use('/api', apiIndex);
+  console.log('✅ /api -> ./routes/index mounted as fallback');
+} catch (err) {
+  console.error('❌ Failed to mount /api index:', err.message);
+}
 
 // -------- Error handling --------
 app.use((req, res, next) => {

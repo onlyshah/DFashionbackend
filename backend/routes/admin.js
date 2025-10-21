@@ -202,6 +202,9 @@ router.get('/user-permissions', (req, res) => {
   res.json({ success: true, data: { role, permissions: perms[role] || ['dashboard.view'] } });
 });
 
+// Quick actions for admin navbar
+router.get('/quick-actions', requirePermission('dashboard', 'view'), adminController.getQuickActions);
+
 // =============================================================
 // PRODUCTS
 // =============================================================

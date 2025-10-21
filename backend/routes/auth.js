@@ -203,7 +203,27 @@ router.post('/admin/login', async (req, res) => {
     admin.lastLogin = new Date();
     await admin.save();
 
-    const permissions = getUserPermissions(admin.role);
+    // Format permissions for frontend
+    let permissions = [];
+    if (admin.role === 'super_admin') {
+      permissions = [{ module: 'all', actions: ['all'] }];
+    } else if (admin.role === 'admin') {
+      permissions = [
+        { module: 'users', actions: ['view', 'manage'] },
+        { module: 'reports', actions: ['view'] },
+        { module: 'products', actions: ['manage'] }
+      ];
+    } else if (admin.role === 'sales_manager') {
+      permissions = [
+        { module: 'orders', actions: ['view'] },
+        { module: 'sales', actions: ['manage'] }
+      ];
+    } else if (admin.role === 'support_agent') {
+      permissions = [
+        { module: 'tickets', actions: ['handle'] },
+        { module: 'users', actions: ['view'] }
+      ];
+    }
     const token = generateToken(admin._id, admin.role, ADMIN_TOKEN_EXPIRY);
 
     res.json({
