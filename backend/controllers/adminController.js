@@ -321,7 +321,8 @@ exports.getQuickActions = async (req, res) => {
       return a.roles.includes(role) || a.roles.includes('all');
     });
 
-    res.json({ success: true, data: { quickActions: filtered } });
+    // Return the filtered actions array directly in the data field
+    res.json({ success: true, data: filtered });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Error fetching quick actions', error: error.message });
   }

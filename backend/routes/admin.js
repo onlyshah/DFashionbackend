@@ -17,6 +17,7 @@ const Story = require('../models/Story');
 const Post = require('../models/Post');
 const Order = require('../models/Order');
 const Payment = require('../models/Payment');
+const Notification = require('../models/Notification');
 
 // ✅ Global Admin Auth Middleware
 router.use(verifyAdminToken);
@@ -204,6 +205,79 @@ router.get('/user-permissions', (req, res) => {
 
 // Quick actions for admin navbar
 router.get('/quick-actions', requirePermission('dashboard', 'view'), adminController.getQuickActions);
+
+// =============================================================
+// ADMIN NOTIFICATIONS (proxied for admin dashboard)
+// These endpoints mirror the public /api/notifications but are mounted under /api/admin
+// so the admin UI can fetch and manage notifications without cross-route changes.
+// =============================================================
+router.get('/notifications', requirePermission('dashboard', 'view'), async (req, res) => {
+  try {
+    const { page = 1, limit = 10, category, isRead, type } = req.query;
+    const options = {
+      page: parseInt(page, 10),
+      limit: parseInt(limit, 10),
+      category,
+      type
+    };
+
+    if (isRead !== undefined) options.isRead = isRead === 'true';
+
+    const result = await Notification.getUserNotifications(req.user._id, options);
+
+    res.json({
+      success: true,
+      data: result.notifications,
+      pagination: result.pagination,
+      unreadCount: result.unreadCount
+    });
+  } catch (error) {
+    console.error('Admin get notifications error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch notifications', error: error.message });
+  }
+});
+
+router.patch('/notifications/:id/read', requirePermission('dashboard', 'view'), async (req, res) => {
+  try {
+    const notification = await Notification.markAsRead(req.params.id, req.user._id);
+    if (!notification) return res.status(404).json({ success: false, message: 'Notification not found' });
+    res.json({ success: true, message: 'Notification marked as read', data: notification });
+  } catch (error) {
+    console.error('Admin mark notification read error:', error);
+    res.status(500).json({ success: false, message: 'Failed to mark notification as read', error: error.message });
+  }
+});
+
+router.patch('/notifications/mark-all-read', requirePermission('dashboard', 'view'), async (req, res) => {
+  try {
+    const result = await Notification.markAllAsRead(req.user._id);
+    res.json({ success: true, message: 'All notifications marked as read', modifiedCount: result.modifiedCount || result.nModified || 0 });
+  } catch (error) {
+    console.error('Admin mark all read error:', error);
+    res.status(500).json({ success: false, message: 'Failed to mark all notifications as read', error: error.message });
+  }
+});
+
+router.delete('/notifications/:id', requirePermission('dashboard', 'view'), async (req, res) => {
+  try {
+    const notification = await Notification.findOneAndDelete({ _id: req.params.id, recipient: req.user._id });
+    if (!notification) return res.status(404).json({ success: false, message: 'Notification not found' });
+    res.json({ success: true, message: 'Notification deleted' });
+  } catch (error) {
+    console.error('Admin delete notification error:', error);
+    res.status(500).json({ success: false, message: 'Failed to delete notification', error: error.message });
+  }
+});
+
+router.delete('/notifications', requirePermission('dashboard', 'view'), async (req, res) => {
+  try {
+    const result = await Notification.deleteMany({ recipient: req.user._id });
+    res.json({ success: true, message: 'All notifications cleared', deletedCount: result.deletedCount || 0 });
+  } catch (error) {
+    console.error('Admin clear notifications error:', error);
+    res.status(500).json({ success: false, message: 'Failed to clear notifications', error: error.message });
+  }
+});
 
 // =============================================================
 // PRODUCTS
