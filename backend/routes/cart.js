@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const { body, validationResult } = require('express-validator');
-const { auth } = require('../middleware/auth');
+const { auth, requireRole, optionalAuth } = require('../middleware/auth');
 const Product = require('../models/Product');
+const Cart = require('../models/Cart');
+const User = require('../models/User');
 
 // @route   GET /cart
 // @desc    Get user's cart
@@ -229,3 +231,200 @@ router.delete('/', auth, async (req, res) => {
 });
 
 module.exports = router;
+
+// --- Model-backed endpoints (compatibility for cartNew features) ---
+
+// Debug endpoint (model-backed)
+router.get('/debug', auth, requireRole(['end_user']), async (req, res) => {
+  try {
+    const cart = await Cart.findOne({ user: req.user._id, isActive: true });
+    res.json({ success: true, debug: { cartExists: !!cart, cartId: cart?._id } });
+  } catch (error) {
+    console.error('Debug cart error:', error);
+    res.status(500).json({ success: false, message: 'Debug failed', error: error.message });
+  }
+});
+
+// Cart count (model)
+router.get('/count', auth, requireRole(['end_user']), async (req, res) => {
+  try {
+    const cart = await Cart.findOne({ user: req.user._id, isActive: true }).select('totalItems items totalAmount');
+    if (!cart) return res.json({ success: true, count: 0, totalItems: 0, itemCount: 0, totalAmount: 0, showTotalPrice: false });
+    const totalItems = cart.items.reduce((t, i) => t + i.quantity, 0);
+    const itemCount = cart.items.length;
+    const totalAmount = cart.totalAmount || 0;
+    const showTotalPrice = itemCount >= 4;
+    res.json({ success: true, count: totalItems, totalItems, itemCount, totalAmount, showTotalPrice, lastUpdated: cart.lastUpdated });
+  } catch (error) {
+    console.error('Get cart count error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch cart count', error: error.message });
+  }
+});
+
+// Recalculate cart totals
+router.post('/recalculate', auth, requireRole(['end_user']), async (req, res) => {
+  try {
+    const cart = await Cart.findOne({ user: req.user._id, isActive: true });
+    if (!cart) return res.json({ success: true, message: 'No cart found to recalculate' });
+    const oldTotalItems = cart.totalItems;
+    const oldTotalAmount = cart.totalAmount;
+    cart.calculateTotals();
+    await cart.save();
+    res.json({ success: true, message: 'Cart totals recalculated successfully', data: { itemsCount: cart.items.length, totalItems: cart.totalItems, totalAmount: cart.totalAmount, changes: { totalItemsChanged: oldTotalItems !== cart.totalItems, totalAmountChanged: oldTotalAmount !== cart.totalAmount } } });
+  } catch (error) {
+    console.error('Recalculate cart error:', error);
+    res.status(500).json({ success: false, message: 'Failed to recalculate cart', error: error.message });
+  }
+});
+
+// Total-count across cart and wishlist (optionalAuth)
+router.get('/total-count', optionalAuth, async (req, res) => {
+  try {
+    if (!req.user) return res.json({ success: true, data: { cartItemCount: 0, cartQuantityTotal: 0, cartTotalAmount: 0, wishlistItemCount: 0, combinedTotal: 0 } });
+    const cart = await Cart.findOne({ user: req.user._id, isActive: true }).select('totalItems items totalAmount');
+    const Wishlist = require('../models/Wishlist');
+    const wishlist = await Wishlist.findOne({ user: req.user._id }).select('totalItems items');
+    const cartItemCount = cart ? cart.items.length : 0;
+    const cartQuantityTotal = cart ? cart.items.reduce((total, i) => total + i.quantity, 0) : 0;
+    const cartTotalAmount = cart ? cart.totalAmount || 0 : 0;
+    const wishlistItemCount = wishlist ? wishlist.items.length : 0;
+    const totalCount = cartItemCount + wishlistItemCount;
+    const showCartTotalPrice = cartItemCount >= 4;
+    res.json({ success: true, userId: req.user._id, username: req.user.username, data: { cart: { itemCount: cartItemCount, quantityTotal: cartQuantityTotal, totalAmount: cartTotalAmount }, wishlist: { itemCount: wishlistItemCount }, totalCount, showCartTotalPrice, cartTotalAmount: showCartTotalPrice ? cartTotalAmount : 0 }, lastUpdated: new Date() });
+  } catch (error) {
+    console.error('Error getting total count for user:', error);
+    res.status(500).json({ success: false, message: 'Failed to get total count', error: error.message });
+  }
+});
+
+// Model-backed GET / (cart)
+router.get('/', optionalAuth, async (req, res) => {
+  try {
+    if (!req.user) return res.json({ success: true, data: { cart: { _id: null, user: null, items: [], totalItems: 0, totalAmount: 0, isActive: false } } });
+    let cart = await Cart.findOne({ user: req.user._id, isActive: true });
+    if (!cart) { cart = new Cart({ user: req.user._id }); await cart.save(); }
+    try { cart = await Cart.findById(cart._id).populate({ path: 'items.product', select: 'name images price originalPrice brand category isActive sizes colors vendor', populate: { path: 'vendor', select: 'username fullName vendorInfo.businessName' } }); } catch (populateError) { console.error('Populate error:', populateError); }
+    let summary;
+    try { summary = cart.summary; } catch (summaryError) { console.error('Summary error:', summaryError); summary = { totalItems: 0, totalAmount: 0, totalSavings: 0, itemCount: 0 }; }
+    res.json({ success: true, cart, summary });
+  } catch (error) {
+    console.error('Get cart error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch cart', error: error.message });
+  }
+});
+
+// Add item to cart (model)
+router.post('/add', auth, requireRole(['end_user']), async (req, res) => {
+  try {
+    const { productId, quantity = 1, size, color, addedFrom = 'manual', notes } = req.body;
+    const product = await Product.findById(productId).populate('vendor');
+    if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
+    if (!product.isActive) return res.status(400).json({ success: false, message: 'Product is not available' });
+    if (product.stock < quantity) return res.status(400).json({ success: false, message: 'Insufficient stock available' });
+    const cart = await Cart.findOrCreateForUser(req.user._id);
+    cart.addItem({ product: productId, quantity: parseInt(quantity), size, color, price: product.price, originalPrice: product.originalPrice, addedFrom, notes, vendor: product.vendor._id });
+    await cart.save();
+    await cart.populate({ path: 'items.product', select: 'name images price originalPrice brand category isActive', populate: { path: 'vendor', select: 'username fullName vendorInfo.businessName' } });
+    res.json({ success: true, message: 'Item added to cart successfully', cart, summary: cart.summary });
+  } catch (error) {
+    console.error('Add to cart error:', error);
+    res.status(500).json({ success: false, message: 'Failed to add item to cart', error: error.message });
+  }
+});
+
+// Update item quantity in cart (model)
+router.put('/update/:itemId', auth, requireRole(['end_user']), async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { quantity, size, color, notes } = req.body;
+    const cart = await Cart.findOne({ user: req.user._id, isActive: true });
+    if (!cart) return res.status(404).json({ success: false, message: 'Cart not found' });
+    const item = cart.items.id(itemId);
+    if (!item) return res.status(404).json({ success: false, message: 'Item not found in cart' });
+    if (quantity !== undefined) { if (quantity <= 0) { cart.removeItem(itemId); } else { cart.updateItemQuantity(itemId, parseInt(quantity)); } }
+    if (size !== undefined) item.size = size;
+    if (color !== undefined) item.color = color;
+    if (notes !== undefined) item.notes = notes;
+    if (item.parent()) item.updatedAt = new Date();
+    await cart.save();
+    await cart.populate({ path: 'items.product', select: 'name images price originalPrice brand category isActive', populate: { path: 'vendor', select: 'username fullName vendorInfo.businessName' } });
+    res.json({ success: true, message: 'Cart updated successfully', cart, summary: cart.summary });
+  } catch (error) {
+    console.error('Update cart error:', error);
+    res.status(500).json({ success: false, message: 'Failed to update cart', error: error.message });
+  }
+});
+
+// Remove item (model)
+router.delete('/remove/:itemId', auth, requireRole(['end_user']), async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const cart = await Cart.findOne({ user: req.user._id, isActive: true });
+    if (!cart) return res.status(404).json({ success: false, message: 'Cart not found' });
+    cart.removeItem(itemId);
+    await cart.save();
+    await cart.populate({ path: 'items.product', select: 'name images price originalPrice brand category isActive', populate: { path: 'vendor', select: 'username fullName vendorInfo.businessName' } });
+    res.json({ success: true, message: 'Item removed from cart successfully', cart, summary: cart.summary });
+  } catch (error) {
+    console.error('Remove from cart error:', error);
+    res.status(500).json({ success: false, message: 'Failed to remove item from cart', error: error.message });
+  }
+});
+
+// Bulk remove
+router.delete('/bulk-remove', auth, requireRole(['end_user']), async (req, res) => {
+  try {
+    const { itemIds } = req.body;
+    if (!itemIds || !Array.isArray(itemIds) || itemIds.length === 0) return res.status(400).json({ success: false, message: 'Item IDs array is required' });
+    const cart = await Cart.findOne({ user: req.user._id, isActive: true });
+    if (!cart) return res.status(404).json({ success: false, message: 'Cart not found' });
+    let removedCount = 0; itemIds.forEach(itemId => { const itemExists = cart.items.id(itemId); if (itemExists) { cart.removeItem(itemId); removedCount++; } });
+    await cart.save();
+    await cart.populate({ path: 'items.product', select: 'name images price originalPrice brand category isActive', populate: { path: 'vendor', select: 'username fullName vendorInfo.businessName' } });
+    res.json({ success: true, message: `${removedCount} item(s) removed from cart successfully`, removedCount, cart, summary: cart.summary });
+  } catch (error) {
+    console.error('Bulk remove cart error:', error);
+    res.status(500).json({ success: false, message: 'Failed to remove items from cart', error: error.message });
+  }
+});
+
+// Clear entire cart
+router.delete('/clear', auth, requireRole(['end_user']), async (req, res) => {
+  try {
+    const cart = await Cart.findOne({ user: req.user._id, isActive: true });
+    if (!cart) return res.status(404).json({ success: false, message: 'Cart not found' });
+    const itemCount = cart.items.length; cart.clearCart(); await cart.save(); res.json({ success: true, message: `Cart cleared successfully. ${itemCount} item(s) removed.`, clearedCount: itemCount, cart, summary: cart.summary });
+  } catch (error) {
+    console.error('Clear cart error:', error);
+    res.status(500).json({ success: false, message: 'Failed to clear cart', error: error.message });
+  }
+});
+
+// Vendors grouping
+router.get('/vendors', auth, requireRole(['end_user']), async (req, res) => {
+  try {
+    const cart = await Cart.findOrCreateForUser(req.user._id).populate({ path: 'items.product', select: 'name images price originalPrice brand category isActive', populate: { path: 'vendor', select: 'username fullName vendorInfo.businessName avatar' } });
+    const vendorGroups = cart.getItemsByVendor();
+    res.json({ success: true, vendorGroups, summary: cart.summary });
+  } catch (error) {
+    console.error('Get cart vendors error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch cart vendors', error: error.message });
+  }
+});
+
+// Move to wishlist (model)
+router.post('/move-to-wishlist/:itemId', auth, requireRole(['end_user']), async (req, res) => {
+  try {
+    const { itemId } = req.params; const Wishlist = require('../models/Wishlist');
+    const cart = await Cart.findOne({ user: req.user._id, isActive: true }); if (!cart) return res.status(404).json({ success: false, message: 'Cart not found' });
+    const item = cart.items.id(itemId); if (!item) return res.status(404).json({ success: false, message: 'Item not found in cart' });
+  const wishlist = await Wishlist.findOrCreateForUser(req.user._id);
+    wishlist.addItem({ product: item.product, size: item.size, color: item.color, price: item.price, originalPrice: item.originalPrice, addedFrom: 'cart', notes: item.notes, vendor: item.vendor });
+    cart.removeItem(itemId);
+    await Promise.all([cart.save(), wishlist.save()]);
+    res.json({ success: true, message: 'Item moved to wishlist successfully' });
+  } catch (error) {
+    console.error('Move to wishlist error:', error);
+    res.status(500).json({ success: false, message: 'Failed to move item to wishlist', error: error.message });
+  }
+});

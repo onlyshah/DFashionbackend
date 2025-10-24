@@ -36,15 +36,12 @@ const cartRoutes = require('./cart');
 const wishlistRoutes = require('./wishlist');
 const postRoutes = require('./posts');
 const storyRoutes = require('./stories');
-const cartNewRoutes = require('./cartNew');
-const wishlistNewRoutes = require('./wishlistNew');
 const paymentRoutes = require('./payments');
 const checkoutRoutes = require('./checkout');
 const notificationRoutes = require('./notifications');
 const productCommentsRoutes = require('./productComments');
 const productSharesRoutes = require('./productShares');
 const ecommerceAPIRoutes = require('./ecommerceAPI');
-const userWishlistCartRoutes = require('./userWishlistCart');
 const categoriesRoutes = require('./categories');
 const brandsRoutes = require('./brands');
 const analyticsRoutes = require('./analytics');
@@ -55,15 +52,15 @@ router.use(`/cart`, cartRoutes);
 router.use(`/wishlist`, wishlistRoutes);
 router.use(`/posts`, postRoutes);
 router.use(`/stories`, storyRoutes);
-router.use(`/cart-new`, cartNewRoutes);
-router.use(`/wishlist-new`, wishlistNewRoutes);
+// legacy aliases removed; canonical routes above cover both new and old endpoints
 router.use(`/payments`, paymentRoutes);
 router.use(`/checkout`, checkoutRoutes);
 router.use(`/notifications`, notificationRoutes);
 router.use(`/product-comments`, productCommentsRoutes);
 router.use(`/product-shares`, productSharesRoutes);
 router.use(`/ecommerce`, ecommerceAPIRoutes);
-router.use(`/user`, userWishlistCartRoutes);
+// Note: `/user` compatibility endpoints are implemented inside the canonical
+// wishlist and cart routers where necessary. No separate userWishlistCart router.
 router.use(`/categories`, categoriesRoutes);
 router.use(`/brands`, brandsRoutes);
 router.use(`/analytics`, analyticsRoutes);
@@ -80,4 +77,4 @@ router.use('*', (req, res) => {
   });
 });
 
-module.exports = router;
+module.exports = router
