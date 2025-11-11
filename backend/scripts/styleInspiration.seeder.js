@@ -1,42 +1,72 @@
-// Seeder for styleinspirations table
-const { Client } = require('pg');
-require('dotenv').config();
+// Style Inspiration Seeder Script
+const mongoose = require('mongoose');
+const StyleInspiration = require('../models/StyleInspiration');
 
-const client = new Client({
-  connectionString: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/dfashion',
-});
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/dfashion';
 
 const seedData = [
   {
-    user_id: '550e8400-e29b-41d4-a716-446655440001',
+    user_id: '507f1f77bcf86cd799439001',
     title: 'Summer Chic',
     description: 'Light and breezy summer styles for 2025.',
-    image_url: 'https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?w=600',
+    imageUrl: 'https://images.unsplash.com/photo-1515372039744-b8f02a3ae446?w=600',
+    tags: ['summer', 'casual', 'beach'],
+    likes: 245,
+    views: 1200,
+    createdAt: new Date(),
+    updatedAt: new Date()
   },
   {
-    user_id: '550e8400-e29b-41d4-a716-446655440002',
+    user_id: '507f1f77bcf86cd799439002',
     title: 'Urban Streetwear',
     description: 'Trendy streetwear looks for city life.',
-    image_url: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600',
+    imageUrl: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=600',
+    tags: ['streetwear', 'urban', 'trendy'],
+    likes: 189,
+    views: 890,
+    createdAt: new Date(),
+    updatedAt: new Date()
   },
   {
-    user_id: '550e8400-e29b-41d4-a716-446655440003',
+    user_id: '507f1f77bcf86cd799439003',
     title: 'Minimalist Office',
     description: 'Clean and professional outfits for work.',
-    image_url: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=600',
+    imageUrl: 'https://images.unsplash.com/photo-1483985988355-763728e1935b?w=600',
+    tags: ['office', 'professional', 'minimalist'],
+    likes: 156,
+    views: 720,
+    createdAt: new Date(),
+    updatedAt: new Date()
   },
 ];
 
-async function seed() {
-  await client.connect();
-  for (const inspiration of seedData) {
-    await client.query(
-      'INSERT INTO styleinspirations (user_id, title, description, image_url) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING',
-      [inspiration.user_id, inspiration.title, inspiration.description, inspiration.image_url]
-    );
-  }
-  await client.end();
-  console.log('StyleInspirations seeded!');
+async function seedStyleInspirations() {
+  await mongoose.connect(MONGO_URI);
+  console.log('Connected to MongoDB');
+  
+  // Clean existing data
+  await StyleInspiration.deleteMany({});
+  
+  // Convert string IDs to MongoDB ObjectIds and prepare documents
+  const inspirations = seedData.map(inspiration => ({
+    user: new mongoose.Types.ObjectId(inspiration.user_id),
+    title: inspiration.title,
+    description: inspiration.description,
+    imageUrl: inspiration.imageUrl,
+    tags: inspiration.tags,
+    likes: inspiration.likes,
+    views: inspiration.views,
+    createdAt: inspiration.createdAt,
+    updatedAt: inspiration.updatedAt
+  }));
+  
+  // Insert new data
+  await StyleInspiration.insertMany(inspirations);
+  console.log('StyleInspirations seeded successfully!');
+  await mongoose.disconnect();
 }
 
-seed().catch(e => { console.error(e); process.exit(1); });
+seedStyleInspirations().catch(err => {
+  console.error('Seeding failed:', err);
+  process.exit(1);
+});

@@ -8,6 +8,7 @@ const express = require('express');
 const cors = require('cors');
 const http = require('http');
 const mongoose = require('mongoose');
+const fs = require('fs');
 require('dotenv').config();
 
 // Local modules
@@ -96,28 +97,44 @@ app.options('*', (req, res) => {
   res.sendStatus(200);
 });
 
-// -------- Static file serving (uploads) --------
+// -------- Static file serving (centralized in backend) --------
 const uploadsPath = path.join(__dirname, 'uploads');
+const publicPath = path.join(__dirname, 'public');
 
-app.use(
-  '/uploads',
-  express.static(uploadsPath, {
-    setHeaders: (res, filePath) => {
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-    }
-  })
-);
-// Ensure /uploads/brands is accessible
-app.use('/uploads/brands', express.static(path.join(uploadsPath, 'brands')));
+// Middleware to set CORS headers for static files
+const setStaticFileHeaders = (res, filePath) => {
+  // Allow from frontend origin only
+  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:4200');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
+  // Add cache control for better performance
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+};
+
+// Main upload directories with subdirectories
+app.use('/uploads', express.static(uploadsPath, { setHeaders: setStaticFileHeaders }));
+app.use('/assets', express.static(path.join(publicPath, 'assets'), { setHeaders: setStaticFileHeaders }));
+
+// Ensure critical paths exist and are accessible
+[
+  path.join(uploadsPath, 'logo'),
+  path.join(uploadsPath, 'faces'),
+  path.join(uploadsPath, 'brands'),
+  path.join(publicPath, 'assets', 'images', 'default')
+].forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+    console.log(`Created directory: ${dir}`);
+  }
+});
 
 // -------- Convenience redirects --------
 app.get('/me', (req, res) => res.redirect(301, '/api/auth/me'));
 app.get('/api/me', (req, res) => res.redirect(301, '/api/auth/me'));
 app.post('/login', (req, res) => res.redirect(307, '/api/auth/login'));
 app.post('/api/login', (req, res) => res.redirect(307, '/api/auth/login'));
+app.post('/admin/login', (req, res) => res.redirect(307, '/api/auth/admin/login'));
 
 // -------- Utility endpoints --------
 app.get('/api/health', (req, res) => {
@@ -209,8 +226,9 @@ const safeMount = (mountPath, routePath) => {
 };
 
 // -------- Mount specific route files (unique, no duplicates) --------
-// Core auth
-// safeMount('/api/auth', './routes/auth'); // Removed duplicate mounting; handled by /api router
+// Core auth - mount for both /api/auth and direct /admin paths
+safeMount('/api/auth', './routes/auth');
+safeMount('/admin', './routes/auth');
 
 // Features & content
 safeMount('/api/stories', './routes/stories');

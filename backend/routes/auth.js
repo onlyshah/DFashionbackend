@@ -95,7 +95,10 @@ router.post('/login', async (req, res) => {
     if (!email || !password)
       return res.status(400).json({ message: 'Email and password required' });
 
-    const user = await User.findOne({ email: email.trim().toLowerCase() });
+    const user = await User.findOne({
+      email: email.trim().toLowerCase()
+    }).select('+password'); // ensure hashed password is included
+
     if (!user || !user.isActive)
       return res.status(400).json({ message: 'Invalid credentials or deactivated account' });
 
@@ -105,7 +108,8 @@ router.post('/login', async (req, res) => {
       return res.status(403).json({ message: `Account locked. Try again in ${mins} min.` });
     }
 
-    const valid = await bcrypt.compare(password, user.password);
+    // Use the model's comparePassword helper which uses bcrypt under the hood
+    const valid = await user.comparePassword(password);
     if (!valid) {
       user.failedLoginAttempts = (user.failedLoginAttempts || 0) + 1;
       if (user.failedLoginAttempts >= MAX_FAILED_ATTEMPTS) {
@@ -186,7 +190,9 @@ router.post('/admin/login', async (req, res) => {
       return res.status(403).json({ message: `Account locked. Try again in ${mins} min.` });
     }
 
-    const valid = await bcrypt.compare(password, admin.password);
+  // Ensure password field is available for comparison
+  const adminWithPassword = await User.findById(admin._id).select('+password');
+  const valid = await adminWithPassword.comparePassword(password);
     if (!valid) {
       admin.failedLoginAttempts = (admin.failedLoginAttempts || 0) + 1;
       if (admin.failedLoginAttempts >= MAX_FAILED_ATTEMPTS) {

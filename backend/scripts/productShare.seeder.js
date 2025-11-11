@@ -1,44 +1,73 @@
-// Seeder for productshares table
-const { Client } = require('pg');
-require('dotenv').config();
+// Product Share Seeder Script
+const mongoose = require('mongoose');
+const ProductShare = require('../models/ProductShare');
 
-const client = new Client({
-  connectionString: process.env.DATABASE_URL || 'postgres://postgres:postgres@localhost:5432/dfashion',
-});
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/dfashion';
 
 const seedData = [
   {
-    product_id: '750e8400-e29b-41d4-a716-446655440001',
-    user_id: '550e8400-e29b-41d4-a716-446655440001',
+    product_id: '507f1f77bcf86cd799439011',
+    user_id: '507f1f77bcf86cd799439001',
     platform: 'facebook',
+    shareUrl: 'https://facebook.com/share/product1',
+    sharedBy: '507f1f77bcf86cd799439001',
+    createdAt: new Date(),
+    updatedAt: new Date()
   },
   {
-    product_id: '750e8400-e29b-41d4-a716-446655440002',
-    user_id: '550e8400-e29b-41d4-a716-446655440002',
+    product_id: '507f1f77bcf86cd799439012',
+    user_id: '507f1f77bcf86cd799439002',
     platform: 'instagram',
+    shareUrl: 'https://instagram.com/share/product2',
+    sharedBy: '507f1f77bcf86cd799439002',
+    createdAt: new Date(),
+    updatedAt: new Date()
   },
   {
-    product_id: '750e8400-e29b-41d4-a716-446655440003',
-    user_id: '550e8400-e29b-41d4-a716-446655440003',
+    product_id: '507f1f77bcf86cd799439013',
+    user_id: '507f1f77bcf86cd799439003',
     platform: 'twitter',
+    shareUrl: 'https://twitter.com/share/product3',
+    sharedBy: '507f1f77bcf86cd799439003',
+    createdAt: new Date(),
+    updatedAt: new Date()
   },
   {
-    product_id: '750e8400-e29b-41d4-a716-446655440004',
-    user_id: '550e8400-e29b-41d4-a716-446655440004',
+    product_id: '507f1f77bcf86cd799439014',
+    user_id: '507f1f77bcf86cd799439004',
     platform: 'whatsapp',
+    shareUrl: 'https://wa.me/share/product4',
+    sharedBy: '507f1f77bcf86cd799439004',
+    createdAt: new Date(),
+    updatedAt: new Date()
   },
 ];
 
-async function seed() {
-  await client.connect();
-  for (const share of seedData) {
-    await client.query(
-      'INSERT INTO productshares (product_id, user_id, platform) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
-      [share.product_id, share.user_id, share.platform]
-    );
-  }
-  await client.end();
-  console.log('ProductShares seeded!');
+async function seedProductShares() {
+  await mongoose.connect(MONGO_URI);
+  console.log('Connected to MongoDB');
+  
+  // Clean existing data
+  await ProductShare.deleteMany({});
+  
+  // Convert string IDs to MongoDB ObjectIds
+  const shares = seedData.map(share => ({
+    product: new mongoose.Types.ObjectId(share.product_id),
+    user: new mongoose.Types.ObjectId(share.user_id),
+    platform: share.platform,
+    shareUrl: share.shareUrl,
+    sharedBy: new mongoose.Types.ObjectId(share.sharedBy),
+    createdAt: share.createdAt,
+    updatedAt: share.updatedAt
+  }));
+  
+  // Insert new data
+  await ProductShare.insertMany(shares);
+  console.log('ProductShares seeded successfully!');
+  await mongoose.disconnect();
 }
 
-seed().catch(e => { console.error(e); process.exit(1); });
+seedProductShares().catch(err => {
+  console.error('Seeding failed:', err);
+  process.exit(1);
+});

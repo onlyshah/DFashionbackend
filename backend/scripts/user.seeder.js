@@ -5,9 +5,9 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/dfashion';
-const DEFAULT_AVATAR = '/uploads/default/default-placeholder.png';
+const DEFAULT_AVATAR = '/assets/images/default/default-avatar.svg';
 
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const users = [
   // 1 Super Admin
   {
@@ -15,7 +15,7 @@ const users = [
     email: 'superadmin@dfashion.com',
     password: 'SuperAdmin123!',
     fullName: 'Super Admin',
-    avatar: '/uploads/avatars/superadmin.jpg',
+    avatar: '/assets/images/default/default-avatar.svg',
     role: 'super_admin',
     department: 'administration',
     isActive: true
@@ -95,7 +95,8 @@ async function seedUsers() {
   // Hash passwords before insertMany
   const hashedUsers = await Promise.all(users.map(async user => {
     const hashed = { ...user };
-    hashed.password = await bcrypt.hash(user.password, 12);
+    const salt = await bcrypt.genSalt(12);
+    hashed.password = await bcrypt.hash(user.password, salt);
     return hashed;
   }));
   await User.insertMany(hashedUsers);
