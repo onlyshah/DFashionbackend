@@ -7,25 +7,68 @@ const Order = require('../models/Order');
 const Post = require('../models/Post');
 const Story = require('../models/Story');
 
+// Postgres (Sequelize) fallback when MongoDB is unavailable
+let sequelizeMode = false;
+let SQLModels = null;
+try {
+  if (process.env.DB_TYPE === 'postgres') {
+    SQLModels = require('../models_sql');
+    if (SQLModels && SQLModels.User && typeof SQLModels.User.count === 'function') {
+      sequelizeMode = true;
+      console.log('[analytics] Sequelize mode enabled for analytics overview');
+    }
+  }
+} catch (err) {
+  // ignore and use mongoose
+}
+
 /**
  * Analytics Overview - REAL TIME ONLY
  */
 router.get('/overview', async (req, res) => {
   try {
     // Basic counts
-    const totalUsers = await User.countDocuments();
-    const activeUsers = await User.countDocuments({
-      lastActive: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } // Active last 30 days
-    });
-    const totalProducts = await Product.countDocuments();
-    const totalOrders = await Order.countDocuments();
+    let totalUsers = 0;
+    let activeUsers = 0;
+    let totalProducts = 0;
+    let totalOrders = 0;
+    let totalRevenue = 0;
 
-    // Revenue
-    const revenueResult = await Order.aggregate([
-      { $match: { status: 'completed' } },
-      { $group: { _id: null, total: { $sum: '$totalAmount' } } }
-    ]);
-    const totalRevenue = revenueResult.length > 0 ? revenueResult[0].total : 0;
+    if (sequelizeMode && SQLModels) {
+      try {
+        totalUsers = await SQLModels.User.count();
+        // activeUsers: SQL model may not track lastActive; default to totalUsers
+        activeUsers = totalUsers;
+        totalProducts = await SQLModels.Product.count();
+        // Orders may not be modeled in SQLModels; default to 0 if missing
+        if (SQLModels.Order && typeof SQLModels.Order.count === 'function') {
+          totalOrders = await SQLModels.Order.count();
+          const revenueRow = await SQLModels.Order.findOne({
+            attributes: [[SQLModels.sequelize.fn('SUM', SQLModels.sequelize.col('totalAmount')), 'total']]
+          });
+          totalRevenue = (revenueRow && revenueRow.dataValues && revenueRow.dataValues.total) || 0;
+        } else {
+          totalOrders = 0;
+          totalRevenue = 0;
+        }
+      } catch (err) {
+        console.error('[analytics] Sequelize overview fallback failed:', err);
+      }
+    } else {
+      totalUsers = await User.countDocuments();
+      activeUsers = await User.countDocuments({
+        lastActive: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } // Active last 30 days
+      });
+      totalProducts = await Product.countDocuments();
+      totalOrders = await Order.countDocuments();
+
+      // Revenue
+      const revenueResult = await Order.aggregate([
+        { $match: { status: 'completed' } },
+        { $group: { _id: null, total: { $sum: '$totalAmount' } } }
+      ]);
+      totalRevenue = revenueResult.length > 0 ? revenueResult[0].total : 0;
+    }
 
     // Average order value
     const averageOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;

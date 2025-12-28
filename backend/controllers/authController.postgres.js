@@ -1,7 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { User } = require('../models_sql');
-const { Op } = require('sequelize');
 
 // Generate JWT Token
 const generateToken = (userId, role) => {
@@ -30,7 +29,7 @@ const register = async (req, res) => {
     // Check if user exists
     const existingUser = await User.findOne({
       where: {
-        [Op.or]: [
+        [require('sequelize').Op.or]: [
           { email: email.toLowerCase() },
           { username: username.toLowerCase() }
         ]
@@ -90,6 +89,9 @@ const register = async (req, res) => {
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
+    console.log('[auth.postgres] Login attempt for:', email, 'from IP:', req.ip);
+    console.log('[auth.postgres] Request body:', req.body);
+    console.log('[auth.postgres] Request headers:', req.headers);
 
     // Validation
     if (!email || !password) {
@@ -102,7 +104,7 @@ const login = async (req, res) => {
     // Find user by email or username
     const user = await User.findOne({
       where: {
-        [Op.or]: [
+        [require('sequelize').Op.or]: [
           { email: email.toLowerCase() },
           { username: email.toLowerCase() }
         ]
@@ -161,7 +163,7 @@ const login = async (req, res) => {
     console.error('Login error:', error);
     res.status(500).json({
       success: false,
-      message: 'Login failed'
+      message: 'Server error during login'
     });
   }
 };
@@ -178,7 +180,7 @@ const adminLogin = async (req, res) => {
       where: {
         email: email.toLowerCase(),
         role: {
-          [Op.in]: ['admin', 'sales', 'marketing', 'accounting', 'support', 'super_admin']
+          [require('sequelize').Op.in]: ['admin', 'sales', 'marketing', 'accounting', 'support', 'super_admin']
         }
       }
     });
@@ -266,10 +268,10 @@ const getMe = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get me error:', error);
+    console.error('Get profile error:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to get user data'
+      message: 'Failed to fetch profile'
     });
   }
 };
@@ -284,10 +286,16 @@ const logout = (req, res) => {
   });
 };
 
+const getUserById = async (id) => {
+  if (!id) return null;
+  return await User.findByPk(id);
+};
+
 module.exports = {
   register,
   login,
   adminLogin,
   getMe,
-  logout
+  logout,
+  getUserById
 };

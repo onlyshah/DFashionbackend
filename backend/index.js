@@ -15,6 +15,7 @@ require('dotenv').config();
 const socketService = require('./services/socketService');
 const BasicSecurity = require('./middleware/basicSecurity');
 const { connectDB } = require('./config/database');
+const { connectPostgres } = require('./config/postgres');
 
 // -------- Basic sanity checks --------
 if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
@@ -311,8 +312,21 @@ process.on('unhandledRejection', (reason, promise) => {
 // -------- Start server --------
 const startServer = async () => {
   try {
-    console.log('🔌 Attempting to connect to MongoDB...');
-    await connectDB();
+    // Initialize databases based on DB_TYPE env var
+    // Default to Postgres to avoid attempting MongoDB connections when not used
+    const dbType = (process.env.DB_TYPE || 'postgres').toLowerCase();
+
+    if (dbType === 'postgres' || dbType === 'both') {
+      console.log('🔌 Attempting to connect to PostgreSQL...');
+      await connectPostgres();
+    }
+
+    if (dbType === 'mongo' || dbType === 'both') {
+      console.log('🔌 Attempting to connect to MongoDB...');
+      await connectDB();
+    } else {
+      console.log('ℹ️ Skipping MongoDB connection (DB_TYPE=' + dbType + ')');
+    }
 
     const PORT = process.env.PORT || 9000;
     const server = http.createServer(app);

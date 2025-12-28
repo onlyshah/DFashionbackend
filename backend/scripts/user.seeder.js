@@ -26,7 +26,7 @@ const users = [
     email: `admin${i+1}@dfashion.com`,
     password: 'Admin123!',
     fullName: `Admin User ${i+1}`,
-    avatar: `/uploads/avatars/admin${i+1}.jpg`,
+    avatar: `/uploads/avatars/admin${i+1}.svg`,
     role: 'admin',
     department: 'administration',
     isActive: true
@@ -37,7 +37,7 @@ const users = [
     email: `vendor${i+1}@dfashion.com`,
     password: 'Vendor123!',
     fullName: `Vendor User ${i+1}`,
-    avatar: `/uploads/avatars/vendor${i+1}.jpg`,
+    avatar: `/uploads/avatars/vendor${i+1}.svg`,
     role: 'vendor',
     department: 'vendor_management',
     isActive: true
@@ -48,7 +48,7 @@ const users = [
     email: `customer${i+1}@dfashion.com`,
     password: 'Customer123!',
     fullName: `Customer User ${i+1}`,
-    avatar: `/uploads/avatars/customer${i+1}.jpg`,
+    avatar: `/uploads/avatars/customer${i+1}.svg`,
     role: 'end_user',
     department: 'customer_service',
     isActive: true
@@ -59,7 +59,7 @@ const users = [
     email: `influencer${i+1}@dfashion.com`,
     password: 'Influencer123!',
     fullName: `Influencer User ${i+1}`,
-    avatar: `/uploads/avatars/influencer${i+1}.jpg`,
+    avatar: `/uploads/avatars/influencer${i+1}.svg`,
     role: 'end_user',
     isInfluencer: true,
     bio: `Fashion influencer and trendsetter #${i+1}`,
@@ -72,14 +72,23 @@ const users = [
   })),
 ];
 
-// Validate avatar path
+// Validate avatar path (ensure it resolves inside the backend folder)
 const fs = require('fs');
 const path = require('path');
 function validateAvatarPath(avatarPath) {
-  const absPath = path.join(__dirname, '..', avatarPath);
+  if (!avatarPath) return DEFAULT_AVATAR;
+  // Strip any leading slashes/backslashes so join resolves under backend root
+  const rel = avatarPath.replace(/^[/\\]+/, '');
+  const absPath = path.join(__dirname, '..', rel);
   if (fs.existsSync(absPath)) {
-    return avatarPath;
+    // Return a normalized web-friendly path with a leading slash
+    return '/' + rel.replace(/\\/g, '/');
   }
+  // Fallback to default avatar (also ensure it exists under backend)
+  const defRel = DEFAULT_AVATAR.replace(/^[/\\]+/, '');
+  const defAbs = path.join(__dirname, '..', defRel);
+  if (fs.existsSync(defAbs)) return '/' + defRel.replace(/\\/g, '/');
+  // As a last resort, return the DEFAULT_AVATAR value
   return DEFAULT_AVATAR;
 }
 
