@@ -73,4 +73,32 @@ router.get('/verify', verifyToken, (req, res) => res.json({ success: true, data:
 router.get('/me', verifyToken, (req, res) => res.json({ success: true, user: req.user }));
 router.post('/logout', (req, res) => controller.logout(req, res));
 
+// Password recovery routes
+router.post('/forgot-password', async (req, res) => {
+  try {
+    await controller.forgotPassword(req, res);
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    res.status(500).json({ success: false, message: 'Forgot password error' });
+  }
+});
+
+router.post('/reset-password', async (req, res) => {
+  try {
+    await controller.resetPassword(req, res);
+  } catch (err) {
+    console.error('Reset password error:', err);
+    res.status(500).json({ success: false, message: 'Reset password error' });
+  }
+});
+
+router.post('/verify-reset-token', async (req, res) => {
+  try {
+    await controller.verifyResetToken(req, res);
+  } catch (err) {
+    console.error('Verify reset token error:', err);
+    res.status(500).json({ success: false, message: 'Verify reset token error' });
+  }
+});
+
 module.exports = router;
