@@ -102,13 +102,16 @@ app.options('*', (req, res) => {
 const uploadsPath = path.join(__dirname, 'uploads');
 const publicPath = path.join(__dirname, 'public');
 
-// Middleware to set CORS headers for static files
+// Middleware to set permissive CORS headers for static files (allows frontend to load images)
 const setStaticFileHeaders = (res, filePath) => {
-  // Allow from frontend origin only
-  res.setHeader('Access-Control-Allow-Origin', 'http://localhost:4200');
+  // Use the incoming Origin header when present to avoid hardcoding a single origin
+  const origin = (res && res.req && res.req.get && res.req.get('Origin')) || '*';
+  res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-  res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
+  // Allow cross-origin resource embedding for images used by the frontend (prevents NotSameOrigin blocking)
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
   // Add cache control for better performance
   res.setHeader('Cache-Control', 'public, max-age=3600');
 };

@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 const User = require('../models/User');
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/dfashion';
-const DEFAULT_AVATAR = '/assets/images/default/default-avatar.svg';
+const DEFAULT_AVATAR = '/uploads/avatars/default-avatar.svg';
 
 const bcrypt = require('bcryptjs');
 const users = [
@@ -15,7 +15,7 @@ const users = [
     email: 'superadmin@dfashion.com',
     password: 'SuperAdmin123!',
     fullName: 'Super Admin',
-    avatar: '/assets/images/default/default-avatar.svg',
+    avatar: '/uploads/avatars/default-avatar.svg',
     role: 'super_admin',
     department: 'administration',
     isActive: true

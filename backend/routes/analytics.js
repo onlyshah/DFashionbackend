@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const Product = require('../models/Product');
 const Order = require('../models/Order');
@@ -27,6 +28,23 @@ try {
  */
 router.get('/overview', async (req, res) => {
   try {
+    // If MongoDB is not connected and Sequelize fallback isn't enabled, return safe defaults
+    if (!sequelizeMode && mongoose.connection.readyState !== 1) {
+      console.warn('[analytics] MongoDB not connected - returning default overview values');
+      return res.json({
+        success: true,
+        data: {
+          totalUsers: 0,
+          activeUsers: 0,
+          totalProducts: 0,
+          totalOrders: 0,
+          totalRevenue: 0,
+          conversionRate: 0,
+          averageOrderValue: 0,
+          topCategories: []
+        }
+      });
+    }
     // Basic counts
     let totalUsers = 0;
     let activeUsers = 0;
