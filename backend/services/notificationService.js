@@ -1,4 +1,5 @@
-const Notification = require('../models/Notification');
+const models = require('../models');
+const Notification = models.Notification;
 const socketService = require('./socketService');
 
 class NotificationService {
@@ -295,7 +296,8 @@ class NotificationService {
   // Broadcast notifications
   async broadcastToRole(role, type, data = {}, options = {}) {
     try {
-      const User = require('../models/User');
+      const models = require('../models');
+      const User = models.User;
       const users = await User.find({ role }).select('_id');
       
       const notifications = [];
@@ -313,7 +315,8 @@ class NotificationService {
 
   async broadcastToAll(type, data = {}, options = {}) {
     try {
-      const User = require('../models/User');
+      const models = require('../models');
+      const User = models.User;
       const users = await User.find({ isActive: true }).select('_id');
       
       const notifications = [];

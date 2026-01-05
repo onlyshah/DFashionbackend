@@ -1,8 +1,10 @@
-const Product = require('../models/Product');
-const User = require('../models/User');
-const UserBehavior = require('../models/UserBehavior');
-const Post = require('../models/Post');
-const Story = require('../models/Story');
+const { getModels } = require('../config');
+const models = getModels();
+const Product = models.Product;
+const User = models.User;
+const UserBehavior = models.UserBehavior;
+const Post = models.Post;
+const Story = models.Story;
 
 class RecommendationEngine {
   constructor() {

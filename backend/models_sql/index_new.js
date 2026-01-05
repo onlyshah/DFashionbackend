@@ -22,78 +22,74 @@ const Story = defineStory(sequelize, Sequelize.DataTypes);
 const Reel = defineReel(sequelize, Sequelize.DataTypes);
 const UserBehavior = defineUserBehavior(sequelize, Sequelize.DataTypes);
 
-// SequelizeQueryWrapper class - provides Promise-based chainable interface
+// Query wrapper class to support Mongoose-like chaining with Sequelize
 class SequelizeQueryWrapper {
-  constructor(sequelizeModel) {
-    this.model = sequelizeModel;
+  constructor(model) {
+    this.model = model;
     this.query = {};
-    this.sortOrder = [];
-    this.limitVal = null;
+    this.sortOrder = undefined;
+    this.limitVal = undefined;
     this.offsetVal = 0;
-    this.projection = null;
-    this.isRaw = true;
+    this.populateFields = null;
+    this.leanFlag = true;
   }
 
   find(query = {}) {
-    this.query = query;
+    this.query = query || {};
     return this;
   }
 
   sort(sortObj) {
-    if (typeof sortObj === 'object') {
-      this.sortOrder = Object.entries(sortObj).map(([key, val]) => [key, val === -1 ? 'DESC' : 'ASC']);
+    if (sortObj && typeof sortObj === 'object') {
+      this.sortOrder = Object.entries(sortObj).map(([key, val]) => [key, val > 0 ? 'ASC' : 'DESC']);
     }
     return this;
   }
 
-  limit(n) {
-    this.limitVal = n;
+  limit(num) {
+    this.limitVal = num;
     return this;
   }
 
-  skip(n) {
-    this.offsetVal = n;
+  skip(num) {
+    this.offsetVal = num;
     return this;
   }
 
-  select(projection) {
-    this.projection = projection;
+  populate(field, projection) {
+    this.populateFields = { field, projection };
     return this;
   }
 
   lean() {
-    this.isRaw = true;
+    this.leanFlag = true;
     return this;
   }
 
   async exec() {
     try {
-      const options = {
+      const opts = {
         where: this.query,
-        raw: this.isRaw
+        raw: this.leanFlag
       };
-      if (this.sortOrder.length > 0) options.order = this.sortOrder;
-      if (this.limitVal) options.limit = this.limitVal;
-      if (this.offsetVal) options.offset = this.offsetVal;
-      if (this.projection) options.attributes = this.projection;
-
-      return await this.model.findAll(options);
+      if (this.limitVal) opts.limit = this.limitVal;
+      if (this.offsetVal) opts.offset = this.offsetVal;
+      if (this.sortOrder) opts.order = this.sortOrder;
+      const results = await this.model.findAll(opts);
+      return results || [];
     } catch (err) {
-      console.error(`Error in exec for ${this.model.name}:`, err);
+      console.error(`Error executing query:`, err);
       return [];
     }
   }
 
+  // Support both .exec() and implicit execution via Promise
   then(onFulfilled, onRejected) {
     return this.exec().then(onFulfilled, onRejected);
   }
 
   catch(onRejected) {
     return this.exec().catch(onRejected);
-  }
-
-  finally(onFinally) {
-    return this.exec().finally(onFinally);
   }
 }
 
@@ -103,26 +99,16 @@ const createMongooseLikeWrapper = (sequelizeModel) => {
     // find() - returns chainable query wrapper
     find: (query = {}, projection = null, options = {}) => {
       const wrapper = new SequelizeQueryWrapper(sequelizeModel);
-      // Support Sequelize-style options passthrough: { where, limit, order, offset }
-      if (query && (query.where || query.limit || query.order || query.offset)) {
-        wrapper.query = query.where || {};
-        if (query.order) wrapper.sortOrder = query.order;
-        if (query.limit) wrapper.limitVal = query.limit;
-        if (query.offset) wrapper.offsetVal = query.offset || query.skip || 0;
-        return wrapper;
-      }
-      // Mongoose-style filter object
       return wrapper.find(query);
     },
 
     // findOne() - returns single object or null
     findOne: async (query = {}, projection = null, options = {}) => {
       try {
-        if (query && query.where) {
-          const result = await sequelizeModel.findOne({ ...query, raw: true });
-          return result || null;
-        }
-        const result = await sequelizeModel.findOne({ where: query, raw: true });
+        const result = await sequelizeModel.findOne({
+          where: query,
+          raw: true
+        });
         return result || null;
       } catch (err) {
         console.error(`Error in findOne for ${sequelizeModel.name}:`, err);

@@ -1,6 +1,10 @@
 // Import dependencies - no fallbacks, require database
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const models = require('../models');
+const { Op } = require('sequelize');
+
+let User = models.User;
+let UserRaw = models._raw && models._raw.User ? models._raw.User : null;
 
 // Admin roles that can access dashboard
 const ADMIN_ROLES = [
@@ -44,8 +48,31 @@ exports.verifyAdminToken = async (req, res, next) => {
     // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
     
-    // Get user from database
-    const user = await User.findById(decoded.userId).select('-password');
+    // Get user from database.
+    // If the backend is running in Postgres mode, avoid calling Mongoose methods
+    // with numeric IDs — prefer raw Sequelize or wrapped findOne with a `where`.
+    const dbType = (process.env.DB_TYPE || '').toLowerCase();
+    let user;
+
+    if (dbType.includes('postgres')) {
+      if (UserRaw) {
+        user = await UserRaw.findOne({ where: { id: decoded.userId } });
+      } else if (User.findOne) {
+        // Use wrapped model's findOne with a Sequelize-style `where` object
+        user = await User.findOne({ where: { id: decoded.userId } });
+      } else {
+        throw new Error('Postgres configured but User model lacks query methods');
+      }
+    } else {
+      // Mongo or default: use Mongoose-style find
+      if (User.findById) {
+        user = await User.findById(decoded.userId).select('-password');
+      } else if (User.findOne) {
+        user = await User.findOne({ where: { id: decoded.userId } });
+      } else {
+        throw new Error('User model does not support expected query methods');
+      }
+    }
     
     if (!user) {
       return res.status(401).json({
@@ -56,7 +83,7 @@ exports.verifyAdminToken = async (req, res, next) => {
     }
 
     // Check if user is active
-    if (!user.isActive) {
+    if (user.isActive === false) {
       return res.status(401).json({
         success: false,
         message: 'Account is deactivated.',
@@ -82,9 +109,15 @@ exports.verifyAdminToken = async (req, res, next) => {
       });
     }
 
-    // Update last login
-    user.lastLogin = new Date();
-    await user.save();
+    // Update last login using appropriate method
+    if (UserRaw) {
+      // Sequelize - use raw model's update
+      await UserRaw.update({ lastLogin: new Date() }, { where: { id: user.id } });
+    } else if (user.save && typeof user.save === 'function') {
+      // Mongoose - use save
+      user.lastLogin = new Date();
+      await user.save();
+    }
 
     req.user = user;
     next();

@@ -1,23 +1,21 @@
 const express = require('express');
 const router = express.Router();
-const Product = require('../models/Product');
-const User = require('../models/User');
-const UserBehavior = require('../models/UserBehavior');
+const { Op } = require('sequelize');
 const recommendationEngine = require('../services/recommendationEngine');
 
-// If running with Postgres (Sequelize) use SQL models as a fallback when Mongo is not available
+// Force Sequelize mode when DB_TYPE is postgres or postgres_only
 let sequelizeMode = false;
 let SQLModels = null;
 try {
-  if (process.env.DB_TYPE === 'postgres') {
+  if (process.env.DB_TYPE === 'postgres' || process.env.DB_TYPE === 'postgres_only') {
     SQLModels = require('../models_sql');
     if (SQLModels && SQLModels.Product && typeof SQLModels.Product.findAll === 'function') {
       sequelizeMode = true;
-      console.log('[recommendations] Running in Sequelize mode (Postgres fallback)');
+      console.log('[recommendations] Running in Sequelize mode (Postgres/PostgresOnly)');
     }
   }
 } catch (err) {
-  // ignore - fallback to Mongoose
+  console.error('[recommendations] Failed to load Sequelize models:', err.message);
 }
 const { auth } = require('../middleware/auth');
 
@@ -25,23 +23,24 @@ const { auth } = require('../middleware/auth');
 router.get('/trending', async (req, res) => {
   try {
     const { category, limit = 10 } = req.query;
-    // If using Sequelize (Postgres) return products from SQL models
+    
+    // Always use Sequelize if models are available
     if (sequelizeMode && SQLModels && SQLModels.Product) {
-      const where = { };
+      const where = { isActive: true };
       if (category) {
-        // SQL model uses categoryId - try to resolve by name if Category model exists
-        // Fallback: ignore category filter
+        where.categoryId = category;
       }
 
       const products = await SQLModels.Product.findAll({
         where,
         order: [['createdAt', 'DESC']],
-        limit: parseInt(limit),
+        limit: Math.min(parseInt(limit) || 10, 100),
         raw: true
       });
 
       const trendingProducts = products.map(product => ({
         _id: product.id,
+        id: product.id,
         title: product.title || product.name || 'Untitled',
         description: product.description || '',
         price: product.price,
@@ -59,38 +58,9 @@ router.get('/trending', async (req, res) => {
       return res.json({ success: true, data: trendingProducts });
     }
 
-    // Default Mongoose flow
-    let query = { isActive: true };
-    if (category) {
-      query.category = category;
-    }
-
-    // Get products sorted by popularity (you can adjust this logic)
-    const products = await Product.find(query)
-      .sort({ 
-        'analytics.views': -1, 
-        'analytics.purchases': -1,
-        createdAt: -1 
-      })
-      .limit(parseInt(limit))
-      .populate('vendor', 'businessName')
-      .lean();
-
-    // Add trending metadata
-    const trendingProducts = products.map(product => ({
-      ...product,
-      trendingScore: Math.random() * 0.5 + 0.5, // Random score between 0.5-1
-      trendingReason: 'Popular this week',
-      viewCount: product.analytics?.views || Math.floor(Math.random() * 1000) + 100,
-      purchaseCount: product.analytics?.purchases || Math.floor(Math.random() * 50) + 10,
-      shareCount: Math.floor(Math.random() * 200) + 20,
-      engagementRate: (Math.random() * 5 + 3).toFixed(1)
-    }));
-
-    res.json({
-      success: true,
-      data: trendingProducts
-    });
+    // Fallback: Return empty array if no models available
+    console.warn('[recommendations] Sequelize models not available, returning empty results');
+    res.json({ success: true, data: [] });
 
   } catch (error) {
     console.error('Error fetching trending products:', error);

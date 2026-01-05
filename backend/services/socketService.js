@@ -1,7 +1,8 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-const Notification = require('../models/Notification');
+const models = require('../models');
+const User = models.User;
+const Notification = models.Notification;
 
 class SocketService {
   constructor() {

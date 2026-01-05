@@ -1,5 +1,7 @@
-const Product = require('../models/Product');
-const { SearchHistory, TrendingSearch, SearchSuggestion } = require('../models/SearchHistory');
+const { getModels } = require('../config');
+const models = getModels();
+const Product = models.Product;
+const { SearchHistory, TrendingSearch, SearchSuggestion } = models.SearchHistory || {};
 
 class SearchEngine {
   constructor() {

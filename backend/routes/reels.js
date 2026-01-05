@@ -11,7 +11,8 @@ const { auth } = require('../middleware/auth');
 let Reel, User, Product;
 try {
   Reel = require('../models/Reel');
-  User = require('../models/User');
+  const models = require('../models');
+  User = models.User;
   Product = require('../models/Product');
 } catch (error) {
   console.log('⚠️ Models not available, using mock data for reels');

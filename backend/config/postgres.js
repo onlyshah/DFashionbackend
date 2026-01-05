@@ -87,6 +87,11 @@ const testConnection = async (testPassword) => {
 };
 
 const ensurePassword = async () => {
+  // Skip prompting in non-interactive environments
+  if (!process.stdin.isTTY) {
+    console.log('⚠️  Non-interactive mode: using password from environment');
+    return password;
+  }
   console.log(`🔍 Current password value: "${password}"`);
   console.log(`🔍 Is placeholder? ${placeholderPasswords.has(String(password).trim())}`);
   if (!placeholderPasswords.has(String(password).trim())) {
@@ -94,7 +99,7 @@ const ensurePassword = async () => {
     return password;
   }
   console.warn('⚠️  PostgreSQL password appears to be a placeholder or unset.');
-  if (process.stdin.isTTY) {
+  if (true) {
     console.log('📝 Interactive mode detected, prompting for password...');
     let retries = 3;
     while (retries > 0) {

@@ -316,7 +316,8 @@ router.post('/admin/broadcast', auth, requireRole(['super_admin']), async (req, 
     }
 
     // Get all users based on filter
-    const User = require('../models/User');
+    const models = require('../models');
+    const User = models.User;
     const users = await User.find(userFilter).select('_id');
 
     const notifications = [];

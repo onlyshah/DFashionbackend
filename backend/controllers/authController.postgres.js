@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { User } = require('../models_sql');
+const models = require('../models_sql');
+const User = models._raw && models._raw.User ? models._raw.User : models.User;
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
 
@@ -229,8 +230,10 @@ const adminLogin = async (req, res) => {
     }
 
     // Update last login
-    user.lastLogin = new Date();
-    await user.save();
+    await User.update(
+      { lastLogin: new Date() },
+      { where: { id: user.id } }
+    );
 
     // Generate token
     const token = generateToken(user.id, user.role);

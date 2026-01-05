@@ -1,8 +1,9 @@
-const Product = require('../models/Product');
-const Brand = require('../models/Brand');
-const Category = require('../models/Category');
-const User = require('../models/User');
-const StyleInspiration = require('../models/StyleInspiration');
+const models = require('../models');
+const Product = models.Product;
+const Brand = models.Brand;
+const Category = models.Category;
+const User = models.User;
+const StyleInspiration = models.StyleInspiration;
 
 function paginate(query, page, limit) {
   const skip = (page - 1) * limit;

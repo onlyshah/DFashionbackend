@@ -2,11 +2,12 @@ const express = require('express');
 const router = express.Router();
 
 const mongoose = require('mongoose');
-const User = require('../models/User');
-const Product = require('../models/Product');
-const Order = require('../models/Order');
-const Post = require('../models/Post');
-const Story = require('../models/Story');
+const models = require('../models');
+const User = models.User;
+const Product = models.Product;
+const Order = models.Order;
+const Post = models.Post;
+const Story = models.Story;
 
 // Postgres (Sequelize) fallback when MongoDB is unavailable
 let sequelizeMode = false;

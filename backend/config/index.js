@@ -172,8 +172,14 @@ const getConfig = (env = process.env.NODE_ENV) => {
   }
 };
 
+// Unified models entrypoint
+const getModels = () => {
+  return require('../models');
+};
+
 module.exports = {
   config,
   validateConfig,
-  getConfig
+  getConfig,
+  getModels
 };

@@ -3,7 +3,8 @@
 
 const mongoose = require('mongoose');
 const Cart = require('../models/Cart');
-const User = require('../models/User');
+const models = require('../models');
+const User = models.User;
 const Product = require('../models/Product');
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/dfashion';

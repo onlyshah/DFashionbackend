@@ -10,14 +10,15 @@ const {
 } = require('../middleware/adminAuth');
 
 const { auth, isAdmin } = require('../middleware/auth');
-const User = require('../models/User');
-const Product = require('../models/Product');
-const Category = require('../models/Category');
-const Story = require('../models/Story');
-const Post = require('../models/Post');
-const Order = require('../models/Order');
-const Payment = require('../models/Payment');
-const Notification = require('../models/Notification');
+const models = require('../models');
+const User = models.User;
+const Product = models.Product;
+const Category = models.Category;
+const Story = models.Story;
+const Post = models.Post;
+const Order = models.Order;
+const Payment = models.Payment;
+const Notification = models.Notification;
 
 // ✅ Global Admin Auth Middleware
 router.use(verifyAdminToken);

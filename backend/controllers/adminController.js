@@ -1,10 +1,13 @@
 const bcrypt = require('bcryptjs');
-const User = require('../models/User');
-const Product = require('../models/Product');
-const Order = require('../models/Order');
-const Transaction = require('../models/Transaction'); // ✅ Make sure you have this model
-const Campaign = require('../models/Campaign'); // ✅ Optional - add if not exist
-const Ticket = require('../models/Ticket'); // ✅ Optional - add if not exist
+const { getConfig, getModels } = require('../config');
+const { Op } = require('sequelize');
+
+// Load models based on DB_TYPE
+const models = getModels();
+const User = models.User;
+const UserRaw = models._raw && models._raw.User ? models._raw.User : null;
+const Product = models.Product;
+const Order = models.Order;
 
 // ✅ Dashboard Overview (new version for /admin/dashboard)
 exports.getDashboardStatsFromDB = async (req, res) => {
@@ -12,39 +15,39 @@ exports.getDashboardStatsFromDB = async (req, res) => {
     const today = new Date();
     const startOfDay = new Date(today.setHours(0, 0, 0, 0));
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const startOfYear = new Date(today.getFullYear(), 0, 1);
 
-    const [totalUsers, totalVendors, newUsersToday, newUsersThisMonth] = await Promise.all([
-      User.countDocuments({}),
-      User.countDocuments({ role: 'vendor' }),
-      User.countDocuments({ createdAt: { $gte: startOfDay } }),
-      User.countDocuments({ createdAt: { $gte: startOfMonth } })
-    ]);
+    if (!User || !Product) {
+      return res.status(500).json({ success: false, message: 'Database models not initialized' });
+    }
 
-    const [totalProducts, activeProducts, pendingProducts, newProductsToday] = await Promise.all([
-      Product.countDocuments(),
-      Product.countDocuments({ status: 'active' }),
-      Product.countDocuments({ status: 'pending' }),
-      Product.countDocuments({ createdAt: { $gte: startOfDay } })
-    ]);
+    const dataProvider = require('../services/dataProvider');
 
-    const [totalOrders, ordersToday, ordersThisMonth] = await Promise.all([
-      Order.countDocuments(),
-      Order.countDocuments({ createdAt: { $gte: startOfDay } }),
-      Order.countDocuments({ createdAt: { $gte: startOfMonth } })
-    ]);
+    // Use sequential safe counts via dataProvider (DB-agnostic, falls back to progress)
+    const totalUsers = await dataProvider.count('users', { wrapped: User, raw: UserRaw }, {});
+    const totalVendors = await dataProvider.count('users', { wrapped: User, raw: UserRaw }, { role: 'vendor' });
+    const newUsersToday = await dataProvider.count('users', { wrapped: User, raw: UserRaw }, { createdAt: { [Op.gte]: startOfDay } });
+    const newUsersThisMonth = await dataProvider.count('users', { wrapped: User, raw: UserRaw }, { createdAt: { [Op.gte]: startOfMonth } });
 
-    const revenueAgg = await Order.aggregate([
-      { $group: { _id: null, total: { $sum: '$total' } } }
-    ]);
-    const revenueTodayAgg = await Order.aggregate([
-      { $match: { createdAt: { $gte: startOfDay } } },
-      { $group: { _id: null, total: { $sum: '$total' } } }
-    ]);
-    const revenueMonthAgg = await Order.aggregate([
-      { $match: { createdAt: { $gte: startOfMonth } } },
-      { $group: { _id: null, total: { $sum: '$total' } } }
-    ]);
+    const productRaw = models._raw && models._raw.Product ? models._raw.Product : null;
+    const totalProducts = await dataProvider.count('products', { wrapped: Product, raw: productRaw }, {});
+    const activeProducts = await dataProvider.count('products', { wrapped: Product, raw: productRaw }, { status: 'active' });
+    const pendingProducts = await dataProvider.count('products', { wrapped: Product, raw: productRaw }, { status: 'pending' });
+    const newProductsToday = await dataProvider.count('products', { wrapped: Product, raw: productRaw }, { createdAt: { [Op.gte]: startOfDay } });
+
+    // Orders might not exist in SQL, provide default values
+    let totalOrders = 0, ordersToday = 0, ordersThisMonth = 0;
+    let revenueResult = 0, revenueTodayResult = 0, revenueMonthResult = 0;
+
+    if (Order) {
+      const orderRaw = models._raw && models._raw.Order ? models._raw.Order : null;
+      totalOrders = await dataProvider.count('orders', { wrapped: Order, raw: orderRaw }, {});
+      ordersToday = await dataProvider.count('orders', { wrapped: Order, raw: orderRaw }, { createdAt: { [Op.gte]: startOfDay } });
+      ordersThisMonth = await dataProvider.count('orders', { wrapped: Order, raw: orderRaw }, { createdAt: { [Op.gte]: startOfMonth } });
+
+      revenueResult = await dataProvider.sum('orders', { wrapped: Order, raw: orderRaw }, 'total', {}) || 0;
+      revenueTodayResult = await dataProvider.sum('orders', { wrapped: Order, raw: orderRaw }, 'total', { createdAt: { [Op.gte]: startOfDay } }) || 0;
+      revenueMonthResult = await dataProvider.sum('orders', { wrapped: Order, raw: orderRaw }, 'total', { createdAt: { [Op.gte]: startOfMonth } }) || 0;
+    }
 
     res.json({
       success: true,
@@ -68,15 +71,16 @@ exports.getDashboardStatsFromDB = async (req, res) => {
             this_month: ordersThisMonth
           },
           revenue: {
-            total: revenueAgg[0]?.total || 0,
-            today: revenueTodayAgg[0]?.total || 0,
-            this_month: revenueMonthAgg[0]?.total || 0
+            total: revenueResult,
+            today: revenueTodayResult,
+            this_month: revenueMonthResult
           }
         },
         user_permissions: req.user.permissions || []
       }
     });
   } catch (error) {
+    console.error('[adminController] Dashboard error:', error);
     res.status(500).json({ success: false, message: 'Error fetching dashboard data', error: error.message });
   }
 };
@@ -88,24 +92,32 @@ exports.getDashboardStats = exports.getDashboardStatsFromDB;
 exports.getAllUsers = async (req, res) => {
   try {
     const { page = 1, limit = 20, role, department, search } = req.query;
-    let query = {};
+    const where = {};
 
-    if (role && role !== 'all') query.role = role;
-    if (department && department !== 'all') query.department = department;
+    if (role && role !== 'all') where.role = role;
+    if (department && department !== 'all') where.department = department;
     if (search) {
-      query.$or = [
-        { fullName: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { username: { $regex: search, $options: 'i' } }
+      where[Op.or] = [
+        { fullName: { [Op.iLike]: `%${search}%` } },
+        { email: { [Op.iLike]: `%${search}%` } },
+        { username: { [Op.iLike]: `%${search}%` } }
       ];
     }
 
-    const users = await User.find(query)
-      .select('-password')
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-    const total = await User.countDocuments(query);
+    if (!User) {
+      return res.status(500).json({ success: false, message: 'User model not initialized' });
+    }
+
+    const users = await User.findAll({
+      where,
+      attributes: { exclude: ['password'] },
+      order: [['createdAt', 'DESC']],
+      limit: parseInt(limit),
+      offset: (parseInt(page) - 1) * parseInt(limit),
+      raw: true
+    });
+
+    const total = await User.count({ where });
 
     res.json({
       success: true,
@@ -119,6 +131,7 @@ exports.getAllUsers = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('[adminController] Error fetching users:', error);
     res.status(500).json({ success: false, message: 'Error fetching users', error: error.message });
   }
 };
@@ -127,27 +140,63 @@ exports.getAllUsers = async (req, res) => {
 exports.createAdminUser = async (req, res) => {
   try {
     const { fullName, email, password, role, department, employeeId, permissions } = req.body;
-    const existingUser = await User.findOne({ $or: [{ email }, { employeeId }] });
+    
+    // Check if user exists - use appropriate method
+    let existingUser;
+    if (UserRaw) {
+      // Sequelize
+      existingUser = await User.findOne({
+        where: {
+          [Op.or]: [
+            { email: email },
+            { employeeId: employeeId }
+          ]
+        }
+      });
+    } else {
+      // Mongoose
+      existingUser = await User.findOne({ $or: [{ email }, { employeeId }] });
+    }
+    
     if (existingUser) {
       return res.status(400).json({ success: false, message: 'User with this email or employee ID already exists' });
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
-    const user = new User({
-      fullName,
-      email,
-      password: hashedPassword,
-      role,
-      department,
-      employeeId,
-      permissions,
-      username: email.split('@')[0] + '_' + Date.now(),
-      isVerified: true,
-      isActive: true
-    });
+    
+    let user;
+    if (UserRaw) {
+      // Sequelize - create and save
+      user = await User.create({
+        fullName,
+        email,
+        password: hashedPassword,
+        role,
+        department,
+        employeeId,
+        permissions,
+        username: email.split('@')[0] + '_' + Date.now(),
+        isVerified: true,
+        isActive: true
+      });
+    } else {
+      // Mongoose
+      user = new User({
+        fullName,
+        email,
+        password: hashedPassword,
+        role,
+        department,
+        employeeId,
+        permissions,
+        username: email.split('@')[0] + '_' + Date.now(),
+        isVerified: true,
+        isActive: true
+      });
+      await user.save();
+    }
 
-    await user.save();
-    const userResponse = user.toObject();
+    const userResponse = UserRaw ? user.toJSON ? user.toJSON() : user.dataValues : user.toObject();
     delete userResponse.password;
 
     res.status(201).json({ success: true, message: 'Admin user created successfully', data: { user: userResponse } });
@@ -162,16 +211,37 @@ exports.updateUserRole = async (req, res) => {
     const { userId } = req.params;
     const { role, department, permissions, isActive } = req.body;
 
-    const user = await User.findById(userId);
+    let user;
+    if (UserRaw) {
+      // Sequelize - use findOne
+      user = await User.findOne({ where: { id: userId } });
+    } else {
+      // Mongoose
+      user = await User.findById(userId);
+    }
+    
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    if (role) user.role = role;
-    if (department) user.department = department;
-    if (permissions) user.permissions = permissions;
-    if (typeof isActive !== 'undefined') user.isActive = isActive;
+    if (UserRaw) {
+      // Sequelize - use update
+      const updateData = {};
+      if (role) updateData.role = role;
+      if (department) updateData.department = department;
+      if (permissions) updateData.permissions = permissions;
+      if (typeof isActive !== 'undefined') updateData.isActive = isActive;
+      
+      await User.update(updateData, { where: { id: userId } });
+      user = await User.findOne({ where: { id: userId } });
+    } else {
+      // Mongoose - use save
+      if (role) user.role = role;
+      if (department) user.department = department;
+      if (permissions) user.permissions = permissions;
+      if (typeof isActive !== 'undefined') user.isActive = isActive;
+      await user.save();
+    }
 
-    await user.save();
-    const userResponse = user.toObject();
+    const userResponse = UserRaw ? user.toJSON ? user.toJSON() : user.dataValues : user.toObject();
     delete userResponse.password;
 
     res.json({ success: true, message: 'User updated successfully', data: { user: userResponse } });
@@ -186,14 +256,33 @@ exports.updateUserRoleBySuperAdmin = async (req, res) => {
     const { userId } = req.params;
     const { role, permissions } = req.body;
 
-    const user = await User.findById(userId);
+    let user;
+    if (UserRaw) {
+      // Sequelize - use findOne
+      user = await User.findOne({ where: { id: userId } });
+    } else {
+      // Mongoose
+      user = await User.findById(userId);
+    }
+    
     if (!user) return res.status(404).json({ success: false, message: 'User not found' });
 
-    if (role) user.role = role;
-    if (permissions) user.permissions = permissions;
+    if (UserRaw) {
+      // Sequelize - use update
+      const updateData = {};
+      if (role) updateData.role = role;
+      if (permissions) updateData.permissions = permissions;
+      
+      await User.update(updateData, { where: { id: userId } });
+      user = await User.findOne({ where: { id: userId } });
+    } else {
+      // Mongoose - use save
+      if (role) user.role = role;
+      if (permissions) user.permissions = permissions;
+      await user.save();
+    }
 
-    await user.save();
-    const userResponse = user.toObject();
+    const userResponse = UserRaw ? user.toJSON ? user.toJSON() : user.dataValues : user.toObject();
     delete userResponse.password;
 
     res.json({ success: true, message: 'User role updated by super admin successfully', data: { user: userResponse } });
@@ -309,7 +398,7 @@ exports.getSupportTickets = async (req, res) => {
 // ✅ Get quick actions for admin navbar (stored in DB)
 exports.getQuickActions = async (req, res) => {
   try {
-    const QuickAction = require('../models/QuickAction');
+    const QuickAction = models.QuickAction;
     const role = req.user?.role || 'admin';
 
     // Fetch active quick actions and filter by role if specified

@@ -460,7 +460,7 @@ router.get('/admin/analytics', auth, async (req, res) => {
       totalCarts
     ] = await Promise.all([
       Product.countDocuments({ isActive: true }),
-      require('../models/User').countDocuments({ role: 'customer' }),
+      (function(){ const models = require('../models'); const User = models.User; return User.countDocuments ? User.countDocuments({ role: 'customer' }) : User.count({ where: { role: 'customer' } }); })(),
       ProductComment.countDocuments({ moderationStatus: 'approved' }),
       ProductShare.countDocuments({ isActive: true }),
       Wishlist.countDocuments({}),

@@ -1,9 +1,11 @@
-const User = require('../models/User');
-const Reward = require('../models/Reward');
-const Order = require('../models/Order');
-const Post = require('../models/Post');
-const Story = require('../models/Story');
-const Reel = require('../models/Reel');
+const { getModels } = require('../config');
+const models = getModels();
+const User = models.User;
+const Reward = models.Reward;
+const Order = models.Order;
+const Post = models.Post;
+const Story = models.Story;
+const Reel = models.Reel;
 
 class RewardService {
   

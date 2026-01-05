@@ -1,13 +1,21 @@
 const express = require('express');
-const Product = require('../models/Product');
+const models = require('../models');
+const Product = models.Product;
 const { auth, optionalAuth } = require('../middleware/auth');
 
 const router = express.Router();
 
+const requireMongo = (req, res, next) => {
+  if (process.env.DB_TYPE && !process.env.DB_TYPE.includes('mongo')) {
+    return res.status(501).json({ success: false, message: 'Endpoint requires MongoDB; not available in Postgres-only mode' });
+  }
+  next();
+};
+
 // @route   GET /api/brands
 // @desc    Get all brands
 // @access  Public
-router.get('/', async (req, res) => {
+router.get('/', requireMongo, async (req, res) => {
   try {
     const brands = await Product.aggregate([
       { $match: { isActive: true } },
@@ -49,7 +57,7 @@ router.get('/', async (req, res) => {
 // @route   GET /api/brands/featured
 // @desc    Get featured brands
 // @access  Public
-router.get('/featured', async (req, res) => {
+router.get('/featured', requireMongo, async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 8;
     
@@ -93,7 +101,7 @@ router.get('/featured', async (req, res) => {
 // @route   GET /api/brands/:name
 // @desc    Get brand details
 // @access  Public
-router.get('/:name', async (req, res) => {
+router.get('/:name', requireMongo, async (req, res) => {
   try {
     const brandName = req.params.name;
     
@@ -161,7 +169,7 @@ router.get('/:name', async (req, res) => {
 // @route   GET /api/brands/:name/products
 // @desc    Get products by brand
 // @access  Public
-router.get('/:name/products', async (req, res) => {
+router.get('/:name/products', requireMongo, async (req, res) => {
   try {
     const brandName = req.params.name;
     const page = parseInt(req.query.page) || 1;

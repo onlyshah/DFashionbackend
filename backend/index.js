@@ -16,6 +16,7 @@ const socketService = require('./services/socketService');
 const BasicSecurity = require('./middleware/basicSecurity');
 const { connectDB } = require('./config/database');
 const { connectPostgres } = require('./config/postgres');
+const dataProvider = require('./services/dataProvider');
 
 // -------- Basic sanity checks --------
 if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
@@ -316,17 +317,39 @@ process.on('unhandledRejection', (reason, promise) => {
 const startServer = async () => {
   try {
     // Initialize databases based on DB_TYPE env var
-    // Default to Postgres to avoid attempting MongoDB connections when not used
+    // Accept values like 'postgres', 'postgres_only', 'mongo', 'both'
     const dbType = (process.env.DB_TYPE || 'postgres').toLowerCase();
 
-    if (dbType === 'postgres' || dbType === 'both') {
-      console.log('🔌 Attempting to connect to PostgreSQL...');
-      await connectPostgres();
+    if (dbType.includes('postgres')) {
+      try {
+        console.log('🔌 Attempting to connect to PostgreSQL...');
+        await connectPostgres();
+        // Mark DB available for metrics
+        dataProvider.enableDb();
+      } catch (err) {
+        console.error('⚠️  PostgreSQL connection failed:', err.message);
+        if (dbType.includes('postgres') && !dbType.includes('both')) {
+          // If Postgres is required and fails, fail startup
+          throw err;
+        }
+        // If both databases are enabled, continue with MongoDB
+      }
     }
 
-    if (dbType === 'mongo' || dbType === 'both') {
-      console.log('🔌 Attempting to connect to MongoDB...');
-      await connectDB();
+    if (dbType.includes('mongo')) {
+      try {
+        console.log('🔌 Attempting to connect to MongoDB...');
+        await connectDB();
+        // Mark DB available for metrics
+        dataProvider.enableDb();
+      } catch (err) {
+        console.error('⚠️  MongoDB connection failed:', err.message);
+        if (dbType.includes('mongo') && !dbType.includes('both')) {
+          // If Mongo is required and fails, fail startup
+          throw err;
+        }
+        // If both databases are enabled, continue with Postgres
+      }
     } else {
       console.log('ℹ️ Skipping MongoDB connection (DB_TYPE=' + dbType + ')');
     }

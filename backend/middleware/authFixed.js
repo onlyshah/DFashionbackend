@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const models = require('../models');
+const User = models.User;
 
 // Enhanced authentication middleware with better error handling
 const auth = async (req, res, next) => {

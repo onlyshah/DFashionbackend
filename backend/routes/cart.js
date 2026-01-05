@@ -4,7 +4,8 @@ const { body, validationResult } = require('express-validator');
 const { auth, requireRole, optionalAuth } = require('../middleware/auth');
 const Product = require('../models/Product');
 const Cart = require('../models/Cart');
-const User = require('../models/User');
+const models = require('../models');
+const User = models.User;
 
 // @route   GET /cart
 // @desc    Get user's cart

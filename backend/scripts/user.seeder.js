@@ -2,7 +2,8 @@
 // Usage: node scripts/user.seeder.js
 
 const mongoose = require('mongoose');
-const User = require('../models/User');
+const models = require('../models');
+const User = models.User;
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/dfashion';
 const DEFAULT_AVATAR = '/uploads/avatars/default-avatar.svg';

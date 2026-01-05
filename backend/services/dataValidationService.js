@@ -1,10 +1,13 @@
-const User = require('../models/User');
-const Role = require('../models/Role');
-const Product = require('../models/Product');
-const Post = require('../models/Post');
-const Story = require('../models/Story');
-const Reel = require('../models/Reel');
-const Category = require('../models/Category');
+const { getModels } = require('../config');
+const models = getModels();
+const User = models.User;
+const Role = models.Role;
+const Product = models.Product;
+const Post = models.Post;
+const Story = models.Story;
+const models = require('../models');
+const Reel = models.Reel;
+const Category = models.Category;
 
 class DataValidationService {
   

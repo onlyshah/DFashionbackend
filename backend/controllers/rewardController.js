@@ -1,6 +1,7 @@
 const RewardService = require('../services/rewardService');
-const User = require('../models/User');
-const Reward = require('../models/Reward');
+const models = require('../models');
+const User = models.User;
+const Reward = models.Reward;
 
 /**
  * Get user reward summary

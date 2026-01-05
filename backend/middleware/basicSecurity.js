@@ -113,8 +113,14 @@ class BasicSecurity {
       };
       
       // Log to console (in production, use proper logging)
-      if (res.statusCode >= 400) {
-        console.warn('⚠️ HTTP Error:', logData);
+      if (res.statusCode >= 500) {
+        console.error('⛔️ HTTP Server Error:', logData);
+      } else if (res.statusCode >= 400) {
+        // Suppress noisy 401s for health/client probes to /me
+        if (res.statusCode === 401 && req.url && req.url.includes('/me')) {
+          return;
+        }
+        console.warn('⚠️ HTTP Client Error:', logData);
       } else {
         console.log('📝 Request:', logData);
       }

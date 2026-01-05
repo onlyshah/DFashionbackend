@@ -4,7 +4,8 @@
 
 const mongoose = require('mongoose');
 const Role = require('../models/Role');
-const User = require('../models/User');
+const models = require('../models');
+const User = models.User;
 const Module = require('../models/Module');
 const bcrypt = require('bcrypt');
 

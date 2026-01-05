@@ -1,5 +1,6 @@
-const Product = require('../models/Product');
-const User = require('../models/User');
+const models = require('../models');
+const Product = models.Product;
+const User = models.User;
 
 // @desc    Get all products
 // @route   GET /api/products

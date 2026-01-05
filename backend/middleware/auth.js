@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
-const User = require('../models/User');
+const models = require('../models');
+const User = models.User;
 const crypto = require('crypto');
 
 // Track failed login attempts
@@ -126,7 +127,6 @@ const requireRole = (roles) => {
 const isApprovedVendor = async (req, res, next) => {
   try {
     if (req.user.role === 'vendor') {
-      const User = require('../models/User');
       const vendor = await User.findById(req.user.userId);
 
       if (!vendor || vendor.vendorVerification.status !== 'approved') {
