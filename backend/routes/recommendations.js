@@ -17,7 +17,7 @@ try {
 } catch (err) {
   console.error('[recommendations] Failed to load Sequelize models:', err.message);
 }
-const { auth } = require('../middleware/auth');
+const { auth, allowResourceOwnerOrRoles } = require('../middleware/auth');
 
 // Get trending products
 router.get('/trending', async (req, res) => {
@@ -456,12 +456,12 @@ router.post('/track-interaction', auth, async (req, res) => {
 });
 
 // Get user behavior analytics
-router.get('/user-analytics/:userId', auth, async (req, res) => {
+router.get('/user-analytics/:userId', auth, allowResourceOwnerOrRoles('User', 'userId', '_id', ['admin', 'super_admin']), async (req, res) => {
   try {
     const { userId } = req.params;
 
-    // Check if user can access this data (own data or admin)
-    if (req.user._id.toString() !== userId && req.user.role !== 'super_admin') {
+    // Check if user can access this data (own data or admin/super_admin)
+    if (req.user._id.toString() !== userId && req.user.role !== 'super_admin' && req.user.role !== 'admin') {
       return res.status(403).json({
         success: false,
         message: 'Access denied'
@@ -528,7 +528,7 @@ router.get('/user-analytics/:userId', auth, async (req, res) => {
 });
 
 // Get recommendation insights
-router.get('/insights/:userId', auth, async (req, res) => {
+router.get('/insights/:userId', auth, allowResourceOwnerOrRoles('User', 'userId', '_id', ['super_admin']), async (req, res) => {
   try {
     const { userId } = req.params;
 

@@ -4,8 +4,14 @@ const dbType = (process.env.DB_TYPE || '').toLowerCase();
 
 // List of mongoose model files available in ./models
 const MONGO_MODEL_NAMES = [
-  'Product','User','UserBehavior','Post','Story','Category','Brand','Role','Order','Cart','Wishlist','Notification','QuickAction','Permission','RolePermission','SearchHistory','Session','StyleInspiration','Ticket','Transaction','Payment','ProductComment','ProductShare','Reward'
+  'Product','User','UserBehavior','Post','Story','Category','Brand','Role','Order','Cart','Wishlist','Notification','QuickAction','Permission','RolePermission','SearchHistory','Session','StyleInspiration','Ticket','Transaction','Payment','ProductComment','ProductShare','Reward',
+  // Enterprise audit additions
+  'KYCDocument','SellerPerformance','SellerCommission','Return','Shipment','Courier','ShippingCharge','Coupon','FlashSale','Page','Banner','FAQ'
 ];
+
+// add new models introduced by enterprise audit
+const NEW_MONGO_MODELS = ['KYCDocument','SellerPerformance','SellerCommission','Return','Shipment','Courier','ShippingCharge','Coupon','FlashSale','Page','Banner','FAQ'];
+for (const m of NEW_MONGO_MODELS) MONGO_MODEL_NAMES.push(m);
 
 // Lazy loader for mongoose models (doesn't attempt DB connection)
 const mongoCache = {};

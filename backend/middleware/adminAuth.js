@@ -270,17 +270,49 @@ exports.requireDepartment = (departments) => {
 
 // Helper function to check user permission
 function checkUserPermission(user, module, action) {
-  // Check custom permissions first
+  // Normalize and support synonym action names (e.g. view <-> read, edit <-> update)
+  const synonyms = {
+    view: ['read'],
+    read: ['view'],
+    edit: ['update'],
+    update: ['edit'],
+    roles: ['manage'],
+    manage: ['roles']
+  };
+
+  function actionsMatch(reqAction, permittedAction) {
+    if (!reqAction || !permittedAction) return false;
+    if (reqAction === permittedAction) return true;
+    const reqSyns = synonyms[reqAction] || [];
+    const permSyns = synonyms[permittedAction] || [];
+    if (reqSyns.includes(permittedAction)) return true;
+    if (permSyns.includes(reqAction)) return true;
+    // Cross-synonym (e.g. view -> read and read -> view)
+    for (const s of reqSyns) {
+      if (permSyns.includes(s)) return true;
+    }
+    return false;
+  }
+
+  // Check custom permissions first (user-specific overrides)
   if (user.permissions && user.permissions.length > 0) {
     const modulePermission = user.permissions.find(p => p.module === module);
-    if (modulePermission && modulePermission.actions.includes(action)) {
-      return true;
+    if (modulePermission && Array.isArray(modulePermission.actions)) {
+      for (const a of modulePermission.actions) {
+        if (actionsMatch(action, a)) return true;
+      }
     }
   }
 
   // Check role-based permissions
   const rolePermissions = getRolePermissions(user.role);
-  return rolePermissions[module] && rolePermissions[module].includes(action);
+  if (!rolePermissions || !rolePermissions[module]) return false;
+  const permitted = rolePermissions[module];
+  if (!Array.isArray(permitted)) return false;
+  for (const a of permitted) {
+    if (actionsMatch(action, a)) return true;
+  }
+  return false;
 }
 
 // Get permissions for a role

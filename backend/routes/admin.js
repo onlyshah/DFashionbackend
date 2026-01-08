@@ -224,6 +224,11 @@ router.get('/notifications', requirePermission('dashboard', 'view'), async (req,
 
     if (isRead !== undefined) options.isRead = isRead === 'true';
 
+    // If Notification model is not available (Postgres-only), return safe empty response
+    if (!Notification || typeof Notification.getUserNotifications !== 'function') {
+      return res.json({ success: true, data: [], pagination: { current: options.page, pages: 0, total: 0 }, unreadCount: 0 });
+    }
+
     const result = await Notification.getUserNotifications(req.user._id, options);
 
     res.json({

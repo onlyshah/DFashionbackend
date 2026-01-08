@@ -47,6 +47,14 @@ const brandsRoutes = require('./brands');
 const analyticsRoutes = require('./analytics');
 const recommendationsRoutes = require('./recommendations');
 
+// New enterprise route stubs
+const sellersRoutes = require('./sellers');
+const returnsRoutes = require('./returns');
+const logisticsRoutes = require('./logistics');
+const promotionsRoutes = require('./promotions');
+const cmsRoutes = require('./cms');
+const complianceRoutes = require('./compliance');
+
 // Mount additional routes
 router.use(`/cart`, cartRoutes);
 router.use(`/wishlist`, wishlistRoutes);
@@ -65,6 +73,14 @@ router.use(`/categories`, categoriesRoutes);
 router.use(`/brands`, brandsRoutes);
 router.use(`/analytics`, analyticsRoutes);
 router.use(`/recommendations`, recommendationsRoutes);
+
+// Mount new enterprise routes
+router.use(`/sellers`, sellersRoutes);
+router.use(`/returns`, returnsRoutes);
+router.use(`/logistics`, logisticsRoutes);
+router.use(`/promotions`, promotionsRoutes);
+router.use(`/cms`, cmsRoutes);
+router.use(`/compliance`, complianceRoutes);
 
 // Mount admin routes (keep at the end)
 router.use(`/admin`, adminRoutes);

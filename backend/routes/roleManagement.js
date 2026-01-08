@@ -3,23 +3,15 @@ const router = express.Router();
 const Role = require('../models/Role');
 const Module = require('../models/Module');
 const User = require('../models/User');
-const { auth } = require('../middleware/auth');
+const AuditLog = require('../models/AuditLog');
+const { auth, requireRole } = require('../middleware/auth');
 
-// Middleware to check if user is super admin
-const requireSuperAdmin = (req, res, next) => {
-  if (req.user.role !== 'super_admin') {
-    return res.status(403).json({
-      success: false,
-      message: 'Access denied. Super admin only.'
-    });
-  }
-  next();
-};
+// Use shared role middleware for super admin
 
 // @route   GET /api/roles
 // @desc    Get all roles
 // @access  Private/Super Admin
-router.get('/', auth, requireSuperAdmin, async (req, res) => {
+router.get('/', auth, requireRole('super_admin'), async (req, res) => {
   try {
     const roles = await Role.find()
       .populate('modulePermissions.module', 'name displayName category')
@@ -42,7 +34,7 @@ router.get('/', auth, requireSuperAdmin, async (req, res) => {
 // @route   POST /api/roles
 // @desc    Create new role
 // @access  Private/Super Admin
-router.post('/', auth, requireSuperAdmin, async (req, res) => {
+router.post('/', auth, requireRole('super_admin'), async (req, res) => {
   try {
     const {
       name,
@@ -87,6 +79,25 @@ router.post('/', auth, requireSuperAdmin, async (req, res) => {
 
     await role.save();
 
+    // Audit log
+    try {
+      const actorId = (req.user && (req.user._id || req.user.id || req.user.userId)) || null;
+      await AuditLog.create({
+        actor: actorId,
+        action: 'role.create',
+        resourceType: 'role',
+        resourceId: role._id,
+        details: {
+          name: role.name,
+          modulePermissions: role.modulePermissions
+        },
+        ip: req.ip,
+        userAgent: req.headers['user-agent']
+      });
+    } catch (e) {
+      console.warn('Audit log failed:', e.message);
+    }
+
     const populatedRole = await Role.findById(role._id)
       .populate('modulePermissions.module', 'name displayName category')
       .populate('createdBy', 'username fullName');
@@ -108,7 +119,7 @@ router.post('/', auth, requireSuperAdmin, async (req, res) => {
 // @route   PUT /api/roles/:id
 // @desc    Update role
 // @access  Private/Super Admin
-router.put('/:id', auth, requireSuperAdmin, async (req, res) => {
+router.put('/:id', auth, requireRole('super_admin'), async (req, res) => {
   try {
     const role = await Role.findById(req.params.id);
     
@@ -159,6 +170,29 @@ router.put('/:id', auth, requireSuperAdmin, async (req, res) => {
 
     await role.save();
 
+    // Audit log for update
+    try {
+      const actorId = (req.user && (req.user._id || req.user.id || req.user.userId)) || null;
+      await AuditLog.create({
+        actor: actorId,
+        action: 'role.update',
+        resourceType: 'role',
+        resourceId: role._id,
+        details: {
+          displayName: role.displayName,
+          description: role.description,
+          department: role.department,
+          level: role.level,
+          modulePermissions: role.modulePermissions,
+          isActive: role.isActive
+        },
+        ip: req.ip,
+        userAgent: req.headers['user-agent']
+      });
+    } catch (e) {
+      console.warn('Audit log failed:', e.message);
+    }
+
     const populatedRole = await Role.findById(role._id)
       .populate('modulePermissions.module', 'name displayName category')
       .populate('createdBy', 'username fullName');
@@ -180,7 +214,7 @@ router.put('/:id', auth, requireSuperAdmin, async (req, res) => {
 // @route   DELETE /api/roles/:id
 // @desc    Delete role
 // @access  Private/Super Admin
-router.delete('/:id', auth, requireSuperAdmin, async (req, res) => {
+router.delete('/:id', auth, requireRole('super_admin'), async (req, res) => {
   try {
     const role = await Role.findById(req.params.id);
     
@@ -209,6 +243,25 @@ router.delete('/:id', auth, requireSuperAdmin, async (req, res) => {
     }
 
     await Role.findByIdAndDelete(req.params.id);
+
+    // Audit log for delete
+    try {
+      const actorId = (req.user && (req.user._id || req.user.id || req.user.userId)) || null;
+      await AuditLog.create({
+        actor: actorId,
+        action: 'role.delete',
+        resourceType: 'role',
+        resourceId: req.params.id,
+        details: {
+          roleId: req.params.id,
+          name: role.name
+        },
+        ip: req.ip,
+        userAgent: req.headers['user-agent']
+      });
+    } catch (e) {
+      console.warn('Audit log failed:', e.message);
+    }
 
     res.json({
       success: true,

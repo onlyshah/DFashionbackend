@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { auth, requireCustomer } = require('../middleware/auth');
+const { auth, requireCustomer, allowResourceOwnerOrRoles } = require('../middleware/auth');
 const Payment = require('../models/Payment');
 const Order = require('../models/Order');
 const crypto = require('crypto');
@@ -145,7 +145,7 @@ router.post('/initiate', requireCustomer, async (req, res) => {
 // @route   GET /api/payments/:paymentId
 // @desc    Get payment details
 // @access  Private
-router.get('/:paymentId', async (req, res) => {
+router.get('/:paymentId', auth, allowResourceOwnerOrRoles('Payment', 'paymentId', 'customer', ['admin', 'sales_manager', 'support_manager']), async (req, res) => {
   try {
     const payment = await Payment.findById(req.params.paymentId)
       .populate('order', 'orderNumber totalAmount status')
@@ -158,16 +158,7 @@ router.get('/:paymentId', async (req, res) => {
       });
     }
 
-    // Check access permissions
-    const hasAccess = payment.customer._id.toString() === req.user.userId ||
-                     ['admin', 'sales_manager', 'support_manager'].includes(req.user.role);
-
-    if (!hasAccess) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied'
-      });
-    }
+    // Access validated by middleware
 
     res.json({
       success: true,

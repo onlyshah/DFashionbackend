@@ -1,23 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
-const { auth } = require('../middleware/auth');
+const { auth, requireRole } = require('../middleware/auth');
 
-// Middleware to check if user is super admin
-const requireSuperAdmin = (req, res, next) => {
-  if (req.user.role !== 'super_admin') {
-    return res.status(403).json({
-      success: false,
-      message: 'Access denied. Super admin only.'
-    });
-  }
-  next();
-};
+// Use shared role middleware for super admin
 
 // @route   GET /api/vendor-verification/pending
 // @desc    Get all pending vendor verifications
 // @access  Private/Super Admin
-router.get('/pending', auth, requireSuperAdmin, async (req, res) => {
+router.get('/pending', auth, requireRole('super_admin'), async (req, res) => {
   try {
     const pendingVendors = await User.find({
       role: 'vendor',
@@ -40,7 +31,7 @@ router.get('/pending', auth, requireSuperAdmin, async (req, res) => {
 // @route   GET /api/vendor-verification/:vendorId
 // @desc    Get vendor verification details
 // @access  Private/Super Admin
-router.get('/:vendorId', auth, requireSuperAdmin, async (req, res) => {
+router.get('/:vendorId', auth, requireRole('super_admin'), async (req, res) => {
   try {
     const vendor = await User.findById(req.params.vendorId)
       .select('username fullName email vendorVerification createdAt')
@@ -76,7 +67,7 @@ router.get('/:vendorId', auth, requireSuperAdmin, async (req, res) => {
 // @route   POST /api/vendor-verification/:vendorId/approve
 // @desc    Approve vendor verification
 // @access  Private/Super Admin
-router.post('/:vendorId/approve', auth, requireSuperAdmin, async (req, res) => {
+router.post('/:vendorId/approve', auth, requireRole('super_admin'), async (req, res) => {
   try {
     const vendor = await User.findById(req.params.vendorId);
 
@@ -130,7 +121,7 @@ router.post('/:vendorId/approve', auth, requireSuperAdmin, async (req, res) => {
 // @route   POST /api/vendor-verification/:vendorId/reject
 // @desc    Reject vendor verification
 // @access  Private/Super Admin
-router.post('/:vendorId/reject', auth, requireSuperAdmin, async (req, res) => {
+router.post('/:vendorId/reject', auth, requireRole('super_admin'), async (req, res) => {
   try {
     const { reason } = req.body;
 

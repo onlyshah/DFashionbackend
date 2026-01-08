@@ -102,6 +102,36 @@ router.get('/active', optionalAuth, async (req, res) => {
   }
 });
 
+// @route   GET /api/stories/preview
+// @desc    Get a lightweight preview of recent stories for UI (covers /api/stories/preview)
+// @access  Public
+router.get('/preview', optionalAuth, async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 10;
+
+    // Fetch recent active stories but return lightweight preview objects
+    const stories = await Story.find({ isActive: true, expiresAt: { $gt: new Date() } })
+      .populate('user', 'username fullName avatar')
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean();
+
+    const preview = stories.map(s => ({
+      _id: s._id,
+      user: s.user || {},
+      media: s.media || s.mediaUrl || [],
+      createdAt: s.createdAt,
+      caption: s.caption || ''
+    }));
+
+    return res.json({ success: true, stories: preview });
+  } catch (error) {
+    console.error('Get stories preview error:', error && error.message ? error.message : error);
+    // Return empty array so frontend degrades gracefully instead of 404/500
+    return res.json({ success: false, stories: [] });
+  }
+});
+
 // @route   GET /api/stories/user/:userId
 // @desc    Get stories by user
 // @access  Public

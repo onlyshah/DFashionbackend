@@ -1,7 +1,7 @@
 const express = require('express');
 const Category = require('../models/Category');
 const Product = require('../models/Product');
-const { auth, optionalAuth } = require('../middleware/auth');
+const { auth, optionalAuth, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -252,16 +252,8 @@ router.post('/', auth, checkCategoryPermission, async (req, res) => {
 // @route   PUT /api/categories/:id
 // @desc    Update category (Admin only)
 // @access  Private/Admin
-router.put('/:id', auth, async (req, res) => {
+router.put('/:id', auth, requireRole(['admin','super_admin']), async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied. Admin only.'
-      });
-    }
-
     const category = await Category.findByIdAndUpdate(
       req.params.id,
       req.body,
@@ -292,16 +284,8 @@ router.put('/:id', auth, async (req, res) => {
 // @route   DELETE /api/categories/:id
 // @desc    Delete category (Admin only)
 // @access  Private/Admin
-router.delete('/:id', auth, async (req, res) => {
+router.delete('/:id', auth, requireRole(['admin','super_admin']), async (req, res) => {
   try {
-    // Check if user is admin
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied. Admin only.'
-      });
-    }
-
     const category = await Category.findById(req.params.id);
     if (!category) {
       return res.status(404).json({

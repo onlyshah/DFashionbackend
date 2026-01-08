@@ -243,6 +243,41 @@ const cleanupExpiredSessions = () => {
   }
 };
 
+// Allow resource owner or specific roles middleware
+// modelName: string path under ../models (e.g., 'Payment')
+// idParam: request param name that contains the resource id (e.g., 'paymentId')
+// ownerField: field on the resource that references the owner user id (e.g., 'customer')
+// roles: array of role names allowed to access
+const allowResourceOwnerOrRoles = (modelName, idParam, ownerField, roles) => {
+  return async (req, res, next) => {
+    try {
+      const models = require('../models');
+      const Model = models[modelName];
+      if (!Model) return res.status(500).json({ success: false, message: 'Server misconfiguration' });
+
+      const resourceId = req.params[idParam];
+      if (!resourceId) return res.status(400).json({ success: false, message: 'Missing resource identifier' });
+
+      const resource = await Model.findById(resourceId).select(ownerField);
+      if (!resource) return res.status(404).json({ success: false, message: 'Resource not found' });
+
+      const ownerId = resource[ownerField] ? resource[ownerField].toString() : null;
+
+      if (ownerId && ownerId === (req.user._id || req.user.userId).toString()) {
+        return next();
+      }
+
+      const allowedRoles = Array.isArray(roles) ? roles : [roles];
+      if (allowedRoles.includes(req.user.role)) return next();
+
+      return res.status(403).json({ success: false, message: 'Access denied' });
+    } catch (error) {
+      console.error('allowResourceOwnerOrRoles error:', error);
+      return res.status(500).json({ success: false, message: 'Server error' });
+    }
+  };
+};
+
 // Run cleanup every 5 minutes
 setInterval(cleanupExpiredSessions, 5 * 60 * 1000);
 
@@ -261,4 +296,5 @@ module.exports = {
   createSession,
   destroySession,
   cleanupExpiredSessions
+  , allowResourceOwnerOrRoles
 };

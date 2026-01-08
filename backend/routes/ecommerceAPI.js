@@ -4,7 +4,7 @@ const Cart = require('../models/Cart');
 const Wishlist = require('../models/Wishlist');
 const ProductComment = require('../models/ProductComment');
 const ProductShare = require('../models/ProductShare');
-const { auth, optionalAuth } = require('../middleware/auth');
+const { auth, optionalAuth, requireRole } = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
 
 const router = express.Router();
@@ -394,15 +394,8 @@ router.delete('/cart/saved/:itemId', auth, async (req, res) => {
 // @route   DELETE /api/ecommerce/admin/products/:id
 // @desc    Delete product (Super Admin only)
 // @access  Private (Super Admin)
-router.delete('/admin/products/:id', auth, async (req, res) => {
+router.delete('/admin/products/:id', auth, requireRole('super_admin'), async (req, res) => {
   try {
-    if (req.user.role !== 'super_admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied. Super admin only.'
-      });
-    }
-
     const product = await Product.findByIdAndDelete(req.params.id);
     if (!product) {
       return res.status(404).json({
@@ -442,15 +435,8 @@ router.delete('/admin/products/:id', auth, async (req, res) => {
 // @route   GET /api/ecommerce/admin/analytics
 // @desc    Get system analytics (Super Admin only)
 // @access  Private (Super Admin)
-router.get('/admin/analytics', auth, async (req, res) => {
+router.get('/admin/analytics', auth, requireRole('super_admin'), async (req, res) => {
   try {
-    if (req.user.role !== 'super_admin') {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied. Super admin only.'
-      });
-    }
-
     const [
       totalProducts,
       totalUsers,

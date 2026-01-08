@@ -1,6 +1,6 @@
 const express = require('express');
 const Product = require('../models/Product');
-const { auth, isVendor, isApprovedVendor, optionalAuth } = require('../middleware/auth');
+const { auth, isVendor, isApprovedVendor, optionalAuth, allowResourceOwnerOrRoles } = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
 const searchEngine = require('../services/searchEngine');
 const { SearchHistory, TrendingSearch, SearchSuggestion } = require('../models/SearchHistory');
@@ -660,7 +660,7 @@ router.post('/', [
 // @access  Private (Vendor only - own products)
 router.put('/:id', [
   auth,
-  isVendor,
+  allowResourceOwnerOrRoles('Product', 'id', 'vendor', ['admin', 'super_admin']),
   isApprovedVendor
 ], async (req, res) => {
   try {
@@ -669,12 +669,6 @@ router.put('/:id', [
     if (!product) {
       return res.status(404).json({ message: 'Product not found' });
     }
-
-    // Check if user owns the product
-    if (product.vendor.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Not authorized to update this product' });
-    }
-
     const updatedProduct = await Product.findByIdAndUpdate(
       req.params.id,
       req.body,
@@ -694,19 +688,13 @@ router.put('/:id', [
 // @route   DELETE /api/products/:id
 // @desc    Delete product
 // @access  Private (Vendor only - own products)
-router.delete('/:id', [auth, isVendor], async (req, res) => {
+router.delete('/:id', [auth, allowResourceOwnerOrRoles('Product', 'id', 'vendor', ['admin', 'super_admin']), isApprovedVendor], async (req, res) => {
   try {
     const product = await Product.findById(req.params.id);
 
     if (!product) {
       return res.status(404).json({ message: 'Product not found' });
     }
-
-    // Check if user owns the product
-    if (product.vendor.toString() !== req.user._id.toString()) {
-      return res.status(403).json({ message: 'Not authorized to delete this product' });
-    }
-
     await Product.findByIdAndDelete(req.params.id);
 
     res.json({ message: 'Product deleted successfully' });

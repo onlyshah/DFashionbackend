@@ -25,8 +25,13 @@ async function seed() {
     ];
 
     for (const r of roles) {
-      const [role, created] = await Role.findOrCreate({ where: { name: r.name }, defaults: r });
-      console.log(`   Role: ${role.name} (${created ? 'created' : 'exists'})`);
+      const existing = await Role.findOne({ where: { name: r.name } });
+      if (existing) {
+        console.log(`   Role: ${r.name} (exists)`);
+      } else {
+        await Role.create(r);
+        console.log(`   Role: ${r.name} (created)`);
+      }
     }
 
     // Superadmin user

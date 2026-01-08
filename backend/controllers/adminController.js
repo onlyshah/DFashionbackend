@@ -401,6 +401,17 @@ exports.getQuickActions = async (req, res) => {
     const QuickAction = models.QuickAction;
     const role = req.user?.role || 'admin';
 
+    // If QuickAction model is not available (Postgres-only env), return safe default
+    if (!QuickAction) {
+      // Optional: provide a small set of default quick actions for admin
+      const defaultActions = [
+        { label: 'New Product', icon: 'add', link: '/admin/products', color: 'primary', roles: ['admin','super_admin'], order: 1 },
+        { label: 'Orders', icon: 'receipt', link: '/admin/orders', color: 'accent', roles: ['admin','super_admin'], order: 2 }
+      ];
+      const filteredDefault = defaultActions.filter(a => !a.roles || a.roles.length === 0 || a.roles.includes(role) || a.roles.includes('all'));
+      return res.json({ success: true, data: filteredDefault });
+    }
+
     // Fetch active quick actions and filter by role if specified
     const actions = await QuickAction.find({ isActive: true }).sort({ order: 1 }).lean();
 

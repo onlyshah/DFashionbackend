@@ -1,23 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const Module = require('../models/Module');
-const { auth } = require('../middleware/auth');
+const { auth, requireRole } = require('../middleware/auth');
 
-// Middleware to check if user is super admin
-const requireSuperAdmin = (req, res, next) => {
-  if (req.user.role !== 'super_admin') {
-    return res.status(403).json({
-      success: false,
-      message: 'Access denied. Super admin only.'
-    });
-  }
-  next();
-};
+// Use centralized role middleware for super admin
 
 // @route   GET /api/modules
 // @desc    Get all modules
 // @access  Private/Super Admin
-router.get('/', auth, requireSuperAdmin, async (req, res) => {
+router.get('/', auth, requireRole('super_admin'), async (req, res) => {
   try {
     const { category } = req.query;
     
@@ -46,7 +37,7 @@ router.get('/', auth, requireSuperAdmin, async (req, res) => {
 // @route   POST /api/modules
 // @desc    Create new module
 // @access  Private/Super Admin
-router.post('/', auth, requireSuperAdmin, async (req, res) => {
+router.post('/', auth, requireRole('super_admin'), async (req, res) => {
   try {
     const {
       name,
@@ -106,7 +97,7 @@ router.post('/', auth, requireSuperAdmin, async (req, res) => {
 // @route   PUT /api/modules/:id
 // @desc    Update module
 // @access  Private/Super Admin
-router.put('/:id', auth, requireSuperAdmin, async (req, res) => {
+router.put('/:id', auth, requireRole('super_admin'), async (req, res) => {
   try {
     const module = await Module.findById(req.params.id);
     
@@ -162,7 +153,7 @@ router.put('/:id', auth, requireSuperAdmin, async (req, res) => {
 // @route   DELETE /api/modules/:id
 // @desc    Delete module
 // @access  Private/Super Admin
-router.delete('/:id', auth, requireSuperAdmin, async (req, res) => {
+router.delete('/:id', auth, requireRole('super_admin'), async (req, res) => {
   try {
     const module = await Module.findById(req.params.id);
     
@@ -191,7 +182,7 @@ router.delete('/:id', auth, requireSuperAdmin, async (req, res) => {
 // @route   GET /api/modules/categories
 // @desc    Get module categories
 // @access  Private/Super Admin
-router.get('/categories', auth, requireSuperAdmin, async (req, res) => {
+router.get('/categories', auth, requireRole('super_admin'), async (req, res) => {
   try {
     const categories = await Module.distinct('category');
     
