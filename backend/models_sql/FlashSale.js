@@ -1,0 +1,13 @@
+module.exports = (sequelize, DataTypes) => {
+  return sequelize.define('FlashSale', {
+    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    name: { type: DataTypes.STRING(200), allowNull: false },
+    description: { type: DataTypes.TEXT },
+    discountPercentage: { type: DataTypes.DECIMAL(5, 2), allowNull: false },
+    startTime: { type: DataTypes.DATE, allowNull: false },
+    endTime: { type: DataTypes.DATE, allowNull: false },
+    products: { type: DataTypes.JSON, defaultValue: [] },
+    categories: { type: DataTypes.JSON, defaultValue: [] },
+    isActive: { type: DataTypes.BOOLEAN, defaultValue: true }
+  }, { tableName: 'flash_sales', timestamps: true });
+};

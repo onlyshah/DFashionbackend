@@ -1,10 +1,17 @@
 // Role Seeder Script
 // Usage: node scripts/role.seeder.js
 
+require('dotenv').config();
 const mongoose = require('mongoose');
 const Role = require('../models/Role');
 const Module = require('../models/Module');
 const User = require('../models/User');
+
+const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
+if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
+  console.log('⏭️  Skipping role.seeder - MongoDB disabled (DB_MODE=' + DB_MODE + ')');
+  process.exit(0);
+}
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/dfashion';
 

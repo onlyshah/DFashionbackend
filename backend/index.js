@@ -275,6 +275,22 @@ safeMount('/api/style-inspiration', './routes/styleInspiration');
 // Smart collections & plugins
 safeMount('/api/smart-collections', './routes/smartCollections');
 
+// Live commerce & marketing
+safeMount('/api/live', './routes/live');
+safeMount('/api/marketing', './routes/marketing');
+
+// Creators & influencers
+safeMount('/api/creators', './routes/creators');
+
+// Support tickets
+safeMount('/api/support', './routes/support');
+
+// Alerts & notifications
+safeMount('/api/alerts', './routes/alerts');
+
+// Returns management
+safeMount('/api/returns', './routes/returns');
+
 // -------- Mount the aggregated /api index as a fallback (last) --------
 // This provides catch-all aggregated routes and is mounted last to avoid shadowing specific routes.
 try {

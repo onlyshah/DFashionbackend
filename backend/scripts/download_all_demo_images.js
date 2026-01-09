@@ -44,13 +44,19 @@ async function downloadImage(url, dest) {
     const file = fs.createWriteStream(dest);
     https.get(url, response => {
       if (response.statusCode !== 200) {
-        reject(new Error('Failed to download image: ' + response.statusCode));
+        // Consume response and skip instead of failing the whole script
+        response.resume();
+        file.close && file.close();
+        try { fs.unlinkSync(dest); } catch (e) {}
+        console.warn(`Warning: Skipping ${url} - status ${response.statusCode}`);
+        resolve(false);
         return;
       }
       response.pipe(file);
-      file.on('finish', () => file.close(resolve));
+      file.on('finish', () => file.close(() => resolve(true)));
     }).on('error', err => {
-      fs.unlink(dest, () => reject(err));
+      try { fs.unlinkSync(dest); } catch (e) {}
+      reject(err);
     });
   });
 }
@@ -70,7 +76,12 @@ async function cleanAndDownload() {
     for (const img of images) {
       const dest = path.join(dir, img.name);
       console.log(`Downloading ${img.name} to ${folder}...`);
-      await downloadImage(img.url, dest);
+      try {
+        const ok = await downloadImage(img.url, dest);
+        if (!ok) console.log(`   ⏭️  Skipped: ${img.name}`);
+      } catch (err) {
+        console.warn(`   ⚠️  Error downloading ${img.name}: ${err.message}`);
+      }
     }
   }
   console.log('All demo images downloaded and replaced.');

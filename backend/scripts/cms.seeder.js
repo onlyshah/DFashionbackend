@@ -2,10 +2,17 @@
 // Creates pages, banners, FAQs, and content management records
 // Usage: node scripts/cms.seeder.js
 
+require('dotenv').config();
 const mongoose = require('mongoose');
 const Page = require('../models/Page');
 const Banner = require('../models/Banner');
 const FAQ = require('../models/FAQ');
+
+const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
+if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
+  console.log('⏭️  Skipping cms.seeder - MongoDB disabled (DB_MODE=' + DB_MODE + ')');
+  process.exit(0);
+}
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/dfashion';
 

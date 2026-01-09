@@ -60,6 +60,7 @@
     "xss": "^1.0.15"
   },
   "devDependencies": {
+    "cross-env": "^10.1.0",
     "nodemon": "3.0.1"
   }
 }

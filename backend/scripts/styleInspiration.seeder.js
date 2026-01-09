@@ -1,6 +1,13 @@
 // Style Inspiration Seeder Script
+require('dotenv').config();
 const mongoose = require('mongoose');
 const StyleInspiration = require('../models/StyleInspiration');
+
+const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
+if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
+  console.log('⏭️  Skipping styleInspiration.seeder - MongoDB disabled (DB_MODE=' + DB_MODE + ')');
+  process.exit(0);
+}
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/dfashion';
 

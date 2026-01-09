@@ -4,7 +4,12 @@
 
 require('dotenv').config();
 
-const { sequelize, User, Role, Permission } = require('../models_sql');
+// Use the raw Sequelize models exported under `_raw` to access create/findOne
+const modelsSql = require('../models_sql');
+const sequelize = modelsSql.sequelize;
+const Role = modelsSql._raw.Role;
+const User = modelsSql._raw.User;
+const Permission = modelsSql._raw.Permission || null;
 const bcrypt = require('bcryptjs');
 
 const defaultUsers = [
@@ -138,14 +143,13 @@ async function seedDatabase() {
     // Seed Roles
     console.log('\n🔐 Seeding roles...');
     for (const roleData of defaultRoles) {
-      const [role, created] = await Role.findOrCreate({
-        where: { name: roleData.name },
-        defaults: roleData
-      });
-      if (created) {
-        console.log(`  ✅ Created role: ${roleData.displayName}`);
-      } else {
+      // Some setups may not expose findOrCreate; use findOne + create for compatibility
+      const existingRole = await Role.findOne({ where: { name: roleData.name } });
+      if (existingRole) {
         console.log(`  ⏭️  Role already exists: ${roleData.displayName}`);
+      } else {
+        await Role.create(roleData);
+        console.log(`  ✅ Created role: ${roleData.displayName}`);
       }
     }
 

@@ -1,4 +1,9 @@
-const fetch = require('node-fetch');
+let fetch;
+try {
+  fetch = global.fetch || require('node-fetch');
+} catch (e) {
+  fetch = global.fetch;
+}
 
 async function test(){
   const res = await fetch('http://localhost:9000/api/auth/login', {

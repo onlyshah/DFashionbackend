@@ -1,7 +1,14 @@
+require('dotenv').config();
 const mongoose = require('mongoose');
 const Role = require('../models/Role');
 const Permission = require('../models/Permission');
 const RolePermission = require('../models/RolePermission');
+
+const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
+if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
+  console.log('⏭️  Skipping permission-management.seeder - MongoDB disabled (DB_MODE=' + DB_MODE + ')');
+  process.exit(0);
+}
 
 async function assignPermissionToRole(roleName, permissionName, actions) {
   const role = await Role.findOne({ name: roleName });

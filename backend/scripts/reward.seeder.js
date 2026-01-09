@@ -1,10 +1,17 @@
 // Reward Seeder Script
 // Usage: node scripts/reward.seeder.js
 
+require('dotenv').config();
 const mongoose = require('mongoose');
 const Reward = require('../models/Reward');
 const User = require('../models/User');
 const Order = require('../models/Order');
+
+const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
+if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
+  console.log('⏭️  Skipping reward.seeder - MongoDB disabled (DB_MODE=' + DB_MODE + ')');
+  process.exit(0);
+}
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/dfashion';
 

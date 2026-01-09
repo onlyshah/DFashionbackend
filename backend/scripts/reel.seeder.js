@@ -1,12 +1,19 @@
 // Reel Seeder Script
 // Usage: node scripts/reel.seeder.js
 
+require('dotenv').config();
 const mongoose = require('mongoose');
 const Reel = require('../models/Reel');
 const User = require('../models/User');
 const Product = require('../models/Product');
 const fs = require('fs');
 const path = require('path');
+
+const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
+if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
+  console.log('⏭️  Skipping reel.seeder - MongoDB disabled (DB_MODE=' + DB_MODE + ')');
+  process.exit(0);
+}
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/dfashion';
 const DEFAULT_VIDEO = '/uploads/reels/default-reel.mp4';

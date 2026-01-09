@@ -1,12 +1,19 @@
 // Product Seeder Script
 // Usage: node scripts/product.seeder.js
 
+require('dotenv').config();
 const mongoose = require('mongoose');
 const fs = require('fs');
 const path = require('path');
 const Product = require('../models/Product');
 const Category = require('../models/Category');
 const User = require('../models/User');
+
+const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
+if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
+  console.log('⏭️  Skipping product.seeder - MongoDB disabled (DB_MODE=' + DB_MODE + ')');
+  process.exit(0);
+}
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/dfashion';
 const UPLOADS_DIR = path.join(__dirname, '../uploads/products');
