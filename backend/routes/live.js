@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
-const { requireRole } = require('../middleware/auth');
+const { auth, requireRole } = require('../middleware/auth');
 const LiveStream = require('../models/LiveStream');
 const User = require('../models/User');
 const Product = require('../models/Product');
@@ -44,7 +43,7 @@ router.get('/:streamId', async (req, res) => {
 });
 
 // POST /api/live/start - Start a new live stream (vendor/creator only)
-router.post('/start', [auth, requireRole(['vendor', 'end_user'])], async (req, res) => {
+router.post('/start', auth, requireRole(['vendor', 'end_user']), async (req, res) => {
   try {
     const { title, description, category, thumbnail } = req.body;
     

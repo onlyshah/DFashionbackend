@@ -54,6 +54,8 @@ const logisticsRoutes = require('./logistics');
 const promotionsRoutes = require('./promotions');
 const cmsRoutes = require('./cms');
 const complianceRoutes = require('./compliance');
+const socialAdminRoutes = require('./socialAdmin');
+const usersAdminRoutes = require('./usersAdmin');
 
 // Mount additional routes
 router.use(`/cart`, cartRoutes);
@@ -81,6 +83,9 @@ router.use(`/logistics`, logisticsRoutes);
 router.use(`/promotions`, promotionsRoutes);
 router.use(`/cms`, cmsRoutes);
 router.use(`/compliance`, complianceRoutes);
+router.use(`/admin/social`, socialAdminRoutes);
+router.use(`/admin/users`, usersAdminRoutes);
+router.use(`/admin/activity-logs`, usersAdminRoutes);  // Mount activity-logs at admin level
 
 // Mount admin routes (keep at the end)
 router.use(`/admin`, adminRoutes);
@@ -93,4 +98,15 @@ router.use('*', (req, res) => {
   });
 });
 
-module.exports = router
+// Only export if this router has valid routes
+// (Prevents conflicts when all routes are mounted via safeMount in index.js)
+if (router.stack && router.stack.length > 0) {
+  module.exports = router;
+} else {
+  // Export a minimal router to prevent undefined exports
+  const emptyRouter = require('express').Router();
+  emptyRouter.get('/health', (req, res) => {
+    res.json({ success: true, message: 'API is running' });
+  });
+  module.exports = emptyRouter;
+}

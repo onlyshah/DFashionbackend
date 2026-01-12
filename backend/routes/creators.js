@@ -1,13 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
-const { requireRole } = require('../middleware/auth');
+const { auth, requireRole } = require('../middleware/auth');
 const User = require('../models/User');
 
 // ============ CREATOR PROFILES ============
 
 // GET /api/creators - Get all creators/influencers
-router.get('/', [auth, requireRole(['admin', 'super_admin'])], async (req, res) => {
+router.get('/', auth, requireRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const { page = 1, limit = 10, search = '', status = '' } = req.query;
     const query = { role: 'end_user', isCreator: true };
@@ -61,7 +60,7 @@ router.get('/:creatorId', async (req, res) => {
 // ============ CREATOR VERIFICATION ============
 
 // GET /api/creators/verification/pending - Get pending verification requests
-router.get('/verification/pending', [auth, requireRole(['admin', 'super_admin'])], async (req, res) => {
+router.get('/verification/pending', auth, requireRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const { page = 1, limit = 10 } = req.query;
 

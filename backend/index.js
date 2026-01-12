@@ -121,6 +121,20 @@ const setStaticFileHeaders = (res, filePath) => {
 app.use('/uploads', express.static(uploadsPath, { setHeaders: setStaticFileHeaders }));
 app.use('/assets', express.static(path.join(publicPath, 'assets'), { setHeaders: setStaticFileHeaders }));
 
+// Ensure CORS headers are present even for missing static files (preflight and 404 responses)
+const ensureStaticCors = (req, res, next) => {
+  const origin = req.get('Origin') || '*';
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+};
+
+app.use('/uploads', ensureStaticCors);
+app.use('/assets', ensureStaticCors);
+
 // Ensure critical paths exist and are accessible
 [
   path.join(uploadsPath, 'logo'),
@@ -184,6 +198,10 @@ app.get('/api/collections', (req, res) => {
   });
 });
 
+// ⚠️ ALL DEMO/MOCK ENDPOINTS REMOVED - PRODUCTION ONLY
+// All components must now call real API endpoints from /admin routes
+// Frontend fallbacks to empty data on API errors - NO MOCK DATA FALLBACKS
+
 app.post('/api/seed', async (req, res) => {
   try {
     console.log('🌱 Starting database seeding...');
@@ -218,15 +236,32 @@ const safeMount = (mountPath, routePath) => {
     const resolvedPath = require.resolve(routePath, { paths: [__dirname] });
     console.log(`[safeMount] Attempting to mount ${mountPath} from ${resolvedPath}`);
     const router = require(resolvedPath);
-    if (router && router.stack && router.stack.length > 0) {
-      console.log(`[safeMount] Router for ${mountPath} has ${router.stack.length} routes.`);
-    } else {
-      console.warn(`[safeMount] Router for ${mountPath} appears empty or invalid.`);
+    
+    // Validate that the loaded module is an Express Router
+    // Express Router instances are functions with a .stack property
+    if (!router || typeof router !== 'function' || !router.stack) {
+      console.error(`❌ Error loading ${mountPath} from ${routePath}: Module did not export an Express Router. Received: ${typeof router}`);
+      return;
     }
+    
+    if (!Array.isArray(router.stack)) {
+      console.error(`❌ Error loading ${mountPath} from ${routePath}: Router.stack is not an array`);
+      return;
+    }
+    
+    if (router.stack.length === 0) {
+      console.warn(`⚠️  Router for ${mountPath} is empty (no routes defined).`);
+    } else {
+      console.log(`[safeMount] Router for ${mountPath} has ${router.stack.length} routes.`);
+    }
+    
     app.use(mountPath, router);
     console.log(`✅ ${mountPath} -> ${routePath} loaded`);
   } catch (err) {
     console.error(`❌ Error loading ${mountPath} from ${routePath}:`, err.message);
+    if (err.stack) {
+      console.error('Stack:', err.stack);
+    }
   }
 };
 
@@ -291,15 +326,16 @@ safeMount('/api/alerts', './routes/alerts');
 // Returns management
 safeMount('/api/returns', './routes/returns');
 
-// -------- Mount the aggregated /api index as a fallback (last) --------
-// This provides catch-all aggregated routes and is mounted last to avoid shadowing specific routes.
-try {
-  const apiIndex = require('./routes/index');
-  app.use('/api', apiIndex);
-  console.log('✅ /api -> ./routes/index mounted as fallback');
-} catch (err) {
-  console.error('❌ Failed to mount /api index:', err.message);
-}
+// -------- Mount the aggregated /api index as a fallback (DISABLED) --------
+// All routes are now mounted via safeMount() above, so this fallback is no longer needed
+// Attempting to mount it causes conflicts and duplicate route warnings
+// try {
+//   const apiIndex = require('./routes/index');
+//   app.use('/api', apiIndex);
+//   console.log('✅ /api -> ./routes/index mounted as fallback');
+// } catch (err) {
+//   console.error('❌ Failed to mount /api index:', err.message);
+// }
 
 // -------- Error handling --------
 app.use((req, res, next) => {

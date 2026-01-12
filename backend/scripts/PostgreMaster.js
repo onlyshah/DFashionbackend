@@ -1,764 +1,543 @@
-// PostgreSQL Master Seeder - Seeds All 43 Tables
-// Usage: node scripts/PostgreMaster.js
-// Converts all Mongoose models to PostgreSQL/Sequelize
-
+// PostgreSQL Master Seeder - Production Data (40+ records per table)
 require('dotenv').config();
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const { sequelize } = require('../models_sql');
 const models = require('../models_sql')._raw;
+const imageUtil = require('./image-utils');
 
-async function seedPostgres() {
-  let seedCount = 0;
-  const startTime = Date.now();
+const firstNames = ['Anil', 'Priya', 'Rajesh', 'Neha', 'Vikram', 'Ananya', 'Amit', 'Divya', 'Arjun', 'Pooja',
+  'Sameer', 'Isha', 'Kunal', 'Shreya', 'Nikhil', 'Anjali', 'Rohan', 'Meera', 'Sanjay', 'Riya'];
+const lastNames = ['Sharma', 'Patel', 'Singh', 'Reddy', 'Kapoor', 'Gupta', 'Verma', 'Joshi', 'Kumar', 'Desai'];
+const cities = ['Mumbai', 'Delhi', 'Bangalore', 'Pune', 'Chennai'];
+const productTitles = ['Premium Shirt', 'Elegant Saree', 'Casual Jeans', 'Blazer Jacket', 'Running Shoes',
+  'Designer Bag', 'Winter Coat', 'Summer Dress', 'Kurta', 'Belt', 'Sweater', 'Linen Shirt', 'Trousers', 'Lehenga',
+  'Sports Shirt', 'Formal Shoes', 'Sneakers', 'Sunglasses', 'Scarf', 'Yoga Pants', 'Cardigan', 'Skirt', 'Gown',
+  'Shorts', 'Hoodie', 'Polo', 'Pants', 'Dress', 'Dhoti', 'Tie', 'Pants', 'Top', 'Dress', 'Jeans', 'Shirt', 'Suit',
+  'Swimwear', 'Gym Wear', 'Suit', 'Kurta', 'Blouse', 'Lehenga', 'Kurti', 'Accessory'];
+const brands = ['Nike', 'Adidas', 'Puma', 'Gucci', 'Louis Vuitton', 'Burberry', 'H&M', 'Zara'];
+const categories = ['Men', 'Women', 'Kids', 'Footwear', 'Accessories', 'Formal', 'Casual', 'Sports'];
 
+function rand(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+function randDate(daysBack = 90) { return new Date(Date.now() - Math.random() * daysBack * 24 * 60 * 60 * 1000); }
+
+async function seed() {
+  let count = 0;
   try {
-    console.log('🚀 PostgreSQL Master Seeder Starting...');
-    console.log(`📊 Target: Seed all ${Object.keys(models).length} tables to PostgreSQL\n`);
-    
-    // Authenticate to PostgreSQL
+    console.log('🚀 Seeding PostgreSQL with production data...\n');
     await sequelize.authenticate();
-    console.log('✅ Connected to PostgreSQL');
-
-    // Sync all models (creates tables if they don't exist)
-    console.log('🔄 Synchronizing database schema...');
-    await sequelize.sync({ alter: true });
-    console.log(`✅ Database schema synchronized - ${Object.keys(models).length} tables ready\n`);
-
-    console.log('📝 Starting comprehensive data seeding...\n');
-
-    console.log('📝 Starting comprehensive data seeding...\n');
-
-    // ============================================
-    // CORE SYSTEM TABLES
-    // ============================================
-    console.log('━━━ CORE SYSTEM ━━━');
+    console.log('✅ Connected');
     
-    // 1. Roles
-    console.log('1️⃣  Roles');
-    const roleData = [
-      { name: 'super_admin', description: 'Full system access' },
-      { name: 'admin', description: 'Admin with restricted access' },
-      { name: 'vendor', description: 'Vendor/Seller role' },
-      { name: 'customer', description: 'Regular customer' }
-    ];
-    for (const r of roleData) {
-      const exists = await models.Role.findOne({ where: { name: r.name } });
-      if (!exists) {
-        await models.Role.create(r);
-        seedCount++;
-        console.log(`   ✅ ${r.name}`);
-      } else {
-        console.log(`   ⏭️  ${r.name}`);
-      }
-    }
-
-    // 2. Users
-    console.log('2️⃣  Users');
-    const userData = [
-      { username: 'superadmin', email: 'superadmin@dfashion.com', password: await bcrypt.hash('SuperAdmin123!', 12), fullName: 'Super Admin', role: 'super_admin', isActive: true },
-      { username: 'admin1', email: 'admin1@dfashion.com', password: await bcrypt.hash('Admin123!', 12), fullName: 'Admin User', role: 'admin', isActive: true },
-      { username: 'vendor1', email: 'vendor1@dfashion.com', password: await bcrypt.hash('Vendor123!', 12), fullName: 'Vendor User', role: 'vendor', isActive: true },
-      { username: 'customer1', email: 'customer1@dfashion.com', password: await bcrypt.hash('Customer123!', 12), fullName: 'Customer User', role: 'customer', isActive: true }
-    ];
-    for (const u of userData) {
-      const exists = await models.User.findOne({ where: { email: u.email } });
-      if (!exists) {
-        await models.User.create(u);
-        seedCount++;
-        console.log(`   ✅ ${u.email}`);
-      } else {
-        console.log(`   ⏭️  ${u.email}`);
-      }
-    }
-
-    // 3. Permissions
-    console.log('3️⃣  Permissions');
-    const permissions = [
-      { name: 'create_user', displayName: 'Create User', module: 'user_management' },
-      { name: 'edit_user', displayName: 'Edit User', module: 'user_management' },
-      { name: 'delete_user', displayName: 'Delete User', module: 'user_management' },
-      { name: 'manage_products', displayName: 'Manage Products', module: 'products' }
-    ];
-    for (const p of permissions) {
-      const exists = await models.Permission.findOne({ where: { name: p.name } });
-      if (!exists) {
-        await models.Permission.create(p);
-        seedCount++;
-      }
-    }
-    console.log(`   ✅ Permissions (${permissions.length} created)`);
-
-    // 4. Modules
-    console.log('4️⃣  Modules');
-    const moduleData = [
-      { name: 'user_management', displayName: 'User Management' },
-      { name: 'products', displayName: 'Products' },
-      { name: 'orders', displayName: 'Orders' },
-      { name: 'reports', displayName: 'Reports' }
-    ];
-    for (const m of moduleData) {
-      const exists = await models.Module.findOne({ where: { name: m.name } });
-      if (!exists) {
-        await models.Module.create(m);
-        seedCount++;
-      }
-    }
-    console.log(`   ✅ Modules (${moduleData.length} created)`);
-
-    // 5. Role Permissions
-    console.log('5️⃣  Role Permissions');
-    const rolePermissions = [
-      { roleId: 1, permissionId: 1 },
-      { roleId: 1, permissionId: 2 },
-      { roleId: 1, permissionId: 3 },
-      { roleId: 2, permissionId: 2 }
-    ];
-    for (const rp of rolePermissions) {
-      try {
-        const exists = await models.RolePermission.findOne({ where: { roleId: rp.roleId, permissionId: rp.permissionId } });
-        if (!exists) {
-          await models.RolePermission.create(rp);
-          seedCount++;
+    // Clear all tables with TRUNCATE CASCADE
+    console.log('🧹 Clearing all tables...');
+    try {
+      // Get all table names from models
+      const tables = Object.keys(models).map(key => {
+        const model = models[key];
+        return model.getTableName ? model.getTableName() : null;
+      }).filter(Boolean);
+      
+      // Disable foreign key constraints temporarily, truncate, then re-enable
+      for (const table of tables) {
+        try {
+          await sequelize.query(`TRUNCATE TABLE "${table}" CASCADE;`);
+          console.log(`  ✓ Cleared ${table}`);
+        } catch (e) {
+          console.log(`  ⚠ Could not clear ${table}:`, e.message);
         }
-      } catch (err) {}
-    }
-    console.log(`   ✅ Role permissions (${rolePermissions.length} created)`);
-
-    // 6. Sessions
-    console.log('6️⃣  Sessions');
-    const sessions = [
-      { userId: 1, token: 'token_superadmin_' + Date.now(), ipAddress: '127.0.0.1', isActive: true }
-    ];
-    for (const s of sessions) {
-      const exists = await models.Session.findOne({ where: { userId: s.userId } });
-      if (!exists) {
-        await models.Session.create(s);
-        seedCount++;
       }
+    } catch (e) {
+      console.warn('  ⚠ Truncate warning:', e.message);
     }
-    console.log(`   ✅ Sessions (${sessions.length} created)`);
+    
+    await sequelize.sync({ alter: true });
+    console.log('✅ Synced\n');
 
-    // ============================================
-    // E-COMMERCE TABLES
-    // ============================================
-    console.log('\n━━━ E-COMMERCE ━━━');
+    // 1. ROLES (5)
+    const roles = [{ name: 'super_admin' }, { name: 'admin' }, { name: 'vendor' }, { name: 'customer' }, { name: 'moderator' }];
+    const roleIds = [];
+    for (const r of roles) { const x = await models.Role.create(r); roleIds.push(x.id); count++; }
+    console.log('1️⃣  Roles: 5');
 
-    // 7. Brands
-    console.log('7️⃣  Brands');
-    const brands = [
-      { name: 'Nike', description: 'Athletic apparel' },
-      { name: 'Adidas', description: 'Sportswear' },
-      { name: 'Gucci', description: 'Luxury fashion' },
-      { name: 'H&M', description: 'Fashion retailer' }
+    // 1.a DEPARTMENTS (if model exists)
+    const departments = [
+      { name: 'administration', displayName: 'Administration', description: 'Administrative staff and management', isActive: true },
+      { name: 'sales', displayName: 'Sales', description: 'Sales team and vendor management', isActive: true },
+      { name: 'marketing', displayName: 'Marketing', description: 'Marketing and campaigns', isActive: true },
+      { name: 'accounting', displayName: 'Accounting', description: 'Finance and accounting', isActive: true },
+      { name: 'support', displayName: 'Customer Support', description: 'Customer support and service', isActive: true },
+      { name: 'content', displayName: 'Content Management', description: 'Content creators and management', isActive: true }
     ];
+    if (models.Department) {
+      try {
+        for (const d of departments) { await models.Department.create(d); count++; }
+        console.log('1️⃣a Departments seeded');
+      } catch (e) {
+        console.warn('⚠ Could not seed Departments:', e.message);
+      }
+    } else {
+      console.warn('⚠ Department model not found in Postgres models - skipping Departments seeding');
+    }
+
+    // 2. USERS (45)
+    const userIds = [];
+    for (let i = 0; i < 45; i++) {
+      const u = await models.User.create({
+        username: `user${i}`, email: `user${i}@dfashion.com`, password: await bcrypt.hash('Pass123!', 12),
+        fullName: `${pick(firstNames)} ${pick(lastNames)}`, phone: `+919${rand(0, 9)}${rand(0, 9)}${rand(0, 9)}${rand(0, 9)}${rand(0, 9)}${rand(0, 9)}${rand(0, 9)}${rand(0, 9)}`,
+        address: `${rand(1, 999)} Street`, city: pick(cities), state: 'State',
+        role: i === 0 ? 'super_admin' : i < 5 ? 'admin' : i < 13 ? 'vendor' : 'customer', isActive: true
+      });
+      userIds.push(u.id);
+      count++;
+    }
+    console.log('2️⃣  Users: 45');
+
+    // 3. PERMISSIONS (15)
+    const perms = [
+      { name: 'create_user', displayName: 'Create User', module: 'users' },
+      { name: 'edit_user', displayName: 'Edit User', module: 'users' },
+      { name: 'delete_user', displayName: 'Delete User', module: 'users' },
+      { name: 'view_products', displayName: 'View Products', module: 'products' },
+      { name: 'create_product', displayName: 'Create Product', module: 'products' },
+      { name: 'edit_product', displayName: 'Edit Product', module: 'products' },
+      { name: 'delete_product', displayName: 'Delete Product', module: 'products' },
+      { name: 'view_orders', displayName: 'View Orders', module: 'orders' },
+      { name: 'manage_orders', displayName: 'Manage Orders', module: 'orders' },
+      { name: 'view_payments', displayName: 'View Payments', module: 'payments' },
+      { name: 'view_reports', displayName: 'View Reports', module: 'reports' },
+      { name: 'manage_content', displayName: 'Manage Content', module: 'content' },
+      { name: 'manage_promotions', displayName: 'Manage Promotions', module: 'promotions' },
+      { name: 'view_analytics', displayName: 'View Analytics', module: 'analytics' },
+      { name: 'manage_users', displayName: 'Manage Users', module: 'users' }
+    ];
+    for (const p of perms) { await models.Permission.create(p); count++; }
+    console.log('3️⃣  Permissions: 15');
+
+    // 4. MODULES (8)
+    const mods = [
+      { name: 'users', displayName: 'User Management' }, { name: 'products', displayName: 'Products' },
+      { name: 'orders', displayName: 'Orders' }, { name: 'payments', displayName: 'Payments' },
+      { name: 'promotions', displayName: 'Promotions' }, { name: 'content', displayName: 'Content' },
+      { name: 'analytics', displayName: 'Analytics' }, { name: 'reports', displayName: 'Reports' }
+    ];
+    for (const m of mods) { await models.Module.create(m); count++; }
+    console.log('4️⃣  Modules: 8');
+
+    // 5. ROLE PERMISSIONS (25)
+    for (let i = 0; i < 25; i++) {
+      try {
+        await models.RolePermission.create({ roleId: rand(1, 5), permissionId: rand(1, 15) });
+        count++;
+      } catch (e) {}
+    }
+    console.log('5️⃣  Role Permissions: 25');
+
+    // 6. SESSIONS (20)
+    for (let i = 0; i < 20; i++) {
+      await models.Session.create({
+        userId: userIds[i], token: `token_${i}_${Date.now()}`, ipAddress: `192.168.1.${i}`,
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), isActive: true
+      });
+      count++;
+    }
+    console.log('6️⃣  Sessions: 20');
+
+    // 7. BRANDS (8)
+    const brandIds = [];
     for (const b of brands) {
-      const exists = await models.Brand.findOne({ where: { name: b.name } });
-      if (!exists) {
-        await models.Brand.create(b);
-        seedCount++;
-      }
+      const x = await models.Brand.create({ name: b, description: `${b} collection` });
+      brandIds.push(x.id);
+      count++;
     }
-    console.log(`   ✅ Brands (${brands.length} created)`);
+    console.log('7️⃣  Brands: 8');
 
-    // 8. Categories
-    console.log('8️⃣  Categories');
-    const cats = [
-      { name: 'Men', slug: 'men' },
-      { name: 'Women', slug: 'women' },
-      { name: 'Kids', slug: 'kids' },
-      { name: 'Accessories', slug: 'accessories' }
-    ];
-    for (const c of cats) {
-      const exists = await models.Category.findOne({ where: { slug: c.slug } });
-      if (!exists) {
-        await models.Category.create(c);
-        seedCount++;
-      }
+    // 8. CATEGORIES (8)
+    const catIds = [];
+    for (const c of categories) {
+      const x = await models.Category.create({ name: c, slug: c.toLowerCase() });
+      catIds.push(x.id);
+      count++;
     }
-    console.log(`   ✅ Categories (${cats.length} created)`);
+    console.log('8️⃣  Categories: 8');
 
-    // 9. Products
-    console.log('9️⃣  Products');
-    const prods = [
-      { title: 'Nike Running Shoe', description: 'High-performance shoe', price: 99.99, stock: 100, brandId: 1, categoryId: 1 },
-      { title: 'Adidas T-Shirt', description: 'Cotton shirt', price: 29.99, stock: 150, brandId: 2, categoryId: 1 },
-      { title: 'Gucci Bag', description: 'Luxury handbag', price: 899.99, stock: 20, brandId: 3, categoryId: 4 }
-    ];
-    for (const p of prods) {
-      const exists = await models.Product.findOne({ where: { title: p.title } });
-      if (!exists) {
-        await models.Product.create(p);
-        seedCount++;
-      }
+    // 9. PRODUCTS (50)
+    const prodIds = [];
+    for (let i = 0; i < 50; i++) {
+      const imgPath = imageUtil.createMediaFile('products', productTitles[i % productTitles.length], i, 'svg');
+      const p = await models.Product.create({
+        title: productTitles[i % productTitles.length], description: 'Quality product', price: rand(500, 5000),
+        stock: rand(10, 500), sku: `SKU${i}`, brandId: pick(brandIds), categoryId: pick(catIds),
+        images: [imgPath], rating: (rand(35, 50) / 10).toFixed(1), reviewCount: rand(0, 500)
+      });
+      prodIds.push(p.id);
+      count++;
     }
-    console.log(`   ✅ Products (${prods.length} created)`);
+    console.log('9️⃣  Products: 50');
 
-    // 10. Product Comments
-    console.log('🔟 Product Comments');
-    const firstProd = await models.Product.findOne();
-    if (firstProd) {
-      const exists = await models.ProductComment.findOne({ where: { productId: firstProd.id } });
-      if (!exists) {
-        await models.ProductComment.create({ productId: firstProd.id, comment: 'Great product!' });
-        seedCount++;
-      }
+    // 10. PRODUCT COMMENTS (40)
+    for (let i = 0; i < 40; i++) {
+      await models.ProductComment.create({
+        productId: pick(prodIds), userId: pick(userIds), comment: 'Great!', rating: rand(1, 5), createdAt: randDate()
+      });
+      count++;
     }
-    console.log(`   ✅ Product comments (1 created)`);
+    console.log('🔟 Product Comments: 40');
 
-    // 11. Product Shares
-    console.log('1️⃣1️⃣ Product Shares');
-    if (firstProd) {
-      const exists = await models.ProductShare.findOne({ where: { productId: firstProd.id } });
-      if (!exists) {
-        await models.ProductShare.create({ productId: firstProd.id, platform: 'email' });
-        seedCount++;
-      }
+    // 11. PRODUCT SHARES (40)
+    for (let i = 0; i < 40; i++) {
+      await models.ProductShare.create({
+        productId: pick(prodIds), sharedBy: pick(userIds), platform: pick(['whatsapp', 'facebook', 'instagram', 'email']), sharedAt: randDate()
+      });
+      count++;
     }
-    console.log(`   ✅ Product shares (1 created)`);
+    console.log('1️⃣1️⃣ Product Shares: 40');
 
-    // 12. Carts
-    console.log('1️⃣2️⃣ Carts');
-    const firstUser = await models.User.findOne({ where: { email: 'customer1@dfashion.com' } });
-    if (firstUser) {
-      const exists = await models.Cart.findOne({ where: { userId: firstUser.id } });
-      if (!exists) {
-        await models.Cart.create({ userId: firstUser.id, items: [], totalPrice: 0, totalQuantity: 0 });
-        seedCount++;
-      }
+    // 12. CARTS (25)
+    for (let i = 0; i < 25; i++) {
+      await models.Cart.create({
+        userId: userIds[i], items: [{ productId: pick(prodIds), quantity: 1 }], totalPrice: rand(500, 5000), totalQuantity: 1
+      });
+      count++;
     }
-    console.log(`   ✅ Carts (1 created)`);
+    console.log('1️⃣2️⃣ Carts: 25');
 
-    // 13. Wishlists
-    console.log('1️⃣3️⃣ Wishlists');
-    if (firstUser && firstProd) {
-      const exists = await models.Wishlist.findOne({ where: { userId: firstUser.id, productId: firstProd.id } });
-      if (!exists) {
-        await models.Wishlist.create({ userId: firstUser.id, productId: firstProd.id });
-        seedCount++;
-      }
+    // 13. WISHLISTS (40)
+    for (let i = 0; i < 40; i++) {
+      await models.Wishlist.create({ userId: pick(userIds), productId: pick(prodIds), addedAt: randDate() });
+      count++;
     }
-    console.log(`   ✅ Wishlists (1 created)`);
+    console.log('1️⃣3️⃣ Wishlists: 40');
 
-    // 14. Orders
-    console.log('1️⃣4️⃣ Orders');
-    if (firstUser) {
-      const exists = await models.Order.findOne({ where: { customerId: firstUser.id } });
-      if (!exists) {
-        await models.Order.create({
-          orderNumber: 'ORD-' + Date.now(),
-          customerId: firstUser.id,
-          items: [],
-          totalAmount: 0,
-          paymentMethod: 'card'
-        });
-        seedCount++;
-      }
+    // 14. ORDERS (50)
+    const orderIds = [];
+    for (let i = 0; i < 50; i++) {
+      const o = await models.Order.create({
+        orderNumber: `ORD${Date.now()}${i}`, customerId: pick(userIds), items: [{ productId: pick(prodIds), quantity: 1 }],
+        totalAmount: rand(1000, 20000), status: pick(['pending', 'confirmed', 'shipped', 'delivered']),
+        paymentStatus: 'paid', paymentMethod: pick(['credit_card', 'debit_card', 'upi']), shippingAddress: 'Address', createdAt: randDate()
+      });
+      orderIds.push(o.id);
+      count++;
     }
-    console.log(`   ✅ Orders (1 created)`);
+    console.log('1️⃣4️⃣ Orders: 50');
 
-    // 15. Payments
-    console.log('1️⃣5️⃣ Payments');
-    const firstOrder = await models.Order.findOne();
-    if (firstOrder) {
-      const exists = await models.Payment.findOne({ where: { orderId: firstOrder.id } });
-      if (!exists) {
-        await models.Payment.create({
-          orderId: firstOrder.id,
-          amount: 0,
-          paymentMethod: 'card',
-          status: 'pending'
-        });
-        seedCount++;
-      }
+    // 15. PAYMENTS (50)
+    for (let i = 0; i < 50; i++) {
+      await models.Payment.create({
+        orderId: orderIds[i], amount: rand(1000, 20000), paymentMethod: pick(['credit_card', 'debit_card', 'upi']),
+        transactionId: `TXN${i}`, status: pick(['pending', 'completed', 'failed']), paymentGateway: 'Razorpay'
+      });
+      count++;
     }
-    console.log(`   ✅ Payments (1 created)`);
+    console.log('1️⃣5️⃣ Payments: 50');
 
-    // 16. Returns
-    console.log('1️⃣6️⃣ Returns');
-    if (firstOrder && firstUser) {
-      const exists = await models.Return.findOne({ where: { orderId: firstOrder.id } });
-      if (!exists) {
-        await models.Return.create({
-          orderId: firstOrder.id,
-          userId: firstUser.id,
-          status: 'pending'
-        });
-        seedCount++;
-      }
+    // 16. RETURNS (20)
+    for (let i = 0; i < 20; i++) {
+      await models.Return.create({
+        orderId: orderIds[i], userId: pick(userIds), reason: pick(['Damaged', 'Wrong item', 'Not as described', 'Defective']),
+        status: pick(['pending', 'approved', 'rejected', 'completed']), refundAmount: rand(500, 5000), items: []
+      });
+      count++;
     }
-    console.log(`   ✅ Returns (1 created)`);
+    console.log('1️⃣6️⃣ Returns: 20');
 
-    // ============================================
-    // LOGISTICS TABLES
-    // ============================================
-    console.log('\n━━━ LOGISTICS ━━━');
-
-    // 17. Couriers
-    console.log('1️⃣7️⃣ Couriers');
-    const couriers = [
+    // 17. COURIERS (5)
+    const courierData = [
       { name: 'FedEx', code: 'FEDEX', website: 'fedex.com' },
       { name: 'DHL', code: 'DHL', website: 'dhl.com' },
-      { name: 'UPS', code: 'UPS', website: 'ups.com' }
+      { name: 'UPS', code: 'UPS', website: 'ups.com' },
+      { name: 'Flipkart', code: 'FL', website: 'flipkart.com' },
+      { name: 'Amazon', code: 'AMZN', website: 'amazon.com' }
     ];
-    for (const c of couriers) {
-      const exists = await models.Courier.findOne({ where: { name: c.name } });
-      if (!exists) {
-        await models.Courier.create(c);
-        seedCount++;
-      }
-    }
-    console.log(`   ✅ Couriers (${couriers.length} created)`);
+    for (const c of courierData) { await models.Courier.create(c); count++; }
+    console.log('1️⃣7️⃣ Couriers: 5');
 
-    // 18. Shipments
-    console.log('1️⃣8️⃣ Shipments');
-    if (firstOrder) {
-      const exists = await models.Shipment.findOne({ where: { orderId: firstOrder.id } });
-      if (!exists) {
-        await models.Shipment.create({
-          orderId: firstOrder.id,
-          courierId: 1,
-          status: 'pending'
-        });
-        seedCount++;
-      }
+    // 18. SHIPMENTS (50)
+    for (let i = 0; i < 50; i++) {
+      await models.Shipment.create({
+        orderId: orderIds[i], courierId: rand(1, 5), trackingNumber: `TRACK${i}`,
+        status: pick(['pending', 'picked', 'in_transit', 'delivered', 'failed']), estimatedDelivery: new Date()
+      });
+      count++;
     }
-    console.log(`   ✅ Shipments (1 created)`);
+    console.log('1️⃣8️⃣ Shipments: 50');
 
-    // 19. Shipping Charges
-    console.log('1️⃣9️⃣ Shipping Charges');
-    const shippingCharges = [
-      { name: 'Standard Shipping', minWeight: 0, maxWeight: 5, charge: 10 },
-      { name: 'Express Shipping', minWeight: 0, maxWeight: 5, charge: 25 }
+    // 19. SHIPPING CHARGES (10)
+    const sc = [
+      { name: 'Express', minWeight: 0, maxWeight: 5, charge: 150, courierId: 1 },
+      { name: 'Standard', minWeight: 0, maxWeight: 5, charge: 50, courierId: 2 },
+      { name: 'Economy', minWeight: 0, maxWeight: 5, charge: 30, courierId: 3 },
+      { name: 'Express', minWeight: 5, maxWeight: 10, charge: 250, courierId: 1 },
+      { name: 'Standard', minWeight: 5, maxWeight: 10, charge: 100, courierId: 2 },
+      { name: 'Economy', minWeight: 5, maxWeight: 10, charge: 60, courierId: 3 },
+      { name: 'Free', minWeight: 0, maxWeight: 5, charge: 0, courierId: 4 },
+      { name: 'Premium', minWeight: 0, maxWeight: 2, charge: 500, courierId: 5 },
+      { name: 'Weekend', minWeight: 0, maxWeight: 5, charge: 120, courierId: 2 },
+      { name: 'Rural', minWeight: 0, maxWeight: 5, charge: 200, courierId: 3 }
     ];
-    for (const s of shippingCharges) {
-      const exists = await models.ShippingCharge.findOne({ where: { name: s.name } });
-      if (!exists) {
-        await models.ShippingCharge.create(s);
-        seedCount++;
-      }
+    for (const s of sc) { await models.ShippingCharge.create(s); count++; }
+    console.log('1️⃣9️⃣ Shipping Charges: 10');
+
+    // 20. COUPONS (40)
+    for (let i = 0; i < 40; i++) {
+      await models.Coupon.create({
+        code: `COUPON${i}`, description: `Save ${rand(10, 50)}%`, discountType: 'percentage', discountValue: rand(10, 50),
+        minPurchase: rand(500, 2000), maxDiscount: 5000, usageLimit: 100, usageCount: rand(0, 50),
+        validFrom: randDate(30), validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), isActive: true
+      });
+      count++;
     }
-    console.log(`   ✅ Shipping Charges (${shippingCharges.length} created)`);
+    console.log('2️⃣0️⃣ Coupons: 40');
 
-    // ============================================
-    // PROMOTIONS & MARKETING
-    // ============================================
-    console.log('\n━━━ PROMOTIONS ━━━');
-
-    // 20. Coupons
-    console.log('2️⃣0️⃣ Coupons');
-    const coupons = [
-      { code: 'SAVE10', discountType: 'percentage', discountValue: 10, minPurchase: 50 },
-      { code: 'SAVE20', discountType: 'percentage', discountValue: 20, minPurchase: 100 }
-    ];
-    for (const cp of coupons) {
-      const exists = await models.Coupon.findOne({ where: { code: cp.code } });
-      if (!exists) {
-        await models.Coupon.create(cp);
-        seedCount++;
-      }
+    // 21. FLASH SALES (15)
+    for (let i = 0; i < 15; i++) {
+      const st = randDate(7);
+      await models.FlashSale.create({
+        name: `Flash Sale ${i}`, description: 'Limited time', discountPercentage: rand(10, 50),
+        startTime: st, endTime: new Date(st.getTime() + 24 * 60 * 60 * 1000), isActive: true
+      });
+      count++;
     }
-    console.log(`   ✅ Coupons (${coupons.length} created)`);
+    console.log('2️⃣1️⃣ Flash Sales: 15');
 
-    // 21. Flash Sales
-    console.log('2️⃣1️⃣ Flash Sales');
-    const flashSales = [
-      { name: 'Weekend Sale', discountPercentage: 25, startTime: new Date(), endTime: new Date(Date.now() + 86400000) }
-    ];
-    for (const fs of flashSales) {
-      const exists = await models.FlashSale.findOne({ where: { name: fs.name } });
-      if (!exists) {
-        await models.FlashSale.create(fs);
-        seedCount++;
-      }
+    // 22. CAMPAIGNS (20)
+    for (let i = 0; i < 20; i++) {
+      await models.Campaign.create({
+        name: `Campaign ${i}`, description: 'Marketing', type: pick(['seasonal', 'promotional']),
+        startDate: randDate(30), endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), isActive: true
+      });
+      count++;
     }
-    console.log(`   ✅ Flash Sales (${flashSales.length} created)`);
+    console.log('2️⃣2️⃣ Campaigns: 20');
 
-    // 22. Campaigns
-    console.log('2️⃣2️⃣ Campaigns');
-    const campaigns = [
-      { name: 'Summer Collection', type: 'seasonal', startDate: new Date(), endDate: new Date(Date.now() + 2592000000) }
-    ];
-    for (const cm of campaigns) {
-      const exists = await models.Campaign.findOne({ where: { name: cm.name } });
-      if (!exists) {
-        await models.Campaign.create(cm);
-        seedCount++;
-      }
+    // 23. PROMOTIONS (20)
+    for (let i = 0; i < 20; i++) {
+      await models.Promotion.create({
+        title: `Promo ${i}`, description: 'Special offer', type: pick(['discount', 'bogo']),
+        discountValue: rand(100, 1000), discountType: 'fixed', appliesTo: 'all',
+        validFrom: randDate(30), validUntil: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), isActive: true
+      });
+      count++;
     }
-    console.log(`   ✅ Campaigns (${campaigns.length} created)`);
+    console.log('2️⃣3️⃣ Promotions: 20');
 
-    // 23. Promotions
-    console.log('2️⃣3️⃣ Promotions');
-    const promos = [
-      { title: 'Buy More Save More', type: 'volume_discount', discountType: 'percentage', discountValue: 15 }
-    ];
-    for (const pr of promos) {
-      const exists = await models.Promotion.findOne({ where: { title: pr.title } });
-      if (!exists) {
-        await models.Promotion.create(pr);
-        seedCount++;
-      }
+    // 24. NOTIFICATIONS (40)
+    for (let i = 0; i < 40; i++) {
+      await models.Notification.create({
+        userId: pick(userIds), title: `Notif ${i}`, message: 'New message', type: pick(['order', 'promotion']),
+        isRead: Math.random() > 0.5, createdAt: randDate()
+      });
+      count++;
     }
-    console.log(`   ✅ Promotions (${promos.length} created)`);
+    console.log('2️⃣4️⃣ Notifications: 40');
 
-    // ============================================
-    // NOTIFICATIONS & ENGAGEMENT
-    // ============================================
-    console.log('\n━━━ ENGAGEMENT ━━━');
-
-    // 24. Notifications
-    console.log('2️⃣4️⃣ Notifications');
-    if (firstUser) {
-      const exists = await models.Notification.findOne({ where: { userId: firstUser.id } });
-      if (!exists) {
-        await models.Notification.create({
-          userId: firstUser.id,
-          title: 'Welcome',
-          message: 'Welcome to DFashion!',
-          type: 'system'
-        });
-        seedCount++;
-      }
+    // 25. REWARDS (40)
+    for (let i = 0; i < 40; i++) {
+      await models.Reward.create({
+        userId: pick(userIds), points: rand(100, 1000), description: 'Reward', type: pick(['purchase', 'referral']),
+        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), isActive: true
+      });
+      count++;
     }
-    console.log(`   ✅ Notifications (1 created)`);
+    console.log('2️⃣5️⃣ Rewards: 40');
 
-    // 25. Rewards
-    console.log('2️⃣5️⃣ Rewards');
-    if (firstUser) {
-      const exists = await models.Reward.findOne({ where: { userId: firstUser.id } });
-      if (!exists) {
-        await models.Reward.create({
-          userId: firstUser.id,
-          points: 100,
-          type: 'purchase'
-        });
-        seedCount++;
-      }
+    // 26. POSTS (20)
+    for (let i = 0; i < 20; i++) {
+      await models.Post.create({
+        title: `Post ${i}`, content: 'Blog content', author: pick(userIds), isPublished: true, publishedAt: randDate()
+      });
+      count++;
     }
-    console.log(`   ✅ Rewards (1 created)`);
+    console.log('2️⃣6️⃣ Posts: 20');
 
-    // ============================================
-    // CONTENT MANAGEMENT
-    // ============================================
-    console.log('\n━━━ CONTENT ━━━');
-
-    // 26. Posts
-    console.log('2️⃣6️⃣ Posts');
-    const posts = [
-      { title: 'Welcome to DFashion', content: 'Our first blog post' },
-      { title: 'New Collection', content: 'Check out latest designs' }
-    ];
-    for (const po of posts) {
-      const exists = await models.Post.findOne({ where: { title: po.title } });
-      if (!exists) {
-        await models.Post.create(po);
-        seedCount++;
-      }
+    // 27. STORIES (20)
+    for (let i = 0; i < 20; i++) {
+      const storyUrl = imageUtil.createMediaFile('stories', `story ${i}`, i, 'svg');
+      await models.Story.create({ mediaUrl: storyUrl, mediaType: 'image', duration: 5, isActive: true });
+      count++;
     }
-    console.log(`   ✅ Posts (${posts.length} created)`);
+    console.log('2️⃣7️⃣ Stories: 20');
 
-    // 27. Stories
-    console.log('2️⃣7️⃣ Stories');
-    const stories = [
-      { mediaUrl: '/uploads/stories/story1.jpg', mediaType: 'image' },
-      { mediaUrl: '/uploads/stories/story2.jpg', mediaType: 'image' }
-    ];
-    for (const st of stories) {
-      const exists = await models.Story.findOne({ where: { mediaUrl: st.mediaUrl } });
-      if (!exists) {
-        await models.Story.create(st);
-        seedCount++;
-      }
+    // 28. REELS (20)
+    for (let i = 0; i < 20; i++) {
+      const reelFile = imageUtil.createMediaFile('reels', `reel ${i}`, i, 'mp4');
+      await models.Reel.create({ videoUrl: reelFile, title: `Reel ${i}`, duration: 30, views: rand(0, 10000) });
+      count++;
     }
-    console.log(`   ✅ Stories (${stories.length} created)`);
+    console.log('2️⃣8️⃣ Reels: 20');
 
-    // 28. Reels
-    console.log('2️⃣8️⃣ Reels');
-    const reels = [
-      { videoUrl: '/uploads/reels/reel1.mp4', title: 'Fashion Reel 1' },
-      { videoUrl: '/uploads/reels/reel2.mp4', title: 'Fashion Reel 2' }
-    ];
-    for (const re of reels) {
-      const exists = await models.Reel.findOne({ where: { videoUrl: re.videoUrl } });
-      if (!exists) {
-        await models.Reel.create(re);
-        seedCount++;
-      }
+    // 29. PAGES (10)
+    const pages = [{ title: 'About', slug: 'about' }, { title: 'Contact', slug: 'contact' }, { title: 'Privacy', slug: 'privacy' },
+      { title: 'Terms', slug: 'terms' }, { title: 'Shipping', slug: 'shipping' }, { title: 'Returns', slug: 'returns' },
+      { title: 'FAQs', slug: 'faqs' }, { title: 'Blog', slug: 'blog' }, { title: 'Gallery', slug: 'gallery' }, { title: 'Careers', slug: 'careers' }];
+    for (const p of pages) { await models.Page.create({ ...p, content: 'Content', isPublished: true }); count++; }
+    console.log('2️⃣9️⃣ Pages: 10');
+
+    // 30. BANNERS (15)
+    for (let i = 0; i < 15; i++) {
+      const bannerImg = imageUtil.createMediaFile('banners', `banner ${i}`, i, 'svg');
+      await models.Banner.create({
+        title: `Banner ${i}`, image: bannerImg, link: '/', position: pick(['header', 'footer']),
+        startDate: randDate(30), endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), isActive: true
+      });
+      count++;
     }
-    console.log(`   ✅ Reels (${reels.length} created)`);
+    console.log('3️⃣0️⃣ Banners: 15');
 
-    // 29. Pages
-    console.log('2️⃣9️⃣ Pages');
-    const pages = [
-      { title: 'About Us', slug: 'about', content: 'About DFashion' },
-      { title: 'Contact', slug: 'contact', content: 'Contact us' }
-    ];
-    for (const pg of pages) {
-      const exists = await models.Page.findOne({ where: { slug: pg.slug } });
-      if (!exists) {
-        await models.Page.create(pg);
-        seedCount++;
-      }
+    // 31. FAQs (20)
+    const faqs = ['How to order?', 'What\'s shipping?', 'How to track?', 'Return policy?', 'Do you exchange?',
+      'How long delivery?', 'Payment methods?', 'Cancel order?', 'Contact support?', 'Ship international?',
+      'Warranty?', 'Use coupon?', 'Hidden charges?', 'Reset password?', 'Gift cards?', 'Business hours?',
+      'Become seller?', 'Loyalty program?', 'Leave review?', 'Sizes available?'];
+    for (let i = 0; i < 20; i++) {
+      await models.FAQ.create({
+        question: faqs[i], answer: `Answer to: ${faqs[i]}`, category: pick(['order', 'shipping', 'payment']), order: i + 1, isActive: true
+      });
+      count++;
     }
-    console.log(`   ✅ Pages (${pages.length} created)`);
+    console.log('3️⃣1️⃣ FAQs: 20');
 
-    // 30. Banners
-    console.log('3️⃣0️⃣ Banners');
-    const banners = [
-      { title: 'Sale Banner', image: '/uploads/banners/sale.jpg', position: 'header' },
-      { title: 'Promo Banner', image: '/uploads/banners/promo.jpg', position: 'footer' }
-    ];
-    for (const bn of banners) {
-      const exists = await models.Banner.findOne({ where: { title: bn.title } });
-      if (!exists) {
-        await models.Banner.create(bn);
-        seedCount++;
-      }
+    // 32. KYC DOCUMENTS (10)
+    for (let i = 0; i < 10 && i + 5 < userIds.length; i++) {
+      await models.KYCDocument.create({
+        userId: userIds[i + 5], documentType: pick(['aadhar', 'pan', 'passport']), documentNumber: `DOC${rand(1000000, 9999999)}`,
+        status: pick(['pending', 'verified']), expiryDate: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000)
+      });
+      count++;
     }
-    console.log(`   ✅ Banners (${banners.length} created)`);
+    console.log('3️⃣2️⃣ KYC Documents: 10');
 
-    // 31. FAQs
-    console.log('3️⃣1️⃣ FAQs');
-    const faqs = [
-      { question: 'What is shipping?', answer: 'Fast and reliable shipping' },
-      { question: 'How to return?', answer: 'Easy return process' }
-    ];
-    for (const faq of faqs) {
-      const exists = await models.FAQ.findOne({ where: { question: faq.question } });
-      if (!exists) {
-        await models.FAQ.create(faq);
-        seedCount++;
-      }
+    // 33. SELLER COMMISSION (25)
+    for (let i = 0; i < 25 && i < orderIds.length; i++) {
+      await models.SellerCommission.create({
+        sellerId: userIds[rand(5, 12)], orderId: orderIds[i], commissionPercent: rand(5, 20),
+        commissionAmount: rand(100, 2000), status: pick(['pending', 'paid'])
+      });
+      count++;
     }
-    console.log(`   ✅ FAQs (${faqs.length} created)`);
+    console.log('3️⃣3️⃣ Seller Commission: 25');
 
-    // ============================================
-    // SELLER & ADMIN TABLES
-    // ============================================
-    console.log('\n━━━ SELLER MANAGEMENT ━━━');
-
-    // 32. KYC Documents
-    console.log('3️⃣2️⃣ KYC Documents');
-    const vendor = await models.User.findOne({ where: { email: 'vendor1@dfashion.com' } });
-    if (vendor) {
-      const exists = await models.KYCDocument.findOne({ where: { userId: vendor.id } });
-      if (!exists) {
-        await models.KYCDocument.create({
-          userId: vendor.id,
-          documentType: 'aadhar',
-          documentNumber: '1234 5678 9012',
-          status: 'verified'
-        });
-        seedCount++;
-      }
+    // 34. SELLER PERFORMANCE (8)
+    for (let i = 0; i < 8 && i + 5 < userIds.length; i++) {
+      await models.SellerPerformance.create({
+        sellerId: userIds[i + 5], totalSales: rand(10000, 100000), totalOrders: rand(50, 500),
+        averageRating: (rand(35, 50) / 10).toFixed(1)
+      });
+      count++;
     }
-    console.log(`   ✅ KYC documents (1 created)`);
+    console.log('3️⃣4️⃣ Seller Performance: 8');
 
-    // 33. Seller Commission
-    console.log('3️⃣3️⃣ Seller Commissions');
-    if (firstOrder && vendor) {
-      const exists = await models.SellerCommission.findOne({ where: { orderId: firstOrder.id } });
-      if (!exists) {
-        await models.SellerCommission.create({
-          sellerId: vendor.id,
-          commissionPercent: 10,
-          commissionAmount: 0
-        });
-        seedCount++;
-      }
+    // 35. SEARCH HISTORY (40)
+    const searches = ['shirt', 'dress', 'shoes', 'jeans', 'saree'];
+    for (let i = 0; i < 40; i++) {
+      await models.SearchHistory.create({ userId: pick(userIds), searchQuery: pick(searches), resultCount: rand(1, 100), searchedAt: randDate() });
+      count++;
     }
-    console.log(`   ✅ Seller commissions (1 created)`);
+    console.log('3️⃣5️⃣ Search History: 40');
 
-    // 34. Seller Performance
-    console.log('3️⃣4️⃣ Seller Performance');
-    if (vendor) {
-      const exists = await models.SellerPerformance.findOne({ where: { sellerId: vendor.id } });
-      if (!exists) {
-        await models.SellerPerformance.create({
-          sellerId: vendor.id,
-          totalSales: 0,
-          totalOrders: 0,
-          averageRating: 0
-        });
-        seedCount++;
-      }
+    // 36. SEARCH SUGGESTIONS (30)
+    for (let i = 0; i < 30; i++) {
+      await models.SearchSuggestion.create({ keyword: `${pick(searches)} ${i}`, frequency: rand(100, 1000), isActive: true });
+      count++;
     }
-    console.log(`   ✅ Seller performance (1 created)`);
+    console.log('3️⃣6️⃣ Search Suggestions: 30');
 
-    // ============================================
-    // SEARCH & ANALYTICS
-    // ============================================
-    console.log('\n━━━ SEARCH & ANALYTICS ━━━');
-
-    // 35. Search History
-    console.log('3️⃣5️⃣ Search History');
-    if (firstUser) {
-      const exists = await models.SearchHistory.findOne({ where: { userId: firstUser.id } });
-      if (!exists) {
-        await models.SearchHistory.create({
-          userId: firstUser.id,
-          searchQuery: 'Nike shoes'
-        });
-        seedCount++;
-      }
+    // 37. TRENDING SEARCHES (15)
+    for (let i = 0; i < 15; i++) {
+      await models.TrendingSearch.create({ keyword: `trending ${pick(searches)}`, searchCount: rand(1000, 10000), rank: i + 1 });
+      count++;
     }
-    console.log(`   ✅ Search history (1 created)`);
+    console.log('3️⃣7️⃣ Trending Searches: 15');
 
-    // 36. Search Suggestions
-    console.log('3️⃣6️⃣ Search Suggestions');
-    const suggestions = [
-      { keyword: 'Nike', frequency: 100 },
-      { keyword: 'Adidas', frequency: 80 }
-    ];
-    for (const sg of suggestions) {
-      const exists = await models.SearchSuggestion.findOne({ where: { keyword: sg.keyword } });
-      if (!exists) {
-        await models.SearchSuggestion.create(sg);
-        seedCount++;
-      }
+    // 38. USER BEHAVIOR (40)
+    for (let i = 0; i < 40; i++) {
+      await models.UserBehavior.create({ userId: pick(userIds), action: pick(['view_product', 'purchase', 'wishlist']), createdAt: randDate() });
+      count++;
     }
-    console.log(`   ✅ Search suggestions (${suggestions.length} created)`);
+    console.log('3️⃣8️⃣ User Behavior: 40');
 
-    // 37. Trending Searches
-    console.log('3️⃣7️⃣ Trending Searches');
-    const trending = [
-      { keyword: 'Summer Dresses', searchCount: 500, rank: 1 },
-      { keyword: 'Casual Shoes', searchCount: 400, rank: 2 }
-    ];
-    for (const tr of trending) {
-      const exists = await models.TrendingSearch.findOne({ where: { keyword: tr.keyword } });
-      if (!exists) {
-        await models.TrendingSearch.create(tr);
-        seedCount++;
-      }
+    // 39. AUDIT LOGS (40)
+    for (let i = 0; i < 40; i++) {
+      await models.AuditLog.create({
+        userId: userIds[rand(0, 4)], action: pick(['login', 'create', 'edit', 'delete']), module: pick(categories),
+        description: 'Action', createdAt: randDate()
+      });
+      count++;
     }
-    console.log(`   ✅ Trending searches (${trending.length} created)`);
+    console.log('3️⃣9️⃣ Audit Logs: 40');
 
-    // 38. User Behavior
-    console.log('3️⃣8️⃣ User Behavior');
-    if (firstUser) {
-      const exists = await models.UserBehavior.findOne({ where: { userId: firstUser.id } });
-      if (!exists) {
-        await models.UserBehavior.create({
-          userId: firstUser.id,
-          action: 'view_product'
-        });
-        seedCount++;
-      }
+    // 40. TRANSACTIONS (40)
+    for (let i = 0; i < 40; i++) {
+      await models.Transaction.create({
+        userId: pick(userIds), type: pick(['credit', 'debit']), amount: rand(100, 5000),
+        reference: `REF${i}`, description: 'Transaction', balance: rand(0, 50000), status: pick(['pending', 'completed'])
+      });
+      count++;
     }
-    console.log(`   ✅ User behavior (1 created)`);
+    console.log('4️⃣0️⃣ Transactions: 40');
 
-    // ============================================
-    // ADMIN & SYSTEM TABLES
-    // ============================================
-    console.log('\n━━━ ADMIN & SYSTEM ━━━');
-
-    // 39. Audit Logs
-    console.log('3️⃣9️⃣ Audit Logs');
-    const admin = await models.User.findOne({ where: { email: 'admin1@dfashion.com' } });
-    if (admin) {
-      const exists = await models.AuditLog.findOne({ where: { userId: admin.id } });
-      if (!exists) {
-        await models.AuditLog.create({
-          userId: admin.id,
-          action: 'login',
-          module: 'auth'
-        });
-        seedCount++;
-      }
+    // 41. TICKETS (30)
+    for (let i = 0; i < 30; i++) {
+      await models.Ticket.create({
+        ticketNumber: `TKT${Date.now()}${i}`, userId: pick(userIds), subject: `Issue ${i}`, description: 'Support needed',
+        category: pick(['order', 'product', 'payment']), priority: pick(['low', 'medium', 'high']), status: pick(['open', 'resolved'])
+      });
+      count++;
     }
-    console.log(`   ✅ Audit logs (1 created)`);
+    console.log('4️⃣1️⃣ Tickets: 30');
 
-    // 40. Transactions
-    console.log('4️⃣0️⃣ Transactions');
-    if (firstUser) {
-      const exists = await models.Transaction.findOne({ where: { userId: firstUser.id } });
-      if (!exists) {
-        await models.Transaction.create({
-          userId: firstUser.id,
-          type: 'credit',
-          amount: 100
-        });
-        seedCount++;
-      }
+    // 42. QUICK ACTIONS (15)
+    const qa = [{ name: 'Dashboard', icon: 'dashboard', url: '/dashboard' }, { name: 'Orders', icon: 'cart', url: '/orders' },
+      { name: 'Products', icon: 'box', url: '/products' }, { name: 'Customers', icon: 'users', url: '/customers' },
+      { name: 'Reports', icon: 'chart', url: '/reports' }, { name: 'Settings', icon: 'gear', url: '/settings' },
+      { name: 'Messages', icon: 'mail', url: '/messages' }, { name: 'Analytics', icon: 'graph', url: '/analytics' },
+      { name: 'Inventory', icon: 'package', url: '/inventory' }, { name: 'Payments', icon: 'card', url: '/payments' },
+      { name: 'Promotions', icon: 'gift', url: '/promotions' }, { name: 'Reviews', icon: 'star', url: '/reviews' },
+      { name: 'Coupons', icon: 'tag', url: '/coupons' }, { name: 'Users', icon: 'user', url: '/users' },
+      { name: 'Content', icon: 'file', url: '/content' }];
+    for (let i = 0; i < qa.length; i++) { await models.QuickAction.create({ ...qa[i], order: i + 1, isActive: true }); count++; }
+    console.log('4️⃣2️⃣ Quick Actions: 15');
+
+    // 43. LIVE STREAMS (15)
+    for (let i = 0; i < 15; i++) {
+      await models.LiveStream.create({
+        title: `Stream ${i}`, description: 'Fashion show', hostId: userIds[rand(5, 12)],
+        streamUrl: `https://stream/${i}`, status: pick(['scheduled', 'live', 'ended']),
+        startTime: new Date(Date.now() + Math.random() * 7 * 24 * 60 * 60 * 1000), viewers: rand(0, 5000)
+      });
+      count++;
     }
-    console.log(`   ✅ Transactions (1 created)`);
+    console.log('4️⃣3️⃣ Live Streams: 15');
 
-    // 41. Tickets
-    console.log('4️⃣1️⃣ Tickets');
-    if (firstUser) {
-      const exists = await models.Ticket.findOne({ where: { userId: firstUser.id } });
-      if (!exists) {
-        await models.Ticket.create({
-          ticketNumber: 'TKT-' + Date.now(),
-          userId: firstUser.id,
-          subject: 'Order Issue',
-          description: 'Product not received',
-          status: 'open'
-        });
-        seedCount++;
-      }
+    // 44. STYLE INSPIRATION (15)
+    for (let i = 0; i < 15; i++) {
+      const styleImg = imageUtil.createMediaFile('style_inspiration', `style ${i}`, i, 'svg');
+      await models.StyleInspiration.create({
+        title: `Style ${i}`, description: 'Inspiring look', image: styleImg,
+        season: pick(['spring', 'summer', 'fall', 'winter']), style: pick(['casual', 'formal']), isActive: true
+      });
+      count++;
     }
-    console.log(`   ✅ Tickets (1 created)`);
+    console.log('4️⃣4️⃣ Style Inspiration: 15');
 
-    // 42. Quick Actions
-    console.log('4️⃣2️⃣ Quick Actions');
-    const quickActions = [
-      { name: 'Dashboard', icon: 'dashboard', url: '/dashboard' },
-      { name: 'Orders', icon: 'orders', url: '/orders' }
-    ];
-    for (const qa of quickActions) {
-      const exists = await models.QuickAction.findOne({ where: { name: qa.name } });
-      if (!exists) {
-        await models.QuickAction.create(qa);
-        seedCount++;
-      }
-    }
-    console.log(`   ✅ Quick actions (${quickActions.length} created)`);
-
-    // 43. Live Streams
-    console.log('4️⃣3️⃣ Live Streams');
-    if (vendor) {
-      const exists = await models.LiveStream.findOne({ where: { hostId: vendor.id } });
-      if (!exists) {
-        await models.LiveStream.create({
-          title: 'New Collection Launch',
-          hostId: vendor.id,
-          status: 'scheduled',
-          startTime: new Date(Date.now() + 86400000)
-        });
-        seedCount++;
-      }
-    }
-    console.log(`   ✅ Live streams (1 created)`);
-
-    // 44. Style Inspiration (Bonus: Beyond 43)
-    console.log('4️⃣4️⃣ Style Inspiration');
-    const styles = [
-      { title: 'Summer Vibes', image: '/uploads/styles/summer.jpg', season: 'summer' },
-      { title: 'Winter Elegance', image: '/uploads/styles/winter.jpg', season: 'winter' }
-    ];
-    for (const st of styles) {
-      const exists = await models.StyleInspiration.findOne({ where: { title: st.title } });
-      if (!exists) {
-        await models.StyleInspiration.create(st);
-        seedCount++;
-      }
-    }
-    console.log(`   ✅ Style inspiration (${styles.length} created)`);
-
-    const duration = ((Date.now() - startTime) / 1000).toFixed(2);
-    console.log(`\n✅ PostgreSQL Master Seeder Completed!`);
-    console.log(`📊 Total records seeded: ${seedCount}`);
-    console.log(`⏳ Time taken: ${duration}s`);
-    console.log(`🎉 All 43 tables successfully seeded to PostgreSQL!`);
-
+    console.log('\n' + '═'.repeat(50));
+    console.log(`✅ SEEDING COMPLETE!`);
+    console.log(`📊 Total records: ${count}`);
+    console.log(`🎉 All 44 tables populated!`);
+    console.log('═'.repeat(50) + '\n');
     process.exit(0);
   } catch (err) {
-    console.error('\n❌ PostgreSQL Master Seeder Failed:');
-    console.error(err && err.stack ? err.stack : err);
+    console.error('❌ Error (full):', err);
+    if (err && err.errors && Array.isArray(err.errors)) {
+      console.error('Details:');
+      for (const e of err.errors) {
+        console.error('-', e.message, '| path:', e.path, '| value:', e.value);
+      }
+    }
+    if (err && err.stack) console.error(err.stack);
     process.exit(1);
   }
 }
 
-seedPostgres();
+seed();

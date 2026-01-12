@@ -279,7 +279,7 @@ router.delete('/:id', auth, requireRole('super_admin'), async (req, res) => {
 // @route   GET /api/roles/:id/permissions
 // @desc    Get role permissions
 // @access  Private/Super Admin
-router.get('/:id/permissions', auth, requireSuperAdmin, async (req, res) => {
+router.get('/:id/permissions', auth, requireRole('super_admin'), async (req, res) => {
   try {
     const role = await Role.findById(req.params.id)
       .populate('modulePermissions.module', 'name displayName category availableActions');

@@ -1,6 +1,7 @@
 const { sequelize, Sequelize } = require('../config/sequelize');
 
 const defineRole = require('./Role');
+const defineDepartment = require('./Department');
 const defineUser = require('./User');
 const defineBrand = require('./Brand');
 const defineCategory = require('./Category');
@@ -46,6 +47,7 @@ const defineQuickAction = require('./QuickAction');
 const defineStyleInspiration = require('./StyleInspiration');
 
 const Role = defineRole(sequelize, Sequelize.DataTypes);
+const Department = defineDepartment(sequelize, Sequelize.DataTypes);
 const User = defineUser(sequelize, Sequelize.DataTypes);
 const Brand = defineBrand(sequelize, Sequelize.DataTypes);
 const Category = defineCategory(sequelize, Sequelize.DataTypes);
@@ -243,6 +245,7 @@ const wrappedStory = createMongooseLikeWrapper(Story);
 const wrappedBrand = createMongooseLikeWrapper(Brand);
 const wrappedCategory = createMongooseLikeWrapper(Category);
 const wrappedRole = createMongooseLikeWrapper(Role);
+const wrappedDepartment = createMongooseLikeWrapper(Department);
 const wrappedProductComment = createMongooseLikeWrapper(ProductComment);
 const wrappedReel = createMongooseLikeWrapper(Reel);
 const wrappedUserBehavior = createMongooseLikeWrapper(UserBehavior);
@@ -285,6 +288,7 @@ module.exports = {
   sequelize,
   Sequelize,
   Role: wrappedRole,
+  Department: wrappedDepartment,
   User: wrappedUser,
   Brand: wrappedBrand,
   Category: wrappedCategory,
@@ -331,6 +335,7 @@ module.exports = {
   // Export raw Sequelize models for direct access if needed
   _raw: {
     Role,
+    Department,
     User,
     Brand,
     Category,

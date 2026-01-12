@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
-const { requireRole } = require('../middleware/auth');
+const { auth, requireRole } = require('../middleware/auth');
 
 // Check if Ticket model exists, if not create a simple in-memory store for now
 let Ticket;
@@ -42,7 +41,7 @@ try {
 }
 
 // GET /api/support/tickets - Get all tickets
-router.get('/tickets', [auth, requireRole(['admin', 'super_admin'])], async (req, res) => {
+router.get('/tickets', auth, requireRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const { page = 1, limit = 10, status = '', priority = '', userId = '' } = req.query;
     const query = {};
@@ -69,7 +68,7 @@ router.get('/tickets', [auth, requireRole(['admin', 'super_admin'])], async (req
 });
 
 // GET /api/support/tickets/:ticketId - Get single ticket
-router.get('/tickets/:ticketId', [auth], async (req, res) => {
+router.get('/tickets/:ticketId', auth, async (req, res) => {
   try {
     const ticket = await Ticket.findById(req.params.ticketId);
 
@@ -198,7 +197,7 @@ router.delete('/tickets/:ticketId', [auth, requireRole(['admin', 'super_admin'])
 });
 
 // GET /api/support/stats - Get support statistics
-router.get('/stats', [auth, requireRole(['admin', 'super_admin'])], async (req, res) => {
+router.get('/stats', auth, requireRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const totalTickets = await Ticket.countDocuments({});
     const openTickets = await Ticket.countDocuments({ status: 'open' });

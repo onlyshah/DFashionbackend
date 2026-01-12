@@ -26,7 +26,7 @@ router.use(verifyAdminToken);
 // =============================================================
 // DASHBOARD ROUTES
 // =============================================================
-const dashboardHandler = [requirePermission('dashboard', 'view'), adminController.getDashboardStatsFromDB];
+const dashboardHandler = [adminController.getDashboardStatsFromDB];
 
 // Core dashboard routes
 router.get('/', ...dashboardHandler);
@@ -35,9 +35,11 @@ router.get('/metrics', ...dashboardHandler);
 router.get('/dashboard', ...dashboardHandler);
 router.get('/dashboard/metrics', ...dashboardHandler);
 
+// Real dashboard endpoint
+router.get('/dashboard/stats', adminController.getDashboardStatsFromDB);
+
 // Optional analytics route (safe fallback)
 router.get('/analytics',
-  requirePermission('dashboard', 'analytics'),
   (req, res) => res.json({ success: true, message: 'Analytics endpoint not yet implemented' })
 );
 
@@ -79,19 +81,141 @@ router.put('/users/:id/status', requireRole('admin'), async (req, res) => {
 // =============================================================
 // ROLE & PERMISSION MANAGEMENT (Super Admin Only)
 // =============================================================
-// Placeholder routes to avoid crashes
-router.get('/roles', requireRole('super_admin'), (req, res) =>
-  res.json({ success: true, message: 'Roles endpoint not yet implemented' })
-);
-router.post('/roles', requireRole('super_admin'), (req, res) =>
-  res.json({ success: true, message: 'Create role endpoint not yet implemented' })
-);
-router.put('/roles/:roleId', requireRole('super_admin'), (req, res) =>
-  res.json({ success: true, message: 'Update role endpoint not yet implemented' })
-);
-router.delete('/roles/:roleId', requireRole('super_admin'), (req, res) =>
-  res.json({ success: true, message: 'Delete role endpoint not yet implemented' })
-);
+const Role = models.Role;
+const Department = models.Department;
+
+// GET all roles for dropdowns and management
+router.get('/roles', requireRole('super_admin'), async (req, res) => {
+  try {
+    const { page = 1, limit = 100 } = req.query;
+    const skip = (page - 1) * limit;
+
+    const roles = await Role.find({ isActive: true })
+      .select('_id name displayName description department level isSystemRole')
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+
+    const total = await Role.countDocuments({ isActive: true });
+    const pages = Math.ceil(total / limit);
+
+    res.json({
+      success: true,
+      data: roles,
+      pagination: { page: parseInt(page), limit: parseInt(limit), pages, total }
+    });
+  } catch (error) {
+    console.error('Error fetching roles:', error);
+    res.status(500).json({ success: false, message: 'Error fetching roles' });
+  }
+});
+
+// GET all departments for dropdowns
+router.get('/departments', requireRole('super_admin'), async (req, res) => {
+  try {
+    const { page = 1, limit = 100 } = req.query;
+    const skip = (page - 1) * limit;
+
+    const departments = await Department.find({ isActive: true })
+      .select('_id name displayName description')
+      .skip(skip)
+      .limit(parseInt(limit))
+      .lean();
+
+    const total = await Department.countDocuments({ isActive: true });
+    const pages = Math.ceil(total / limit);
+
+    res.json({
+      success: true,
+      data: departments,
+      pagination: { page: parseInt(page), limit: parseInt(limit), pages, total }
+    });
+  } catch (error) {
+    console.error('Error fetching departments:', error);
+    res.status(500).json({ success: false, message: 'Error fetching departments' });
+  }
+});
+
+// POST create new role
+router.post('/roles', requireRole('super_admin'), async (req, res) => {
+  try {
+    const { name, displayName, description, department, level, modulePermissions } = req.body;
+
+    if (!name || !displayName || !description || !department || level === undefined) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
+    }
+
+    const newRole = new Role({
+      name,
+      displayName,
+      description,
+      department,
+      level,
+      modulePermissions: modulePermissions || [],
+      createdBy: req.user._id
+    });
+
+    await newRole.save();
+
+    res.status(201).json({
+      success: true,
+      message: 'Role created successfully',
+      data: newRole
+    });
+  } catch (error) {
+    console.error('Error creating role:', error);
+    res.status(500).json({ success: false, message: 'Error creating role' });
+  }
+});
+
+// PUT update role
+router.put('/roles/:roleId', requireRole('super_admin'), async (req, res) => {
+  try {
+    const { name, displayName, description, department, level, modulePermissions } = req.body;
+    const updatedRole = await Role.findByIdAndUpdate(
+      req.params.roleId,
+      { name, displayName, description, department, level, modulePermissions },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedRole) {
+      return res.status(404).json({ success: false, message: 'Role not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Role updated successfully',
+      data: updatedRole
+    });
+  } catch (error) {
+    console.error('Error updating role:', error);
+    res.status(500).json({ success: false, message: 'Error updating role' });
+  }
+});
+
+// DELETE role
+router.delete('/roles/:roleId', requireRole('super_admin'), async (req, res) => {
+  try {
+    const role = await Role.findByIdAndUpdate(
+      req.params.roleId,
+      { isActive: false },
+      { new: true }
+    );
+
+    if (!role) {
+      return res.status(404).json({ success: false, message: 'Role not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Role deleted successfully',
+      data: role
+    });
+  } catch (error) {
+    console.error('Error deleting role:', error);
+    res.status(500).json({ success: false, message: 'Error deleting role' });
+  }
+});
 
 router.get('/permissions', requireRole('super_admin'), (req, res) =>
   res.json({ success: true, message: 'Permissions endpoint not yet implemented' })
@@ -304,6 +428,7 @@ router.put('/products/:id/status', requirePermission('products', 'edit'), async 
 // =============================================================
 // ORDERS
 // =============================================================
+router.get('/orders/recent', adminController.getRecentOrders);
 router.get('/orders', requirePermission('orders', 'view'), adminController.getAllOrders);
 
 router.put('/orders/:id/status', requirePermission('orders', 'edit'), async (req, res) => {

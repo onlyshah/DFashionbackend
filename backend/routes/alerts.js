@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
-const { requireRole } = require('../middleware/auth');
+const { auth, requireRole } = require('../middleware/auth');
 const User = require('../models/User');
 
 // In-memory storage for alerts (can be moved to model later)
@@ -43,7 +42,7 @@ router.get('/', async (req, res) => {
 });
 
 // GET /api/alerts/:alertId - Get single alert
-router.get('/:alertId', [auth], async (req, res) => {
+router.get('/:alertId', auth, async (req, res) => {
   try {
     const alert = alertsStore.get(req.params.alertId);
 
@@ -102,7 +101,7 @@ router.delete('/:alertId', [auth], async (req, res) => {
 // ============ ALERT CONFIGURATION ============
 
 // GET /api/alerts/config - Get alert configuration for user
-router.get('/config/user', [auth], async (req, res) => {
+router.get('/config/user', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.id).select('alertPreferences notificationSettings');
 
@@ -148,7 +147,7 @@ router.put('/config/user', [auth], async (req, res) => {
 // ============ ADMIN ALERT CONFIGURATION ============
 
 // GET /api/alerts/admin/config - Get system-wide alert configuration (admin only)
-router.get('/admin/config', [auth, requireRole(['admin', 'super_admin'])], async (req, res) => {
+router.get('/admin/config', auth, requireRole(['admin', 'super_admin']), async (req, res) => {
   try {
     res.json({
       success: true,
@@ -173,7 +172,7 @@ router.get('/admin/config', [auth, requireRole(['admin', 'super_admin'])], async
 });
 
 // POST /api/alerts/admin/trigger - Trigger system alert (admin only)
-router.post('/admin/trigger', [auth, requireRole(['admin', 'super_admin'])], async (req, res) => {
+router.post('/admin/trigger', auth, requireRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const { type, severity, title, message, targetUsers = 'all', data = {} } = req.body;
 
@@ -220,7 +219,7 @@ router.post('/admin/trigger', [auth, requireRole(['admin', 'super_admin'])], asy
 });
 
 // GET /api/alerts/admin/stats - Get alert statistics (admin only)
-router.get('/admin/stats', [auth, requireRole(['admin', 'super_admin'])], async (req, res) => {
+router.get('/admin/stats', auth, requireRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const allAlerts = Array.from(alertsStore.values());
     const unreadAlerts = allAlerts.filter(a => !a.read);

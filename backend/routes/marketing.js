@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const auth = require('../middleware/auth');
-const { requireRole } = require('../middleware/auth');
+const { auth, requireRole } = require('../middleware/auth');
 const Campaign = require('../models/Campaign');
 const Coupon = require('../models/Coupon');
 const FlashSale = require('../models/FlashSale');
@@ -55,7 +54,7 @@ router.get('/flash-sales/:saleId', async (req, res) => {
 });
 
 // POST /api/marketing/flash-sales - Create new flash sale (admin only)
-router.post('/flash-sales', [auth, requireRole(['admin', 'super_admin'])], async (req, res) => {
+router.post('/flash-sales', auth, requireRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const { name, description, startTime, endTime, products, bannerImage } = req.body;
 
@@ -159,7 +158,7 @@ router.get('/campaigns', async (req, res) => {
 });
 
 // POST /api/marketing/campaigns - Create campaign
-router.post('/campaigns', [auth, requireRole(['admin', 'super_admin'])], async (req, res) => {
+router.post('/campaigns', auth, requireRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const { name, type, description, targetAudience, budget, startDate, endDate, content } = req.body;
 
@@ -287,7 +286,7 @@ router.get('/banners', async (req, res) => {
 });
 
 // POST /api/marketing/banners - Create banner
-router.post('/banners', [auth, requireRole(['admin', 'super_admin'])], async (req, res) => {
+router.post('/banners', auth, requireRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const { title, image, link, position, startDate, endDate } = req.body;
 
@@ -341,7 +340,7 @@ router.get('/coupons', [auth, requireRole(['admin', 'super_admin'])], async (req
 });
 
 // POST /api/marketing/coupons - Create new coupon
-router.post('/coupons', [auth, requireRole(['admin', 'super_admin'])], async (req, res) => {
+router.post('/coupons', auth, requireRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const { code, discountValue, type, maxUses, minOrderValue, maxDiscount, startDate, endDate, applicableProducts } = req.body;
 
@@ -434,7 +433,7 @@ router.post('/coupons/validate', auth, async (req, res) => {
 // ============ NOTIFICATIONS ============
 
 // POST /api/marketing/push-notification - Send push notification
-router.post('/push-notification', [auth, requireRole(['admin', 'super_admin'])], async (req, res) => {
+router.post('/push-notification', auth, requireRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const { title, message, targetAudience, targetUsers, imageUrl } = req.body;
 
@@ -459,7 +458,7 @@ router.post('/push-notification', [auth, requireRole(['admin', 'super_admin'])],
 });
 
 // POST /api/marketing/email - Send email to users
-router.post('/email', [auth, requireRole(['admin', 'super_admin'])], async (req, res) => {
+router.post('/email', auth, requireRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const { subject, body, recipients, html } = req.body;
 
@@ -483,7 +482,7 @@ router.post('/email', [auth, requireRole(['admin', 'super_admin'])], async (req,
 });
 
 // POST /api/marketing/sms - Send SMS to users
-router.post('/sms', [auth, requireRole(['admin', 'super_admin'])], async (req, res) => {
+router.post('/sms', auth, requireRole(['admin', 'super_admin']), async (req, res) => {
   try {
     const { message, recipients } = req.body;
 

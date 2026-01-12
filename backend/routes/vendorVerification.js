@@ -177,7 +177,7 @@ router.post('/:vendorId/reject', auth, requireRole('super_admin'), async (req, r
 // @route   POST /api/vendor-verification/:vendorId/suspend
 // @desc    Suspend vendor
 // @access  Private/Super Admin
-router.post('/:vendorId/suspend', auth, requireSuperAdmin, async (req, res) => {
+router.post('/:vendorId/suspend', auth, requireRole('super_admin'), async (req, res) => {
   try {
     const { reason } = req.body;
 
@@ -233,7 +233,7 @@ router.post('/:vendorId/suspend', auth, requireSuperAdmin, async (req, res) => {
 // @route   GET /api/vendor-verification/stats
 // @desc    Get vendor verification statistics
 // @access  Private/Super Admin
-router.get('/stats', auth, requireSuperAdmin, async (req, res) => {
+router.get('/stats', auth, requireRole('super_admin'), async (req, res) => {
   try {
     const stats = await User.aggregate([
       { $match: { role: 'vendor' } },
