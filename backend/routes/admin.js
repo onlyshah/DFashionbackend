@@ -217,18 +217,119 @@ router.delete('/roles/:roleId', requireRole('super_admin'), async (req, res) => 
   }
 });
 
-router.get('/permissions', requireRole('super_admin'), (req, res) =>
-  res.json({ success: true, message: 'Permissions endpoint not yet implemented' })
-);
-router.post('/permissions', requireRole('super_admin'), (req, res) =>
-  res.json({ success: true, message: 'Create permission endpoint not yet implemented' })
-);
-router.put('/permissions/:permissionId', requireRole('super_admin'), (req, res) =>
-  res.json({ success: true, message: 'Update permission endpoint not yet implemented' })
-);
-router.delete('/permissions/:permissionId', requireRole('super_admin'), (req, res) =>
-  res.json({ success: true, message: 'Delete permission endpoint not yet implemented' })
-);
+// GET all permissions
+router.get('/permissions', requireRole('super_admin'), async (req, res) => {
+  try {
+    const { page = 1, limit = 100, module = '' } = req.query;
+    const skip = (page - 1) * limit;
+
+    const Permission = models.Permission;
+    let where = {};
+    if (module) {
+      where.module = module;
+    }
+
+    const { count, rows } = await Permission.findAndCountAll({
+      where,
+      order: [['createdAt', 'DESC']],
+      limit: parseInt(limit),
+      offset: skip,
+      raw: true
+    });
+
+    res.json({
+      success: true,
+      data: rows || [],
+      pagination: { page: parseInt(page), limit: parseInt(limit), total: count, pages: Math.ceil(count / limit) }
+    });
+  } catch (error) {
+    console.error('Error fetching permissions:', error.message);
+    res.status(500).json({ success: false, message: 'Error fetching permissions' });
+  }
+});
+
+// POST create new permission (Super Admin only)
+router.post('/permissions', requireRole('super_admin'), async (req, res) => {
+  try {
+    const { name, displayName, description, module, actions } = req.body;
+
+    if (!name || !displayName || !module) {
+      return res.status(400).json({ success: false, message: 'Missing required fields' });
+    }
+
+    const Permission = models.Permission;
+    const newPermission = await Permission.create({
+      name,
+      displayName,
+      description,
+      module,
+      actions: Array.isArray(actions) ? JSON.stringify(actions) : actions
+    });
+
+    res.status(201).json({
+      success: true,
+      message: 'Permission created successfully',
+      data: newPermission
+    });
+  } catch (error) {
+    console.error('Error creating permission:', error);
+    res.status(500).json({ success: false, message: 'Error creating permission' });
+  }
+});
+
+// PUT update permission (Super Admin only)
+router.put('/permissions/:permissionId', requireRole('super_admin'), async (req, res) => {
+  try {
+    const { name, displayName, description, module, actions } = req.body;
+    const Permission = models.Permission;
+
+    const updatedPermission = await Permission.update(
+      {
+        name,
+        displayName,
+        description,
+        module,
+        actions: Array.isArray(actions) ? JSON.stringify(actions) : actions
+      },
+      { where: { id: req.params.permissionId }, returning: true }
+    );
+
+    if (updatedPermission[0] === 0) {
+      return res.status(404).json({ success: false, message: 'Permission not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Permission updated successfully',
+      data: updatedPermission[1][0]
+    });
+  } catch (error) {
+    console.error('Error updating permission:', error);
+    res.status(500).json({ success: false, message: 'Error updating permission' });
+  }
+});
+
+// DELETE permission (Super Admin only)
+router.delete('/permissions/:permissionId', requireRole('super_admin'), async (req, res) => {
+  try {
+    const Permission = models.Permission;
+    const deleted = await Permission.destroy({
+      where: { id: req.params.permissionId }
+    });
+
+    if (deleted === 0) {
+      return res.status(404).json({ success: false, message: 'Permission not found' });
+    }
+
+    res.json({
+      success: true,
+      message: 'Permission deleted successfully'
+    });
+  } catch (error) {
+    console.error('Error deleting permission:', error);
+    res.status(500).json({ success: false, message: 'Error deleting permission' });
+  }
+});
 
 // =============================================================
 // DEPARTMENT DASHBOARDS
@@ -439,6 +540,79 @@ router.put('/orders/:id/status', requirePermission('orders', 'edit'), async (req
     res.json({ success: true, message: `Order updated to ${status}` });
   } catch (e) {
     res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+// =============================================================
+// ACTIVITY LOGS
+// =============================================================
+router.get('/activity-logs', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 25;
+    const offset = (page - 1) * limit;
+
+    // Try to get AuditLog from Postgres models first
+    try {
+      const models = require('../models_sql');
+      const AuditLog = models._raw.AuditLog;
+      
+      if (AuditLog) {
+        const { count, rows } = await AuditLog.findAndCountAll({
+          order: [['createdAt', 'DESC']],
+          limit,
+          offset,
+          raw: true
+        });
+
+        return res.json({
+          success: true,
+          data: {
+            logs: rows || [],
+            pagination: { page, limit, total: count, pages: Math.ceil(count / limit) }
+          }
+        });
+      }
+    } catch (err) {
+      console.log('Postgres AuditLog not available, trying MongoDB...');
+    }
+
+    // Fallback to MongoDB if available
+    try {
+      const models = require('../models');
+      const AuditLog = models.AuditLog;
+      
+      if (AuditLog) {
+        const count = await AuditLog.countDocuments();
+        const logs = await AuditLog.find()
+          .sort({ createdAt: -1 })
+          .limit(limit)
+          .skip(offset)
+          .lean();
+
+        return res.json({
+          success: true,
+          data: {
+            logs: logs || [],
+            pagination: { page, limit, total: count, pages: Math.ceil(count / limit) }
+          }
+        });
+      }
+    } catch (err) {
+      console.log('MongoDB AuditLog not available');
+    }
+
+    // Return empty logs if neither database has data
+    res.json({
+      success: true,
+      data: {
+        logs: [],
+        pagination: { page, limit, total: 0, pages: 0 }
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching activity logs:', error.message);
+    res.status(500).json({ success: false, message: 'Error fetching activity logs', error: error.message });
   }
 });
 

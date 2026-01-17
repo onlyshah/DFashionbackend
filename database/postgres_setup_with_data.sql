@@ -535,6 +535,123 @@ SELECT '🎉 DFashion PostgreSQL Database Setup Complete! 🎉' as message,
        'You can now connect your application to this database' as next_step;
 
 -- =====================================================
+-- INVENTORY MANAGEMENT TABLES
+-- =====================================================
+
+-- Warehouses table (if not already exists)
+CREATE TABLE IF NOT EXISTS warehouses (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    location VARCHAR(255),
+    address TEXT,
+    city VARCHAR(100),
+    state VARCHAR(100),
+    country VARCHAR(100),
+    postal_code VARCHAR(20),
+    phone VARCHAR(20),
+    manager_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Inventories table (Product stock by warehouse)
+CREATE TABLE IF NOT EXISTS inventories (
+    id SERIAL PRIMARY KEY,
+    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+    sku VARCHAR(100) NOT NULL UNIQUE,
+    quantity INTEGER DEFAULT 0 CHECK (quantity >= 0),
+    minimum_level INTEGER DEFAULT 10,
+    maximum_level INTEGER DEFAULT 1000,
+    status VARCHAR(50) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'discontinued')),
+    notes TEXT,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_movement TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Inventory Alerts table
+CREATE TABLE IF NOT EXISTS inventory_alerts (
+    id SERIAL PRIMARY KEY,
+    type VARCHAR(50) NOT NULL CHECK (type IN ('critical', 'warning', 'info')),
+    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    warehouse_id INTEGER REFERENCES warehouses(id) ON DELETE SET NULL,
+    status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending', 'acknowledged', 'resolved')),
+    message TEXT NOT NULL,
+    current_quantity INTEGER DEFAULT 0,
+    minimum_level INTEGER DEFAULT 10,
+    acknowledged_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    acknowledged_at TIMESTAMP,
+    resolved_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Inventory History table (Transaction audit trail)
+CREATE TABLE IF NOT EXISTS inventory_histories (
+    id SERIAL PRIMARY KEY,
+    transaction_id VARCHAR(100) NOT NULL UNIQUE,
+    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    type VARCHAR(50) NOT NULL CHECK (type IN ('in', 'out', 'adjustment', 'receipt', 'sale', 'return', 'damage', 'expired')),
+    quantity INTEGER NOT NULL,
+    warehouse_id INTEGER NOT NULL REFERENCES warehouses(id) ON DELETE CASCADE,
+    reference INTEGER,
+    reference_type VARCHAR(50) DEFAULT 'Purchase' CHECK (reference_type IN ('Order', 'Purchase', 'Return')),
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    notes TEXT,
+    timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indexes for better query performance
+CREATE INDEX IF NOT EXISTS idx_inventories_product_id ON inventories(product_id);
+CREATE INDEX IF NOT EXISTS idx_inventories_warehouse_id ON inventories(warehouse_id);
+CREATE INDEX IF NOT EXISTS idx_inventories_sku ON inventories(sku);
+CREATE INDEX IF NOT EXISTS idx_inventory_alerts_product_id ON inventory_alerts(product_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_alerts_status ON inventory_alerts(status);
+CREATE INDEX IF NOT EXISTS idx_inventory_alerts_created_at ON inventory_alerts(created_at);
+CREATE INDEX IF NOT EXISTS idx_inventory_histories_product_id ON inventory_histories(product_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_histories_warehouse_id ON inventory_histories(warehouse_id);
+CREATE INDEX IF NOT EXISTS idx_inventory_histories_timestamp ON inventory_histories(timestamp);
+CREATE INDEX IF NOT EXISTS idx_inventory_histories_type ON inventory_histories(type);
+
+-- =====================================================
+-- SAMPLE INVENTORY DATA
+-- =====================================================
+
+-- Insert sample warehouses
+INSERT INTO warehouses (name, location, city, state, country, postal_code) VALUES
+('Main Warehouse', 'East Delhi', 'Delhi', 'Delhi', 'India', '110001'),
+('Secondary Warehouse', 'Mumbai', 'Mumbai', 'Maharashtra', 'India', '400001'),
+('Regional Hub', 'Bangalore', 'Bangalore', 'Karnataka', 'India', '560001')
+ON CONFLICT DO NOTHING;
+
+-- Insert sample inventory items
+INSERT INTO inventories (product_id, warehouse_id, sku, quantity, minimum_level, maximum_level, status) 
+SELECT p.id, w.id, CONCAT('SKU-', LPAD(p.id::TEXT, 4, '0'), '-', LPAD(w.id::TEXT, 2, '0')), 
+        (RANDOM() * 200 + 50)::INTEGER,
+        10, 500, 'active'
+FROM products p 
+CROSS JOIN warehouses w 
+LIMIT 20
+ON CONFLICT (sku) DO NOTHING;
+
+-- =====================================================
+-- INVENTORY DATA STATISTICS
+-- =====================================================
+
+SELECT 'Warehouse Count' as metric, COUNT(*)::TEXT as value FROM warehouses
+UNION ALL
+SELECT 'Inventory Items', COUNT(*)::TEXT FROM inventories
+UNION ALL
+SELECT 'Inventory Alerts', COUNT(*)::TEXT FROM inventory_alerts
+UNION ALL
+SELECT 'Inventory Transactions', COUNT(*)::TEXT FROM inventory_histories;
+
+-- =====================================================
 -- LOGIN CREDENTIALS FOR TESTING
 -- =====================================================
 

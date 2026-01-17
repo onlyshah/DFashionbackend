@@ -53,11 +53,16 @@ async function seed() {
     await sequelize.sync({ alter: true });
     console.log('✅ Synced\n');
 
-    // 1. ROLES (5)
-    const roles = [{ name: 'super_admin' }, { name: 'admin' }, { name: 'vendor' }, { name: 'customer' }, { name: 'moderator' }];
+    // 1. ROLES (4 Standard RBAC Roles)
+    const roles = [
+      { name: 'super_admin', displayName: 'Super Administrator', description: 'Full system access with all permissions', level: 1, isActive: true, isSystem: true },
+      { name: 'admin', displayName: 'Administrator', description: 'Administrative access with most permissions (no settings management)', level: 2, isActive: true, isSystem: true },
+      { name: 'manager', displayName: 'Manager', description: 'Management access with limited permissions (dashboard, users, products, orders)', level: 3, isActive: true, isSystem: true },
+      { name: 'customer', displayName: 'Customer', description: 'Basic customer access (dashboard only)', level: 4, isActive: true, isSystem: true }
+    ];
     const roleIds = [];
     for (const r of roles) { const x = await models.Role.create(r); roleIds.push(x.id); count++; }
-    console.log('1️⃣  Roles: 5');
+    console.log('1️⃣  Roles: 4 (super_admin, admin, manager, customer)');
 
     // 1.a DEPARTMENTS (if model exists)
     const departments = [
@@ -93,45 +98,74 @@ async function seed() {
     }
     console.log('2️⃣  Users: 45');
 
-    // 3. PERMISSIONS (15)
+    // 3. PERMISSIONS (22 - Better structure with modules)
     const perms = [
-      { name: 'create_user', displayName: 'Create User', module: 'users' },
-      { name: 'edit_user', displayName: 'Edit User', module: 'users' },
-      { name: 'delete_user', displayName: 'Delete User', module: 'users' },
-      { name: 'view_products', displayName: 'View Products', module: 'products' },
-      { name: 'create_product', displayName: 'Create Product', module: 'products' },
-      { name: 'edit_product', displayName: 'Edit Product', module: 'products' },
-      { name: 'delete_product', displayName: 'Delete Product', module: 'products' },
-      { name: 'view_orders', displayName: 'View Orders', module: 'orders' },
-      { name: 'manage_orders', displayName: 'Manage Orders', module: 'orders' },
-      { name: 'view_payments', displayName: 'View Payments', module: 'payments' },
-      { name: 'view_reports', displayName: 'View Reports', module: 'reports' },
-      { name: 'manage_content', displayName: 'Manage Content', module: 'content' },
-      { name: 'manage_promotions', displayName: 'Manage Promotions', module: 'promotions' },
-      { name: 'view_analytics', displayName: 'View Analytics', module: 'analytics' },
-      { name: 'manage_users', displayName: 'Manage Users', module: 'users' }
+      // Dashboard (1)
+      { name: 'dashboard:view', displayName: 'View Dashboard', description: 'View dashboard and analytics', module: 'dashboard', actions: JSON.stringify(['view']) },
+      // Users (4)
+      { name: 'users:view', displayName: 'View Users', description: 'View all users in the system', module: 'users', actions: JSON.stringify(['view']) },
+      { name: 'users:create', displayName: 'Create Users', description: 'Create new users in the system', module: 'users', actions: JSON.stringify(['create']) },
+      { name: 'users:update', displayName: 'Update Users', description: 'Update user information and profiles', module: 'users', actions: JSON.stringify(['update']) },
+      { name: 'users:delete', displayName: 'Delete Users', description: 'Delete users from the system', module: 'users', actions: JSON.stringify(['delete']) },
+      // Products (4)
+      { name: 'products:view', displayName: 'View Products', description: 'View all products in the catalog', module: 'products', actions: JSON.stringify(['view']) },
+      { name: 'products:create', displayName: 'Create Products', description: 'Create new products in the catalog', module: 'products', actions: JSON.stringify(['create']) },
+      { name: 'products:update', displayName: 'Update Products', description: 'Update product information and details', module: 'products', actions: JSON.stringify(['update']) },
+      { name: 'products:delete', displayName: 'Delete Products', description: 'Delete products from the catalog', module: 'products', actions: JSON.stringify(['delete']) },
+      // Orders (3)
+      { name: 'orders:view', displayName: 'View Orders', description: 'View all customer orders', module: 'orders', actions: JSON.stringify(['view']) },
+      { name: 'orders:update', displayName: 'Update Orders', description: 'Update order status and information', module: 'orders', actions: JSON.stringify(['update']) },
+      { name: 'orders:delete', displayName: 'Delete Orders', description: 'Delete orders from the system', module: 'orders', actions: JSON.stringify(['delete']) },
+      // Analytics (2)
+      { name: 'analytics:view', displayName: 'View Analytics', description: 'View analytics and reports', module: 'analytics', actions: JSON.stringify(['view']) },
+      { name: 'analytics:export', displayName: 'Export Analytics', description: 'Export analytics data to external formats', module: 'analytics', actions: JSON.stringify(['export']) },
+      // Roles (5)
+      { name: 'roles:view', displayName: 'View Roles', description: 'View all system roles', module: 'roles', actions: JSON.stringify(['view']) },
+      { name: 'roles:create', displayName: 'Create Roles', description: 'Create new roles with specific permissions', module: 'roles', actions: JSON.stringify(['create']) },
+      { name: 'roles:update', displayName: 'Update Roles', description: 'Update role information and permissions', module: 'roles', actions: JSON.stringify(['update']) },
+      { name: 'roles:delete', displayName: 'Delete Roles', description: 'Delete roles from the system', module: 'roles', actions: JSON.stringify(['delete']) },
+      { name: 'roles:manage', displayName: 'Manage Roles', description: 'Full role management including creation, update, and deletion', module: 'roles', actions: JSON.stringify(['create', 'read', 'update', 'delete']) },
+      // Settings (2)
+      { name: 'settings:view', displayName: 'View Settings', description: 'View application settings and configuration', module: 'settings', actions: JSON.stringify(['view']) },
+      { name: 'settings:update', displayName: 'Update Settings', description: 'Update application settings and configuration', module: 'settings', actions: JSON.stringify(['update']) },
+      // Logs (1)
+      { name: 'logs:view', displayName: 'View Logs', description: 'View activity logs and audit trail', module: 'logs', actions: JSON.stringify(['view']) }
     ];
     for (const p of perms) { await models.Permission.create(p); count++; }
-    console.log('3️⃣  Permissions: 15');
+    console.log('3️⃣  Permissions: 22 (dashboard, users, products, orders, analytics, roles, settings, logs)');
 
-    // 4. MODULES (8)
+    // 4. MODULES (8 - Aligns with permissions)
     const mods = [
-      { name: 'users', displayName: 'User Management' }, { name: 'products', displayName: 'Products' },
-      { name: 'orders', displayName: 'Orders' }, { name: 'payments', displayName: 'Payments' },
-      { name: 'promotions', displayName: 'Promotions' }, { name: 'content', displayName: 'Content' },
-      { name: 'analytics', displayName: 'Analytics' }, { name: 'reports', displayName: 'Reports' }
+      { name: 'dashboard', displayName: 'Dashboard' }, { name: 'users', displayName: 'User Management' },
+      { name: 'products', displayName: 'Products' }, { name: 'orders', displayName: 'Orders' },
+      { name: 'analytics', displayName: 'Analytics' }, { name: 'roles', displayName: 'Roles & Permissions' },
+      { name: 'settings', displayName: 'Settings' }, { name: 'logs', displayName: 'Activity Logs' }
     ];
     for (const m of mods) { await models.Module.create(m); count++; }
-    console.log('4️⃣  Modules: 8');
+    console.log('4️⃣  Modules: 8 (dashboard, users, products, orders, analytics, roles, settings, logs)');
 
-    // 5. ROLE PERMISSIONS (25)
-    for (let i = 0; i < 25; i++) {
-      try {
-        await models.RolePermission.create({ roleId: rand(1, 5), permissionId: rand(1, 15) });
-        count++;
-      } catch (e) {}
+    // 5. ROLE PERMISSIONS - Map permissions to roles based on role levels
+    const rolePermissionMap = {
+      super_admin: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22], // All 22 permissions
+      admin: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21], // All except settings:update
+      manager: [1, 2, 3, 4, 6, 7, 10, 12, 13], // Limited: dashboard, users:view/update, products:view/update, orders:view/update, analytics:view, logs:view
+      customer: [1] // Dashboard only
+    };
+    
+    let rpCount = 0;
+    for (const [roleName, permIds] of Object.entries(rolePermissionMap)) {
+      const role = roles.find(r => r.name === roleName);
+      if (!role) continue;
+      const roleId = roleIds[roles.indexOf(role)];
+      
+      for (const permId of permIds) {
+        try {
+          await models.RolePermission.create({ roleId: roleId, permissionId: permId });
+          rpCount++;
+        } catch (e) { }
+      }
     }
-    console.log('5️⃣  Role Permissions: 25');
+    console.log('5️⃣  Role Permissions: ' + rpCount);
 
     // 6. SESSIONS (20)
     for (let i = 0; i < 20; i++) {

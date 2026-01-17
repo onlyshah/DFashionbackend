@@ -10,6 +10,28 @@ const router = express.Router();
 // @access  Public
 router.get('/', async (req, res) => {
   try {
+    // Try PostgreSQL first
+    try {
+      const models = require('../models_sql');
+      const CategoryModel = models._raw.Category;
+      
+      if (CategoryModel) {
+        const categories = await CategoryModel.findAll({
+          where: { isActive: true || null },
+          order: [['name', 'ASC']],
+          raw: true
+        });
+
+        return res.json({
+          success: true,
+          data: categories || []
+        });
+      }
+    } catch (pgErr) {
+      console.log('PostgreSQL Category not available, trying MongoDB...');
+    }
+
+    // Fallback to MongoDB
     const categories = await Category.find({ isActive: true })
       .sort({ sortOrder: 1, name: 1 });
 
@@ -35,7 +57,8 @@ router.get('/', async (req, res) => {
     console.error('Get categories error:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Server error' 
+      message: 'Server error',
+      error: error.message
     });
   }
 });

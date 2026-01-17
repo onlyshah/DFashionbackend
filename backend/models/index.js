@@ -6,7 +6,9 @@ const dbType = (process.env.DB_TYPE || '').toLowerCase();
 const MONGO_MODEL_NAMES = [
   'Product','User','UserBehavior','Post','Story','Category','Brand','Role','Department','Order','Cart','Wishlist','Notification','QuickAction','Permission','RolePermission','SearchHistory','Session','StyleInspiration','Ticket','Transaction','Payment','ProductComment','ProductShare','Reward',
   // Enterprise audit additions
-  'KYCDocument','SellerPerformance','SellerCommission','Return','Shipment','Courier','ShippingCharge','Coupon','FlashSale','Page','Banner','FAQ'
+  'KYCDocument','SellerPerformance','SellerCommission','Return','Shipment','Courier','ShippingCharge','Coupon','FlashSale','Page','Banner','FAQ',
+  // Inventory management
+  'Inventory','InventoryAlert','InventoryHistory'
 ];
 
 // add new models introduced by enterprise audit

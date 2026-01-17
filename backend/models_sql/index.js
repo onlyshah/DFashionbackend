@@ -45,6 +45,9 @@ const defineTransaction = require('./Transaction');
 const defineTicket = require('./Ticket');
 const defineQuickAction = require('./QuickAction');
 const defineStyleInspiration = require('./StyleInspiration');
+const defineInventory = require('./Inventory');
+const defineInventoryAlert = require('./InventoryAlert');
+const defineInventoryHistory = require('./InventoryHistory');
 
 const Role = defineRole(sequelize, Sequelize.DataTypes);
 const Department = defineDepartment(sequelize, Sequelize.DataTypes);
@@ -91,6 +94,9 @@ const Transaction = defineTransaction(sequelize, Sequelize.DataTypes);
 const Ticket = defineTicket(sequelize, Sequelize.DataTypes);
 const QuickAction = defineQuickAction(sequelize, Sequelize.DataTypes);
 const StyleInspiration = defineStyleInspiration(sequelize, Sequelize.DataTypes);
+const Inventory = defineInventory(sequelize, Sequelize.DataTypes);
+const InventoryAlert = defineInventoryAlert(sequelize, Sequelize.DataTypes);
+const InventoryHistory = defineInventoryHistory(sequelize, Sequelize.DataTypes);
 
 // SequelizeQueryWrapper class - provides Promise-based chainable interface
 class SequelizeQueryWrapper {
@@ -283,6 +289,9 @@ const wrappedTransaction = createMongooseLikeWrapper(Transaction);
 const wrappedTicket = createMongooseLikeWrapper(Ticket);
 const wrappedQuickAction = createMongooseLikeWrapper(QuickAction);
 const wrappedStyleInspiration = createMongooseLikeWrapper(StyleInspiration);
+const wrappedInventory = createMongooseLikeWrapper(Inventory);
+const wrappedInventoryAlert = createMongooseLikeWrapper(InventoryAlert);
+const wrappedInventoryHistory = createMongooseLikeWrapper(InventoryHistory);
 
 module.exports = {
   sequelize,
@@ -378,6 +387,9 @@ module.exports = {
     Transaction,
     Ticket,
     QuickAction,
-    StyleInspiration
+    StyleInspiration,
+    Inventory: wrappedInventory,
+    InventoryAlert: wrappedInventoryAlert,
+    InventoryHistory: wrappedInventoryHistory
   }
 };

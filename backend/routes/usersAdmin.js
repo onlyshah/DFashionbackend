@@ -104,13 +104,15 @@ router.get('/creators', verifyAdminToken, checkModels, async (req, res) => {
       raw: true
     });
 
-    res.json({
+    const response = {
       success: true,
       data: {
         users: rows || [],
         pagination: { page, limit, total: count, pages: Math.ceil(count / limit) }
       }
-    });
+    };
+    console.log(`[Creators API] Found ${count} creators, returning ${rows?.length || 0} rows for page ${page}`);
+    res.json(response);
   } catch (error) {
     console.error('Error fetching creators:', error.message);
     res.status(500).json({ success: false, message: 'Error fetching creators' });
@@ -126,13 +128,13 @@ router.get('/admins', verifyAdminToken, checkModels, async (req, res) => {
     const limit = parseInt(req.query.limit) || 25;
     const offset = (page - 1) * limit;
 
-    const { Sequelize } = require('../config/sequelize');
+    // Get Op from sequelize
+    const { Op } = require('sequelize');
+    
     const { count, rows } = await User.findAndCountAll({
-      where: Sequelize.where(
-        Sequelize.fn('LOWER', Sequelize.col('role')),
-        'IN',
-        ['admin', 'super_admin']
-      ),
+      where: {
+        role: { [Op.in]: ['admin', 'super_admin', 'superadmin'] }
+      },
       order: [['createdAt', 'DESC']],
       limit,
       offset,
@@ -147,8 +149,8 @@ router.get('/admins', verifyAdminToken, checkModels, async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Error fetching admins:', error.message);
-    res.status(500).json({ success: false, message: 'Error fetching admins' });
+    console.error('Error fetching admins:', error.message, error.stack);
+    res.status(500).json({ success: false, message: 'Error fetching admins', error: error.message });
   }
 });
 
