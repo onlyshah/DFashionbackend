@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
 const payload = {
-  userId: 'test-admin-123',
+  userId: 1,  // Use numeric ID that exists in the database
   email: 'admin@dfashion.test',
   role: 'super_admin',
   iat: Math.floor(Date.now() / 1000),

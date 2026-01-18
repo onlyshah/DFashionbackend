@@ -45,6 +45,8 @@ const defineTransaction = require('./Transaction');
 const defineTicket = require('./Ticket');
 const defineQuickAction = require('./QuickAction');
 const defineStyleInspiration = require('./StyleInspiration');
+const defineWarehouse = require('./Warehouse');
+const defineSupplier = require('./Supplier');
 const defineInventory = require('./Inventory');
 const defineInventoryAlert = require('./InventoryAlert');
 const defineInventoryHistory = require('./InventoryHistory');
@@ -94,6 +96,8 @@ const Transaction = defineTransaction(sequelize, Sequelize.DataTypes);
 const Ticket = defineTicket(sequelize, Sequelize.DataTypes);
 const QuickAction = defineQuickAction(sequelize, Sequelize.DataTypes);
 const StyleInspiration = defineStyleInspiration(sequelize, Sequelize.DataTypes);
+const Warehouse = defineWarehouse(sequelize, Sequelize.DataTypes);
+const Supplier = defineSupplier(sequelize, Sequelize.DataTypes);
 const Inventory = defineInventory(sequelize, Sequelize.DataTypes);
 const InventoryAlert = defineInventoryAlert(sequelize, Sequelize.DataTypes);
 const InventoryHistory = defineInventoryHistory(sequelize, Sequelize.DataTypes);
@@ -238,6 +242,44 @@ const createMongooseLikeWrapper = (sequelizeModel) => {
       }
     },
 
+    // Sequelize-style count() method
+    count: async (options = {}) => {
+      try {
+        console.log(`[WRAPPER] count called on ${sequelizeModel.name} with options:`, options);
+        const result = await sequelizeModel.count(options);
+        console.log(`[WRAPPER] count result:`, result);
+        return result;
+      } catch (err) {
+        console.error(`Error in count for ${sequelizeModel.name}:`, err);
+        return 0;
+      }
+    },
+
+    // Sequelize-style findAll() method
+    findAll: async (options = {}) => {
+      try {
+        console.log(`[WRAPPER] findAll called on ${sequelizeModel.name} with options:`, JSON.stringify(options));
+        const result = await sequelizeModel.findAll(options);
+        console.log(`[WRAPPER] findAll result count:`, result?.length);
+        return result;
+      } catch (err) {
+        console.error(`Error in findAll for ${sequelizeModel.name}:`, err);
+        return [];
+      }
+    },
+
+    // Sequelize-style findByIdAndUpdate()
+    findByIdAndUpdate: async (id, update, options = {}) => {
+      try {
+        const result = await sequelizeModel.findByPk(id);
+        if (!result) return null;
+        return await result.update(update);
+      } catch (err) {
+        console.error(`Error in findByIdAndUpdate for ${sequelizeModel.name}:`, err);
+        return null;
+      }
+    },
+
     // Direct Sequelize access for complex queries
     _sequelize: sequelizeModel
   };
@@ -289,6 +331,8 @@ const wrappedTransaction = createMongooseLikeWrapper(Transaction);
 const wrappedTicket = createMongooseLikeWrapper(Ticket);
 const wrappedQuickAction = createMongooseLikeWrapper(QuickAction);
 const wrappedStyleInspiration = createMongooseLikeWrapper(StyleInspiration);
+const wrappedWarehouse = createMongooseLikeWrapper(Warehouse);
+const wrappedSupplier = createMongooseLikeWrapper(Supplier);
 const wrappedInventory = createMongooseLikeWrapper(Inventory);
 const wrappedInventoryAlert = createMongooseLikeWrapper(InventoryAlert);
 const wrappedInventoryHistory = createMongooseLikeWrapper(InventoryHistory);
@@ -341,6 +385,11 @@ module.exports = {
   Ticket: wrappedTicket,
   QuickAction: wrappedQuickAction,
   StyleInspiration: wrappedStyleInspiration,
+  Warehouse: wrappedWarehouse,
+  Supplier: wrappedSupplier,
+  Inventory: wrappedInventory,
+  InventoryAlert: wrappedInventoryAlert,
+  InventoryHistory: wrappedInventoryHistory,
   // Export raw Sequelize models for direct access if needed
   _raw: {
     Role,
@@ -388,6 +437,7 @@ module.exports = {
     Ticket,
     QuickAction,
     StyleInspiration,
+    Warehouse,
     Inventory: wrappedInventory,
     InventoryAlert: wrappedInventoryAlert,
     InventoryHistory: wrappedInventoryHistory

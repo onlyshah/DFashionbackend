@@ -513,6 +513,90 @@ router.delete('/notifications', requirePermission('dashboard', 'view'), async (r
 // =============================================================
 // PRODUCTS
 // =============================================================
+
+// Demo endpoint (public) - Returns sample products for testing without auth
+router.get('/demo/products', async (req, res) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    // Return demo/sample products
+    const demoProducts = [
+      {
+        _id: '1',
+        name: 'Premium T-Shirt',
+        description: 'High-quality cotton t-shirt',
+        price: 29.99,
+        category: 'Men',
+        isActive: true,
+        isFeatured: false
+      },
+      {
+        _id: '2',
+        name: 'Classic Jeans',
+        description: 'Comfortable denim jeans',
+        price: 59.99,
+        category: 'Men',
+        isActive: true,
+        isFeatured: true
+      },
+      {
+        _id: '3',
+        name: 'Casual Dress',
+        description: 'Perfect for everyday wear',
+        price: 44.99,
+        category: 'Women',
+        isActive: true,
+        isFeatured: false
+      },
+      {
+        _id: '4',
+        name: 'Sport Shoes',
+        description: 'Lightweight athletic shoes',
+        price: 79.99,
+        category: 'Shoes',
+        isActive: true,
+        isFeatured: true
+      },
+      {
+        _id: '5',
+        name: 'Winter Jacket',
+        description: 'Warm and stylish jacket',
+        price: 119.99,
+        category: 'Outerwear',
+        isActive: true,
+        isFeatured: false
+      }
+    ];
+
+    // Paginate
+    const paginatedProducts = demoProducts.slice(offset, offset + parseInt(limit));
+    const totalPages = Math.ceil(demoProducts.length / parseInt(limit));
+
+    res.json({
+      success: true,
+      data: {
+        products: paginatedProducts,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages,
+          totalProducts: demoProducts.length,
+          hasNextPage: parseInt(page) < totalPages,
+          hasPrevPage: parseInt(page) > 1
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Demo products error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch demo products',
+      error: error.message
+    });
+  }
+});
+
+// Authenticated endpoint - Returns actual products
 router.get('/products', requirePermission('products', 'view'), adminController.getAllProducts);
 
 router.put('/products/:id/status', requirePermission('products', 'edit'), async (req, res) => {
