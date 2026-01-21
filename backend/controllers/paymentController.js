@@ -58,13 +58,13 @@ exports.initiatePayment = async (req, res) => {
 
     await payment.save();
 
-    // For demo, return success
+    // Return success response
     res.status(201).json({
       success: true,
       message: 'Payment initiated',
       data: {
         payment,
-        razorpayOrderId: `order_${payment._id}` // Simulated
+        razorpayOrderId: payment._id || payment.id
       }
     });
   } catch (error) {

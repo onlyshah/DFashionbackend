@@ -39,22 +39,36 @@ const auth = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     console.log('🔐 Auth middleware - Token decoded, userId:', decoded.userId);
 
-    const user = await User.findById(decoded.userId).select('-password');
-    console.log('🔐 Auth middleware - User found:', !!user);
+    try {
+      // Use findById and select with proper Mongoose syntax
+      const user = await User.findById(decoded.userId).select('-password').lean();
+      console.log('🔐 Auth middleware - User found:', !!user);
 
-    if (!user) {
-      console.log('🔐 Auth middleware - User not found in database');
-      return res.status(401).json({ message: 'Token is not valid' });
+      if (!user) {
+        console.log('🔐 Auth middleware - User not found in database');
+        return res.status(401).json({ message: 'Token is not valid' });
+      }
+
+      if (!user.isActive) {
+        console.log('🔐 Auth middleware - User account is deactivated');
+        return res.status(401).json({ message: 'Account is deactivated' });
+      }
+
+      console.log('🔐 Auth middleware - User authenticated:', user.email, 'Role:', user.role);
+      req.user = user;
+      next();
+    } catch (dbError) {
+      console.error('❌ Auth middleware - Database error:', dbError.message);
+      // If user lookup fails, allow request to continue with decoded token data
+      // This prevents blocking when MongoDB is unavailable
+      req.user = {
+        _id: decoded.userId,
+        email: decoded.email || 'unknown',
+        role: decoded.role || 'user'
+      };
+      console.log('🔐 Auth middleware - Using token data as fallback');
+      next();
     }
-
-    if (!user.isActive) {
-      console.log('🔐 Auth middleware - User account is deactivated');
-      return res.status(401).json({ message: 'Account is deactivated' });
-    }
-
-    console.log('🔐 Auth middleware - User authenticated:', user.email, 'Role:', user.role);
-    req.user = user;
-    next();
   } catch (error) {
     console.error('❌ Auth middleware error:', error);
     res.status(401).json({ message: 'Token is not valid' });

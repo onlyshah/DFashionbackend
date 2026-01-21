@@ -172,9 +172,23 @@ const getConfig = (env = process.env.NODE_ENV) => {
   }
 };
 
-// Unified models entrypoint
+// Unified models entrypoint - returns appropriate models based on DB_TYPE
 const getModels = () => {
-  return require('../models');
+  const dbType = (process.env.DB_TYPE || 'mongodb').toLowerCase();
+  
+  if (dbType === 'postgres' || dbType === 'mysql') {
+    // Return SQL models when using PostgreSQL or MySQL
+    try {
+      return require('../models_sql');
+    } catch (err) {
+      console.error('[getModels] Failed to load SQL models:', err.message);
+      // Fallback to Mongoose if SQL models not available
+      return require('../models');
+    }
+  } else {
+    // Return Mongoose models for MongoDB
+    return require('../models');
+  }
 };
 
 module.exports = {

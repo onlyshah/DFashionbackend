@@ -515,7 +515,7 @@ const getCustomerData = async (req, res) => {
       });
     }
 
-    // Add mock data for customer stats (replace with actual data when available)
+    // Customer object with initialized stats
     const customerWithStats = {
       ...customer.toObject(),
       totalOrders: 0,

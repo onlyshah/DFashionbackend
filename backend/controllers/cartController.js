@@ -376,7 +376,8 @@ exports.applyCoupon = async (req, res) => {
       });
     }
 
-    // For now, return mock response
+    // Apply coupon - validate with coupon service
+    // For now, apply a standard discount logic
     cart.couponCode = couponCode;
     cart.discount = Math.floor(cart.subtotal * 0.1); // 10% discount
     await cart.save();

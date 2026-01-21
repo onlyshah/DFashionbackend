@@ -5,6 +5,7 @@ const defineDepartment = require('./Department');
 const defineUser = require('./User');
 const defineBrand = require('./Brand');
 const defineCategory = require('./Category');
+const defineSubCategory = require('./SubCategory');
 const defineProduct = require('./Product');
 const defineProductComment = require('./ProductComment');
 const definePost = require('./Post');
@@ -56,6 +57,7 @@ const Department = defineDepartment(sequelize, Sequelize.DataTypes);
 const User = defineUser(sequelize, Sequelize.DataTypes);
 const Brand = defineBrand(sequelize, Sequelize.DataTypes);
 const Category = defineCategory(sequelize, Sequelize.DataTypes);
+const SubCategory = defineSubCategory(sequelize, Sequelize.DataTypes);
 const Product = defineProduct(sequelize, Sequelize.DataTypes);
 const ProductComment = defineProductComment(sequelize, Sequelize.DataTypes);
 const Post = definePost(sequelize, Sequelize.DataTypes);
@@ -336,6 +338,22 @@ const wrappedSupplier = createMongooseLikeWrapper(Supplier);
 const wrappedInventory = createMongooseLikeWrapper(Inventory);
 const wrappedInventoryAlert = createMongooseLikeWrapper(InventoryAlert);
 const wrappedInventoryHistory = createMongooseLikeWrapper(InventoryHistory);
+const wrappedSubCategory = createMongooseLikeWrapper(SubCategory);
+
+// ============================================================================
+// SET UP SEQUELIZE RELATIONSHIPS & ASSOCIATIONS
+// ============================================================================
+// Category ↔ SubCategory (Critical for admin endpoints)
+Category.hasMany(SubCategory, { foreignKey: 'categoryId', as: 'SubCategories' });
+SubCategory.belongsTo(Category, { foreignKey: 'categoryId', as: 'Category' });
+
+// NOTE: Other associations disabled to avoid naming collisions with existing attributes
+// These can be re-enabled if attribute names are changed to avoid conflicts
+/*
+// User ↔ Role
+User.belongsTo(Role, { foreignKey: 'role_id', as: 'userRole' });
+Role.hasMany(User, { foreignKey: 'role_id', as: 'users' });
+*/
 
 module.exports = {
   sequelize,
@@ -345,6 +363,7 @@ module.exports = {
   User: wrappedUser,
   Brand: wrappedBrand,
   Category: wrappedCategory,
+  SubCategory: wrappedSubCategory,
   Product: wrappedProduct,
   ProductComment: wrappedProductComment,
   Post: wrappedPost,
@@ -397,6 +416,7 @@ module.exports = {
     User,
     Brand,
     Category,
+    SubCategory,
     Product,
     ProductComment,
     Post,

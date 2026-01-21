@@ -17,28 +17,27 @@ exports.getAllCategories = async (req, res) => {
   try {
     const { limit = 50, level = 'parent' } = req.query;
 
-    let categories;
+    let categories = [];
     
-    if (dbType === 'postgres') {
-      // PostgreSQL: Use Sequelize findAll
-      const where = level === 'parent' ? { parentId: null } : {};
-      categories = await Category.findAll({
-        where,
-        limit: parseInt(limit),
-        order: [['name', 'ASC']],
-        raw: true
-      });
-    } else {
-      // MongoDB: Use Mongoose find
-      if (level === 'parent') {
-        categories = await Category.find({ parentId: null })
-          .limit(parseInt(limit))
-          .sort({ name: 1 });
-      } else {
-        categories = await Category.find()
-          .limit(parseInt(limit))
-          .sort({ name: 1 });
+    if (dbType === 'postgres' && Category) {
+      try {
+        // PostgreSQL: Use Sequelize findAll
+        const where = level === 'parent' ? { parentId: null } : {};
+        categories = await Category.findAll({
+          where,
+          limit: parseInt(limit),
+          order: [['name', 'ASC']],
+          raw: true
+        });
+      } catch (postgresError) {
+        console.warn('[categoryController] PostgreSQL query failed:', postgresError.message);
+        categories = [];
       }
+    }
+
+    // If no data from database, return empty array
+    if (!categories || categories.length === 0) {
+      categories = [];
     }
 
     res.json({
@@ -46,11 +45,11 @@ exports.getAllCategories = async (req, res) => {
       data: categories
     });
   } catch (error) {
-    console.error('Get categories error:', error.message, error.stack);
+    console.error('Get categories error:', error.message);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch categories',
-      error: error.message
+      data: []
     });
   }
 };

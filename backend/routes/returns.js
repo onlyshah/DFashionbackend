@@ -4,9 +4,30 @@ const { auth, requireCustomer } = require('../middleware/auth');
 const adminAuth = require('../middleware/adminAuth');
 const { verifyAdminToken, requirePermission } = require('../middleware/adminAuth');
 const { body, validationResult } = require('express-validator');
-const ReturnModel = require('../models/Return');
-const Order = require('../models/Order');
-const Payment = require('../models/Payment');
+
+// Try to load Mongoose models, but handle PostgreSQL gracefully
+let ReturnModel, Order, Payment;
+try {
+  ReturnModel = require('../models/Return');
+  Order = require('../models/Order');
+  Payment = require('../models/Payment');
+} catch (e) {
+  console.warn('[returns] MongoDB models not available, will use safe defaults');
+}
+
+// Safe models with fallback
+const getModels = () => {
+  try {
+    const models = require('../models_sql');
+    return {
+      Return: models._raw?.Return || models.Return,
+      Order: models._raw?.Order || models.Order,
+      Payment: models._raw?.Payment || models.Payment
+    };
+  } catch (e) {
+    return { Return: null, Order: null, Payment: null };
+  }
+};
 
 const timestamp = () => new Date().toISOString();
 
@@ -93,37 +114,66 @@ router.get(
   requirePermission('returns', 'view'),
   async (req, res) => {
     try {
-      const { page = 1, limit = 20, status, customerId, orderId, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
-
+      const { page = 1, limit = 20, status } = req.query;
       const skip = (parseInt(page) - 1) * parseInt(limit);
-      const filter = {};
+      const sqlModels = getModels();
 
-      if (status) filter.status = status;
-      if (customerId) filter.customerId = customerId;
-      if (orderId) filter.orderId = orderId;
+      // Try SQL first
+      if (sqlModels.Return && sqlModels.Return.findAll) {
+        try {
+          const { count, rows } = await sqlModels.Return.findAndCountAll({
+            limit: parseInt(limit),
+            offset: skip,
+            order: [['createdAt', 'DESC']],
+            raw: true
+          });
 
-      const sortOptions = { [sortBy]: sortOrder === 'desc' ? -1 : 1 };
-
-      const returns = await ReturnModel.find(filter)
-        .populate('customerId', 'fullName email')
-        .populate('orderId', 'orderNumber totalAmount')
-        .sort(sortOptions)
-        .skip(skip)
-        .limit(parseInt(limit))
-        .lean();
-
-      const total = await ReturnModel.countDocuments(filter);
-
-      sendResponse(res, 200, true, {
-        returns,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(total / parseInt(limit)),
-          totalItems: total,
-          hasNextPage: page < Math.ceil(total / parseInt(limit)),
-          hasPrevPage: page > 1
+          return sendResponse(res, 200, true, {
+            returns: rows || [],
+            pagination: {
+              currentPage: parseInt(page),
+              totalPages: Math.ceil(count / parseInt(limit)),
+              totalItems: count,
+              hasNextPage: page < Math.ceil(count / parseInt(limit)),
+              hasPrevPage: page > 1
+            }
+          }, 'Returns fetched successfully', 'RETURNS_FETCHED');
+        } catch (sqlErr) {
+          console.warn('[returns] SQL query failed:', sqlErr.message);
         }
-      }, 'Returns fetched successfully', 'RETURNS_FETCHED');
+      }
+
+      // Fallback: MongoDB
+      if (ReturnModel && ReturnModel.find) {
+        const filter = {};
+        if (status) filter.status = status;
+        const sortOptions = { createdAt: -1 };
+
+        const returns = await ReturnModel.find(filter)
+          .sort(sortOptions)
+          .skip(skip)
+          .limit(parseInt(limit))
+          .lean();
+
+        const total = await ReturnModel.countDocuments(filter);
+
+        return sendResponse(res, 200, true, {
+          returns,
+          pagination: {
+            currentPage: parseInt(page),
+            totalPages: Math.ceil(total / parseInt(limit)),
+            totalItems: total,
+            hasNextPage: page < Math.ceil(total / parseInt(limit)),
+            hasPrevPage: page > 1
+          }
+        }, 'Returns fetched successfully', 'RETURNS_FETCHED');
+      }
+
+      // No models available - return empty safe response
+      return sendResponse(res, 200, true, {
+        returns: [],
+        pagination: { currentPage: parseInt(page), totalPages: 0, totalItems: 0, hasNextPage: false, hasPrevPage: false }
+      }, 'Returns service unavailable', 'SERVICE_UNAVAILABLE');
     } catch (error) {
       console.error('List returns error:', error);
       sendResponse(res, 500, false, null, 'Failed to fetch returns', 'FETCH_ERROR');
@@ -140,15 +190,29 @@ router.get(
   requirePermission('returns', 'view'),
   async (req, res) => {
     try {
-      const returnRequest = await ReturnModel.findById(req.params.id)
-        .populate('customerId', 'fullName email phone')
-        .populate('orderId', 'orderNumber items totalAmount shippingAddress');
+      const sqlModels = getModels();
 
-      if (!returnRequest) {
-        return sendResponse(res, 404, false, null, 'Return request not found', 'NOT_FOUND');
+      // Try SQL first
+      if (sqlModels.Return && sqlModels.Return.findByPk) {
+        try {
+          const returnRequest = await sqlModels.Return.findByPk(req.params.id);
+          if (returnRequest) {
+            return sendResponse(res, 200, true, returnRequest, 'Return request fetched successfully', 'RETURN_FETCHED');
+          }
+        } catch (sqlErr) {
+          console.warn('[returns/:id] SQL query failed:', sqlErr.message);
+        }
       }
 
-      sendResponse(res, 200, true, returnRequest, 'Return request fetched successfully', 'RETURN_FETCHED');
+      // Fallback: MongoDB
+      if (ReturnModel && ReturnModel.findById) {
+        const returnRequest = await ReturnModel.findById(req.params.id);
+        if (returnRequest) {
+          return sendResponse(res, 200, true, returnRequest, 'Return request fetched successfully', 'RETURN_FETCHED');
+        }
+      }
+
+      return sendResponse(res, 404, false, null, 'Return request not found', 'NOT_FOUND');
     } catch (error) {
       console.error('Get return error:', error);
       sendResponse(res, 500, false, null, 'Failed to fetch return request', 'FETCH_ERROR');

@@ -20,7 +20,401 @@ const Order = models.Order;
 const Payment = models.Payment;
 const Notification = models.Notification;
 
-// ✅ Global Admin Auth Middleware
+// =============================================================
+// PUBLIC DEMO ENDPOINTS (Before auth middleware)
+// NOTE: These endpoints are PUBLIC but return REAL database data, not mock data
+// =============================================================
+
+// Demo endpoint (public) - Returns REAL products from database for testing without auth
+router.get('/demo/products', async (req, res) => {
+  try {
+    const { page = 1, limit = 10 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    // Query REAL products from database
+    const db = require('../config').getSequelize?.() || null;
+    const sequelize = db;
+    let products = [];
+    let total = 0;
+
+    if (sequelize) {
+      try {
+        const query = `
+          SELECT 
+            p.*,
+            c.name as category_name
+          FROM products p
+          LEFT JOIN categories c ON p.category_id = c.id
+          LIMIT :limit OFFSET :offset
+        `;
+        
+        const countQuery = 'SELECT COUNT(*) as total FROM products';
+        
+        const [productData, countData] = await Promise.all([
+          sequelize.query(query, {
+            replacements: { limit: parseInt(limit), offset },
+            type: sequelize.QueryTypes.SELECT,
+            raw: true
+          }),
+          sequelize.query(countQuery, {
+            type: sequelize.QueryTypes.SELECT,
+            raw: true
+          })
+        ]);
+
+        products = productData || [];
+        total = countData?.[0]?.total || 0;
+      } catch (dbError) {
+        console.warn('[demo/products] Database query failed:', dbError.message);
+        // Fallback to empty data if database fails
+        products = [];
+        total = 0;
+      }
+    }
+
+    const totalPages = Math.ceil(total / parseInt(limit));
+
+    res.json({
+      success: true,
+      data: {
+        products: products,
+        pagination: {
+          currentPage: parseInt(page),
+          totalPages,
+          totalProducts: total,
+          hasNextPage: parseInt(page) < totalPages,
+          hasPrevPage: parseInt(page) > 1
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Demo products error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch demo products',
+      error: error.message
+    });
+  }
+});
+
+// Demo endpoint (public) - Returns REAL dashboard analytics from database
+router.get('/demo/analytics/dashboard', async (req, res) => {
+  try {
+    const db = require('../config').getSequelize?.() || null;
+    const sequelize = db;
+
+    if (!sequelize) {
+      return res.json({
+        success: true,
+        data: { message: 'Database not available', summary: {} }
+      });
+    }
+
+    try {
+      // Get real stats from database
+      const summaryQuery = `
+        SELECT
+          (SELECT COUNT(*) FROM orders) as total_orders,
+          (SELECT SUM("totalAmount") FROM orders) as total_revenue,
+          (SELECT COUNT(DISTINCT "userId") FROM orders) as total_customers,
+          (SELECT COUNT(*) FROM products WHERE status = 'active') as active_products
+      `;
+
+      const summaryData = await sequelize.query(summaryQuery, {
+        type: sequelize.QueryTypes.SELECT,
+        raw: true
+      });
+
+      const summary = summaryData?.[0] || {
+        total_orders: 0,
+        total_revenue: 0,
+        total_customers: 0,
+        active_products: 0
+      };
+
+      // Get top products by sales
+      const topProductsQuery = `
+        SELECT 
+          p.id,
+          p.name,
+          COUNT(oi.id) as units_sold,
+          SUM(oi."subtotal") as revenue
+        FROM products p
+        LEFT JOIN order_items oi ON p.id = oi."productId"
+        GROUP BY p.id, p.name
+        ORDER BY units_sold DESC
+        LIMIT 5
+      `;
+
+      const topProducts = await sequelize.query(topProductsQuery, {
+        type: sequelize.QueryTypes.SELECT,
+        raw: true
+      });
+
+      // Get recent orders
+      const recentOrdersQuery = `
+        SELECT 
+          id,
+          "userId",
+          "totalAmount" as amount,
+          status,
+          "createdAt" as date
+        FROM orders
+        ORDER BY "createdAt" DESC
+        LIMIT 5
+      `;
+
+      const recentOrders = await sequelize.query(recentOrdersQuery, {
+        type: sequelize.QueryTypes.SELECT,
+        raw: true
+      });
+
+      res.json({
+        success: true,
+        data: {
+          summary: {
+            totalOrders: summary.total_orders || 0,
+            totalRevenue: summary.total_revenue || 0,
+            totalCustomers: summary.total_customers || 0,
+            activeProducts: summary.active_products || 0
+          },
+          topProducts: topProducts || [],
+          recentOrders: recentOrders || []
+        }
+      });
+    } catch (queryError) {
+      console.warn('[demo/analytics/dashboard] Query failed:', queryError.message);
+      res.json({
+        success: true,
+        data: {
+          summary: { totalOrders: 0, totalRevenue: 0, totalCustomers: 0, activeProducts: 0 },
+          topProducts: [],
+          recentOrders: []
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Demo dashboard analytics error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch demo dashboard analytics',
+      error: error.message
+    });
+  }
+});
+
+// Demo endpoint (public) - Returns REAL order analytics from database
+router.get('/demo/analytics/orders', async (req, res) => {
+  try {
+    const { period = '30d' } = req.query;
+    const db = require('../config').getSequelize?.() || null;
+    const sequelize = db;
+
+    if (!sequelize) {
+      return res.json({
+        success: true,
+        period,
+        data: { message: 'Database not available' }
+      });
+    }
+
+    try {
+      // Calculate date range based on period
+      let dateFilter = '';
+      switch(period) {
+        case '7d':
+          dateFilter = "o.\"createdAt\" >= NOW() - INTERVAL '7 days'";
+          break;
+        case '90d':
+          dateFilter = "o.\"createdAt\" >= NOW() - INTERVAL '90 days'";
+          break;
+        case '30d':
+        default:
+          dateFilter = "o.\"createdAt\" >= NOW() - INTERVAL '30 days'";
+      }
+
+      // Get real order analytics from database
+      const analyticsQuery = `
+        SELECT
+          COUNT(*) as total_orders,
+          SUM(o."totalAmount") as revenue,
+          AVG(o."totalAmount") as avg_order_value,
+          COUNT(DISTINCT DATE(o."createdAt")) as days_with_orders
+        FROM orders o
+        WHERE ${dateFilter}
+      `;
+
+      const analyticsData = await sequelize.query(analyticsQuery, {
+        type: sequelize.QueryTypes.SELECT,
+        raw: true
+      });
+
+      const analytics = analyticsData?.[0] || {
+        total_orders: 0,
+        revenue: 0,
+        avg_order_value: 0,
+        days_with_orders: 1
+      };
+
+      // Get top products in this period
+      const topProductsQuery = `
+        SELECT 
+          p.name,
+          COUNT(oi.id) as units
+        FROM order_items oi
+        JOIN products p ON oi."productId" = p.id
+        JOIN orders o ON oi."orderId" = o.id
+        WHERE ${dateFilter}
+        GROUP BY p.id, p.name
+        ORDER BY units DESC
+        LIMIT 5
+      `;
+
+      const topProducts = await sequelize.query(topProductsQuery, {
+        type: sequelize.QueryTypes.SELECT,
+        raw: true
+      });
+
+      // Get order status breakdown
+      const statusQuery = `
+        SELECT 
+          status,
+          COUNT(*) as count
+        FROM orders
+        WHERE ${dateFilter}
+        GROUP BY status
+      `;
+
+      const statusData = await sequelize.query(statusQuery, {
+        type: sequelize.QueryTypes.SELECT,
+        raw: true
+      });
+
+      const orderStatus = {};
+      statusData?.forEach(row => {
+        orderStatus[row.status] = row.count;
+      });
+
+      const daysWithOrders = analytics.days_with_orders || 1;
+      const ordersPerDay = analytics.total_orders / daysWithOrders;
+
+      res.json({
+        success: true,
+        period,
+        data: {
+          totalOrders: analytics.total_orders || 0,
+          revenue: parseFloat(analytics.revenue) || 0,
+          avgOrderValue: parseFloat(analytics.avg_order_value) || 0,
+          ordersPerDay: parseFloat(ordersPerDay.toFixed(2)),
+          topProducts: topProducts || [],
+          orderStatus: orderStatus || {}
+        }
+      });
+    } catch (queryError) {
+      console.warn('[demo/analytics/orders] Query failed:', queryError.message);
+      res.json({
+        success: true,
+        period,
+        data: {
+          totalOrders: 0,
+          revenue: 0,
+          avgOrderValue: 0,
+          ordersPerDay: 0,
+          topProducts: [],
+          orderStatus: {}
+        }
+      });
+    }
+  } catch (error) {
+    console.error('Demo analytics error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch demo analytics',
+      error: error.message
+    });
+  }
+});
+
+// Demo endpoint (public) - Returns REAL orders from database  
+router.get('/demo/orders', async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const offset = (page - 1) * limit;
+
+    const sequelize = require('../config').getSequelize?.() || null;
+
+    if (!sequelize) {
+      return res.json({
+        success: true,
+        data: {
+          orders: [],
+          pagination: { page, limit, total: 0, totalPages: 0 }
+        }
+      });
+    }
+
+    try {
+      // Query real orders from database
+      const [count] = await sequelize.query(`SELECT COUNT(*) as count FROM orders`);
+      const totalOrders = count[0]?.count || 0;
+
+      const orders = await sequelize.query(`
+        SELECT 
+          o.id,
+          u.full_name as customer,
+          STRING_AGG(p.name, ', ') as products,
+          o."totalAmount" as amount,
+          o."createdAt" as date,
+          o.status
+        FROM orders o
+        LEFT JOIN users u ON o."userId" = u.id
+        LEFT JOIN order_items oi ON o.id = oi."orderId"
+        LEFT JOIN products p ON oi."productId" = p.id
+        GROUP BY o.id, u.full_name, o."totalAmount", o."createdAt", o.status
+        ORDER BY o."createdAt" DESC
+        LIMIT :limit OFFSET :offset
+      `, {
+        replacements: { limit, offset },
+        type: sequelize.QueryTypes.SELECT,
+        raw: true
+      });
+
+      res.json({
+        success: true,
+        data: {
+          orders: orders || [],
+          pagination: {
+            page,
+            limit,
+            total: totalOrders,
+            totalPages: Math.ceil(totalOrders / limit)
+          }
+        }
+      });
+    } catch (queryError) {
+      console.warn('[admin] Demo orders query failed:', queryError.message);
+      res.json({
+        success: true,
+        data: {
+          orders: [],
+          pagination: { page, limit, total: 0, totalPages: 0 }
+        }
+      });
+    }
+  } catch (error) {
+    console.error('[admin] Error in demo/orders:', error.message);
+    res.json({
+      success: true,
+      data: {
+        orders: [],
+        pagination: { page, limit, total: 0, totalPages: 0 }
+      }
+    });
+  }
+});
+
+// ✅ Global Admin Auth Middleware - All routes below require auth
 router.use(verifyAdminToken);
 
 // =============================================================
@@ -514,88 +908,6 @@ router.delete('/notifications', requirePermission('dashboard', 'view'), async (r
 // PRODUCTS
 // =============================================================
 
-// Demo endpoint (public) - Returns sample products for testing without auth
-router.get('/demo/products', async (req, res) => {
-  try {
-    const { page = 1, limit = 10 } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
-
-    // Return demo/sample products
-    const demoProducts = [
-      {
-        _id: '1',
-        name: 'Premium T-Shirt',
-        description: 'High-quality cotton t-shirt',
-        price: 29.99,
-        category: 'Men',
-        isActive: true,
-        isFeatured: false
-      },
-      {
-        _id: '2',
-        name: 'Classic Jeans',
-        description: 'Comfortable denim jeans',
-        price: 59.99,
-        category: 'Men',
-        isActive: true,
-        isFeatured: true
-      },
-      {
-        _id: '3',
-        name: 'Casual Dress',
-        description: 'Perfect for everyday wear',
-        price: 44.99,
-        category: 'Women',
-        isActive: true,
-        isFeatured: false
-      },
-      {
-        _id: '4',
-        name: 'Sport Shoes',
-        description: 'Lightweight athletic shoes',
-        price: 79.99,
-        category: 'Shoes',
-        isActive: true,
-        isFeatured: true
-      },
-      {
-        _id: '5',
-        name: 'Winter Jacket',
-        description: 'Warm and stylish jacket',
-        price: 119.99,
-        category: 'Outerwear',
-        isActive: true,
-        isFeatured: false
-      }
-    ];
-
-    // Paginate
-    const paginatedProducts = demoProducts.slice(offset, offset + parseInt(limit));
-    const totalPages = Math.ceil(demoProducts.length / parseInt(limit));
-
-    res.json({
-      success: true,
-      data: {
-        products: paginatedProducts,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages,
-          totalProducts: demoProducts.length,
-          hasNextPage: parseInt(page) < totalPages,
-          hasPrevPage: parseInt(page) > 1
-        }
-      }
-    });
-  } catch (error) {
-    console.error('Demo products error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch demo products',
-      error: error.message
-    });
-  }
-});
-
 // Authenticated endpoint - Returns actual products
 router.get('/products', requirePermission('products', 'view'), adminController.getAllProducts);
 
@@ -613,7 +925,7 @@ router.put('/products/:id/status', requirePermission('products', 'edit'), async 
 // =============================================================
 // ORDERS
 // =============================================================
-router.get('/orders/recent', adminController.getRecentOrders);
+router.get('/orders/recent', verifyAdminToken, adminController.getRecentOrders);
 router.get('/orders', requirePermission('orders', 'view'), adminController.getAllOrders);
 
 router.put('/orders/:id/status', requirePermission('orders', 'edit'), async (req, res) => {
@@ -697,6 +1009,141 @@ router.get('/activity-logs', async (req, res) => {
   } catch (error) {
     console.error('Error fetching activity logs:', error.message);
     res.status(500).json({ success: false, message: 'Error fetching activity logs', error: error.message });
+  }
+});
+
+// =============================================================
+// RETURNS MANAGEMENT (Admin)
+// =============================================================
+router.get('/orders/returns', requirePermission('orders', 'view'), async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const status = req.query.status || '';
+    const offset = (page - 1) * limit;
+
+    const ReturnModel = models.Return || require('../models/Return');
+    
+    // Build filter
+    const filter = {};
+    if (status) filter.status = status;
+
+    const returns = await ReturnModel.find(filter)
+      .populate('orderId', 'id totalAmount createdAt status')
+      .populate('customerId', 'fullName email username')
+      .skip(offset)
+      .limit(limit)
+      .sort({ createdAt: -1 });
+
+    const total = await ReturnModel.countDocuments(filter);
+
+    res.json({
+      success: true,
+      data: returns || [],
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('[admin] Error fetching returns:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch returns',
+      error: error.message
+    });
+  }
+});
+
+router.post('/orders/returns', requirePermission('orders', 'create'), async (req, res) => {
+  try {
+    const { orderId, reason, items, comments } = req.body;
+    
+    const ReturnModel = models.Return || require('../models/Return');
+    const newReturn = new ReturnModel({
+      orderId,
+      customerId: req.user._id || req.user.id,
+      reason,
+      items,
+      comments,
+      status: 'pending'
+    });
+
+    const savedReturn = await newReturn.save();
+    
+    res.status(201).json({
+      success: true,
+      message: 'Return request created successfully',
+      data: savedReturn
+    });
+  } catch (error) {
+    console.error('[admin] Error creating return:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create return request',
+      error: error.message
+    });
+  }
+});
+
+router.put('/orders/returns/:id', requirePermission('orders', 'edit'), async (req, res) => {
+  try {
+    const { status, comments } = req.body;
+    
+    const ReturnModel = models.Return || require('../models/Return');
+    const updatedReturn = await ReturnModel.findByIdAndUpdate(
+      req.params.id,
+      { status, comments, updatedAt: new Date() },
+      { new: true }
+    );
+
+    if (!updatedReturn) {
+      return res.status(404).json({
+        success: false,
+        message: 'Return request not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Return request updated successfully',
+      data: updatedReturn
+    });
+  } catch (error) {
+    console.error('[admin] Error updating return:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update return request',
+      error: error.message
+    });
+  }
+});
+
+router.delete('/orders/returns/:id', requirePermission('orders', 'delete'), async (req, res) => {
+  try {
+    const ReturnModel = models.Return || require('../models/Return');
+    const result = await ReturnModel.findByIdAndDelete(req.params.id);
+
+    if (!result) {
+      return res.status(404).json({
+        success: false,
+        message: 'Return request not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Return request deleted successfully'
+    });
+  } catch (error) {
+    console.error('[admin] Error deleting return:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete return request',
+      error: error.message
+    });
   }
 });
 

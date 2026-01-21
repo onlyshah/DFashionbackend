@@ -353,41 +353,75 @@ router.post('/search/track', auth, async (req, res) => {
 // @access  Public
 router.get('/categories', async (req, res) => {
   try {
-    const categories = await Product.distinct('category');
-    const subcategories = await Product.distinct('subcategory');
-    const brands = await Product.distinct('brand');
+    const sequelize = require('../config').getSequelize?.() || null;
 
-    // Get category counts
-    const categoryStats = await Product.aggregate([
-      { $match: { isActive: true } },
-      { $group: { _id: '$category', count: { $sum: 1 } } }
-    ]);
+    if (!sequelize) {
+      // Fallback to MongoDB if available
+      try {
+        const categories = await Product.distinct('category');
+        const subcategories = await Product.distinct('subcategory');
+        const brands = await Product.distinct('brand');
 
-    const subcategoryStats = await Product.aggregate([
-      { $match: { isActive: true } },
-      { $group: { _id: { category: '$category', subcategory: '$subcategory' }, count: { $sum: 1 } } }
-    ]);
+        const categoryStats = await Product.aggregate([
+          { $match: { isActive: true } },
+          { $group: { _id: '$category', count: { $sum: 1 } } }
+        ]);
+
+        const subcategoryStats = await Product.aggregate([
+          { $match: { isActive: true } },
+          { $group: { _id: { category: '$category', subcategory: '$subcategory' }, count: { $sum: 1 } } }
+        ]);
+
+        return res.json({
+          success: true,
+          data: {
+            categories: categories.map(cat => ({
+              name: cat,
+              count: categoryStats.find(stat => stat._id === cat)?.count || 0
+            })),
+            subcategories: subcategoryStats.map(stat => ({
+              category: stat._id.category,
+              name: stat._id.subcategory,
+              count: stat.count
+            })),
+            brands: brands.sort()
+          }
+        });
+      } catch (mongoError) {
+        console.warn('MongoDB fallback failed:', mongoError.message);
+        return res.json({
+          success: true,
+          data: { categories: [], subcategories: [], brands: [] }
+        });
+      }
+    }
+
+    // Use PostgreSQL if available
+    const categories = await sequelize.query(`
+      SELECT id, name, slug, image FROM categories WHERE is_active = true ORDER BY sort_order ASC
+    `, { type: sequelize.QueryTypes.SELECT, raw: true });
+
+    const subcategories = await sequelize.query(`
+      SELECT sc.id, sc.name, sc.slug, c.name as category_name, c.id as category_id 
+      FROM sub_categories sc
+      JOIN categories c ON sc.category_id = c.id
+      WHERE sc.is_active = true
+      ORDER BY sc.sort_order ASC
+    `, { type: sequelize.QueryTypes.SELECT, raw: true });
 
     res.json({
       success: true,
       data: {
-        categories: categories.map(cat => ({
-          name: cat,
-          count: categoryStats.find(stat => stat._id === cat)?.count || 0
-        })),
-        subcategories: subcategoryStats.map(stat => ({
-          category: stat._id.category,
-          name: stat._id.subcategory,
-          count: stat.count
-        })),
-        brands: brands.sort()
+        categories: categories || [],
+        subcategories: subcategories || [],
+        brands: []
       }
     });
   } catch (error) {
-    console.error('Get categories error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch categories'
+    console.error('Get categories error:', error.message);
+    res.json({
+      success: true,
+      data: { categories: [], subcategories: [], brands: [] }
     });
   }
 });

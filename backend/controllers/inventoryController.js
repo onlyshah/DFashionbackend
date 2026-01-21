@@ -5,7 +5,7 @@
  */
 
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
-const models = dbType === 'postgres' ? require('../models_sql') : require('../models')();
+const models = dbType === 'postgres' ? require('../models_sql') : require('../models');
 const { Inventory, InventoryAlert, InventoryHistory, Product, Warehouse, Supplier } = models;
 
 // Helper to safely execute model operations
@@ -67,6 +67,7 @@ exports.getInventoryStats = async (req, res) => {
 
 /**
  * Get all inventory items with pagination and filters
+ * Includes warehouse and product details via joins
  */
 exports.getInventoryList = async (req, res) => {
   try {
@@ -81,16 +82,92 @@ exports.getInventoryList = async (req, res) => {
     console.log('[inventoryController] getInventoryList - filter:', filter);
     console.log('[inventoryController] Inventory.findAll type:', typeof Inventory?.findAll);
 
-    const items = await safeExec(
-      () => Inventory ? Inventory.findAll({
-        where: filter,
-        offset: skip,
-        limit: parseInt(limit),
-        order: [['lastUpdated', 'DESC']],
-        raw: true
-      }) : Promise.resolve([]),
-      []
-    ) || [];
+    // Use raw query with joins to include warehouse and product details
+    const db = require('../config').getSequelize?.() || null;
+    const sequelize = db;
+    let items = [];
+
+    if (sequelize && Inventory?._raw) {
+      // Use Sequelize findAll with include for associations
+      try {
+        const whereClause = filter;
+        
+        // Build query with joins using raw SQL for better performance
+        const query = `
+          SELECT 
+            i.*,
+            w.name as warehouse_name,
+            w.location as warehouse_location,
+            w.city as warehouse_city,
+            w.manager as warehouse_manager,
+            p.name as product_name,
+            p.sku as product_sku
+          FROM inventories i
+          LEFT JOIN warehouses w ON i."warehouseId" = w.id
+          LEFT JOIN products p ON i."productId" = p.id
+          WHERE i.status = :status
+            ${warehouse ? 'AND i."warehouseId" = :warehouse' : ''}
+            ${sku ? 'AND i.sku = :sku' : ''}
+            ${product ? 'AND i."productId" = :product' : ''}
+          ORDER BY i."lastUpdated" DESC
+          LIMIT :limit OFFSET :offset
+        `;
+        
+        const params = {
+          status: status,
+          warehouse: warehouse ? parseInt(warehouse) : null,
+          sku: sku || null,
+          product: product ? parseInt(product) : null,
+          limit: parseInt(limit),
+          offset: skip
+        };
+
+        const rawItems = await sequelize.query(query, {
+          replacements: params,
+          type: sequelize.QueryTypes.SELECT,
+          raw: true
+        });
+
+        // Transform response to include nested warehouse and product objects
+        items = rawItems.map(item => ({
+          ...item,
+          warehouse: {
+            id: item.warehouseId,
+            name: item.warehouse_name,
+            location: item.warehouse_location,
+            city: item.warehouse_city,
+            manager: item.warehouse_manager
+          },
+          product: {
+            id: item.productId,
+            name: item.product_name,
+            sku: item.product_sku
+          }
+        }));
+      } catch (joinError) {
+        console.warn('[inventoryController] Raw join query failed, falling back to basic query:', joinError.message);
+        // Fallback: get basic inventory data
+        items = await Inventory.findAll({
+          where: filter,
+          offset: skip,
+          limit: parseInt(limit),
+          order: [['lastUpdated', 'DESC']],
+          raw: true
+        }) || [];
+      }
+    } else {
+      // Fallback for non-PostgreSQL
+      items = await safeExec(
+        () => Inventory ? Inventory.findAll({
+          where: filter,
+          offset: skip,
+          limit: parseInt(limit),
+          order: [['lastUpdated', 'DESC']],
+          raw: true
+        }) : Promise.resolve([]),
+        []
+      ) || [];
+    }
     
     console.log('[inventoryController] items result:', items?.length || 0, 'items');
 
@@ -181,10 +258,76 @@ exports.createInventoryItem = async (req, res) => {
  */
 exports.getInventoryItem = async (req, res) => {
   try {
-    const item = await safeExec(
-      () => Inventory.findById(req.params.id),
-      null
-    );
+    const db = require('../config').getSequelize?.() || null;
+    const sequelize = db;
+    let item = null;
+
+    if (sequelize && Inventory?._raw) {
+      // Use raw SQL with joins for better data enrichment
+      try {
+        const query = `
+          SELECT 
+            i.*,
+            w.id as warehouse_id,
+            w.name as warehouse_name,
+            w.location as warehouse_location,
+            w.address as warehouse_address,
+            w.city as warehouse_city,
+            w.state as warehouse_state,
+            w.zipCode as warehouse_zip,
+            w.country as warehouse_country,
+            w.manager as warehouse_manager,
+            w.phone as warehouse_phone,
+            w.email as warehouse_email,
+            p.id as product_id,
+            p.name as product_name,
+            p.sku as product_sku
+          FROM inventories i
+          LEFT JOIN warehouses w ON i."warehouseId" = w.id
+          LEFT JOIN products p ON i."productId" = p.id
+          WHERE i.id = :id
+        `;
+
+        const result = await sequelize.query(query, {
+          replacements: { id: parseInt(req.params.id) },
+          type: sequelize.QueryTypes.SELECT,
+          raw: true
+        });
+
+        if (result.length > 0) {
+          const rawItem = result[0];
+          item = {
+            ...rawItem,
+            warehouse: {
+              id: rawItem.warehouse_id,
+              name: rawItem.warehouse_name,
+              location: rawItem.warehouse_location,
+              address: rawItem.warehouse_address,
+              city: rawItem.warehouse_city,
+              state: rawItem.warehouse_state,
+              zipCode: rawItem.warehouse_zip,
+              country: rawItem.warehouse_country,
+              manager: rawItem.warehouse_manager,
+              phone: rawItem.warehouse_phone,
+              email: rawItem.warehouse_email
+            },
+            product: {
+              id: rawItem.product_id,
+              name: rawItem.product_name,
+              sku: rawItem.product_sku
+            }
+          };
+        }
+      } catch (joinError) {
+        console.warn('[inventoryController] Raw join query failed for getInventoryItem:', joinError.message);
+        item = await Inventory.findById(req.params.id);
+      }
+    } else {
+      item = await safeExec(
+        () => Inventory.findById(req.params.id),
+        null
+      );
+    }
 
     if (!item) {
       return res.status(404).json({
@@ -333,16 +476,88 @@ exports.getAlertsList = async (req, res) => {
     console.log('[getAlertsList] InventoryAlert exists:', !!InventoryAlert);
     console.log('[getAlertsList] InventoryAlert.findAll type:', typeof InventoryAlert?.findAll);
 
-    const alerts = await safeExec(
-      () => InventoryAlert ? InventoryAlert.findAll({
-        where: filter,
-        offset: skip,
-        limit: parseInt(limit),
-        order: [['created_at', 'DESC']],
-        raw: true
-      }) : Promise.resolve([]),
-      []
-    );
+    const db = require('../config').getSequelize?.() || null;
+    const sequelize = db;
+    let alerts = [];
+
+    if (sequelize && InventoryAlert?._raw) {
+      // Use raw SQL with joins to include warehouse and product details
+      try {
+        const whereClause = filter;
+        const query = `
+          SELECT 
+            ia.*,
+            w.id as warehouse_id,
+            w.name as warehouse_name,
+            w.location as warehouse_location,
+            w.manager as warehouse_manager,
+            p.id as product_id,
+            p.name as product_name,
+            i.quantity as current_quantity,
+            i.sku as inventory_sku
+          FROM inventory_alerts ia
+          LEFT JOIN warehouses w ON ia."warehouseId" = w.id
+          LEFT JOIN inventories i ON ia."inventoryId" = i.id
+          LEFT JOIN products p ON i."productId" = p.id
+          WHERE ia.status = :status
+            ${type ? 'AND ia.type = :type' : ''}
+          ORDER BY ia.created_at DESC
+          LIMIT :limit OFFSET :offset
+        `;
+        
+        const params = {
+          status: status,
+          type: type || null,
+          limit: parseInt(limit),
+          offset: skip
+        };
+
+        const rawAlerts = await sequelize.query(query, {
+          replacements: params,
+          type: sequelize.QueryTypes.SELECT,
+          raw: true
+        });
+
+        // Transform response to include nested objects
+        alerts = rawAlerts.map(alert => ({
+          ...alert,
+          warehouse: {
+            id: alert.warehouse_id,
+            name: alert.warehouse_name,
+            location: alert.warehouse_location,
+            manager: alert.warehouse_manager
+          },
+          product: {
+            id: alert.product_id,
+            name: alert.product_name
+          },
+          inventory: {
+            sku: alert.inventory_sku,
+            quantity: alert.current_quantity
+          }
+        }));
+      } catch (joinError) {
+        console.warn('[getAlertsList] Raw join query failed, falling back:', joinError.message);
+        alerts = await InventoryAlert.findAll({
+          where: filter,
+          offset: skip,
+          limit: parseInt(limit),
+          order: [['created_at', 'DESC']],
+          raw: true
+        }) || [];
+      }
+    } else {
+      alerts = await safeExec(
+        () => InventoryAlert ? InventoryAlert.findAll({
+          where: filter,
+          offset: skip,
+          limit: parseInt(limit),
+          order: [['created_at', 'DESC']],
+          raw: true
+        }) : Promise.resolve([]),
+        []
+      );
+    }
     
     console.log('[getAlertsList] Alerts result:', alerts?.length || 0);
 
@@ -469,16 +684,88 @@ exports.getHistoryList = async (req, res) => {
       if (endDate) filter.timestamp[Op.lte] = new Date(endDate);
     }
 
-    const history = await safeExec(
-      () => InventoryHistory ? InventoryHistory.findAll({
-        where: filter,
-        offset: skip,
-        limit: parseInt(limit),
-        order: [['timestamp', 'DESC']],
-        raw: true
-      }) : Promise.resolve([]),
-      []
-    );
+    const db = require('../config').getSequelize?.() || null;
+    const sequelize = db;
+    let history = [];
+
+    if (sequelize && InventoryHistory?._raw) {
+      // Use raw SQL with joins to include warehouse and product details
+      try {
+        const query = `
+          SELECT 
+            ih.*,
+            w.id as warehouse_id,
+            w.name as warehouse_name,
+            w.location as warehouse_location,
+            p.id as product_id,
+            p.name as product_name,
+            i.sku as inventory_sku
+          FROM inventory_histories ih
+          LEFT JOIN warehouses w ON ih."warehouseId" = w.id
+          LEFT JOIN products p ON ih."productId" = p.id
+          LEFT JOIN inventories i ON ih."inventoryId" = i.id
+          WHERE 1=1
+            ${type ? 'AND ih.type = :type' : ''}
+            ${warehouse ? 'AND ih."warehouseId" = :warehouse' : ''}
+            ${startDate ? 'AND ih.timestamp >= :startDate' : ''}
+            ${endDate ? 'AND ih.timestamp <= :endDate' : ''}
+          ORDER BY ih.timestamp DESC
+          LIMIT :limit OFFSET :offset
+        `;
+        
+        const params = {
+          type: type || null,
+          warehouse: warehouse ? parseInt(warehouse) : null,
+          startDate: startDate ? new Date(startDate) : null,
+          endDate: endDate ? new Date(endDate) : null,
+          limit: parseInt(limit),
+          offset: skip
+        };
+
+        const rawHistory = await sequelize.query(query, {
+          replacements: params,
+          type: sequelize.QueryTypes.SELECT,
+          raw: true
+        });
+
+        // Transform response to include nested objects
+        history = rawHistory.map(record => ({
+          ...record,
+          warehouse: {
+            id: record.warehouse_id,
+            name: record.warehouse_name,
+            location: record.warehouse_location
+          },
+          product: {
+            id: record.product_id,
+            name: record.product_name
+          },
+          inventory: {
+            sku: record.inventory_sku
+          }
+        }));
+      } catch (joinError) {
+        console.warn('[getHistoryList] Raw join query failed, falling back:', joinError.message);
+        history = await InventoryHistory.findAll({
+          where: filter,
+          offset: skip,
+          limit: parseInt(limit),
+          order: [['timestamp', 'DESC']],
+          raw: true
+        }) || [];
+      }
+    } else {
+      history = await safeExec(
+        () => InventoryHistory ? InventoryHistory.findAll({
+          where: filter,
+          offset: skip,
+          limit: parseInt(limit),
+          order: [['timestamp', 'DESC']],
+          raw: true
+        }) : Promise.resolve([]),
+        []
+      );
+    }
 
     const total = await safeExec(
       () => InventoryHistory ? InventoryHistory.count({ where: filter }) : Promise.resolve(0),

@@ -1,9 +1,20 @@
-const models = require('../models');
-const Product = models.Product;
-const Brand = models.Brand;
-const Category = models.Category;
-const User = models.User;
-const StyleInspiration = models.StyleInspiration;
+const { getModels } = require('../config');
+const sqlModels = getModels();
+const { Op } = require('sequelize');
+
+// Fallback to MongoDB models if needed
+let mongoModels = {};
+try {
+  mongoModels = require('../models');
+} catch (e) {
+  console.warn('[contentAPI] MongoDB models not available');
+}
+
+// Get models for both SQL and Mongo operations
+const Product = mongoModels.Product || (sqlModels._raw?.Product || sqlModels.Product);
+const Brand = mongoModels.Brand || (sqlModels._raw?.Brand || sqlModels.Brand);
+const User = mongoModels.User || (sqlModels._raw?.User || sqlModels.User);
+const StyleInspiration = mongoModels.StyleInspiration || (sqlModels._raw?.StyleInspiration || sqlModels.StyleInspiration);
 
 function paginate(query, page, limit) {
   const skip = (page - 1) * limit;
@@ -42,9 +53,68 @@ exports.getInfluencers = async (req, res) => {
 };
 
 exports.getCategories = async (req, res) => {
-  const { page = 1, limit = 20 } = req.query;
-  const categories = await paginate(Category.find({}), +page, +limit);
-  res.json({ data: await categories });
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    
+    // Try SQL models first (PostgreSQL)
+    try {
+      const CategoryModel = sqlModels._raw?.Category || sqlModels.Category;
+      if (CategoryModel && CategoryModel.findAll) {
+        const offset = (page - 1) * limit;
+        const { count, rows } = await CategoryModel.findAndCountAll({
+          limit: +limit,
+          offset: +offset,
+          order: [['name', 'ASC']],
+          include: [{
+            association: 'SubCategories',
+            attributes: ['id', 'name'],
+            required: false
+          }]
+        });
+
+        return res.json({
+          success: true,
+          data: rows.map(cat => ({
+            id: cat.id,
+            name: cat.name,
+            description: cat.description,
+            subCategories: cat.SubCategories || cat.subcategories || []
+          })),
+          pagination: {
+            total: count,
+            page: +page,
+            limit: +limit,
+            pages: Math.ceil(count / limit)
+          }
+        });
+      }
+    } catch (sqlError) {
+      console.warn('[getCategories] SQL query failed:', sqlError.message);
+    }
+
+    // Fallback to MongoDB if available
+    if (mongoModels.Category && mongoModels.Category.find) {
+      const categories = await paginate(mongoModels.Category.find({}), +page, +limit);
+      return res.json({ 
+        success: true,
+        data: await categories 
+      });
+    }
+
+    // No models available
+    res.json({
+      success: true,
+      data: [],
+      pagination: { total: 0, page: +page, limit: +limit, pages: 0 }
+    });
+  } catch (error) {
+    console.error('[getCategories] Error:', error.message);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching categories',
+      error: error.message
+    });
+  }
 };
 
 // --- Style Inspiration CRUD ---

@@ -288,6 +288,7 @@ safeMount('/api/admin', './routes/admin'); // admin routes
 safeMount('/api/admin/users', './routes/usersAdmin'); // admin users management
 safeMount('/api/admin/social', './routes/socialAdmin'); // admin social management
 safeMount('/api/admin/inventory', './routes/inventory'); // admin inventory management
+safeMount('/api/admin/categories', './routes/admin-categories'); // admin categories & sub-categories management
 safeMount('/api/role-management', './routes/roleManagement');
 safeMount('/api/modules', './routes/moduleManagement');
 safeMount('/api/vendor-verification', './routes/vendorVerification');

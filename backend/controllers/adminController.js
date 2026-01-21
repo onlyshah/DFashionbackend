@@ -1,6 +1,9 @@
 const bcrypt = require('bcryptjs');
 const { getConfig, getModels } = require('../config');
 const { Op } = require('sequelize');
+const OrderRepository = require('../repositories/OrderRepository');
+const ProductRepository = require('../repositories/ProductRepository');
+const UserRepository = require('../repositories/UserRepository');
 
 // Load models based on DB_TYPE
 const models = getModels();
@@ -9,6 +12,32 @@ const UserRaw = models._raw && models._raw.User ? models._raw.User : null;
 const Product = models.Product;
 const Order = models.Order;
 
+// Initialize Repositories (database-agnostic)
+let orderRepository = null;
+let productRepository = null;
+let userRepository = null;
+
+function getOrderRepository() {
+  if (!orderRepository) {
+    orderRepository = new OrderRepository(Order);
+  }
+  return orderRepository;
+}
+
+function getProductRepository() {
+  if (!productRepository) {
+    productRepository = new ProductRepository(models);
+  }
+  return productRepository;
+}
+
+function getUserRepository() {
+  if (!userRepository) {
+    userRepository = new UserRepository(models);
+  }
+  return userRepository;
+}
+
 // ✅ Dashboard Overview (new version for /admin/dashboard)
 exports.getDashboardStatsFromDB = async (req, res) => {
   try {
@@ -16,20 +45,13 @@ exports.getDashboardStatsFromDB = async (req, res) => {
     const startOfDay = new Date(today.setHours(0, 0, 0, 0));
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
-    // If models not available, return demo data instead of erroring
+    // If models not available, return error
     if (!User || !Product) {
-      console.log('[adminController] Models not initialized, returning demo dashboard data');
-      return res.json({
-        success: true,
-        data: {
-          overview: {
-            users: { total: 64, vendors: 8, new_today: 2, new_this_month: 10 },
-            products: { total: 120, active: 115, pending: 5, new_today: 4 },
-            orders: { total: 200, today: 6, this_month: 42 },
-            revenue: { total: 1250000, today: 52000, this_month: 300000 }
-          },
-          user_permissions: (req.user && req.user.permissions) ? req.user.permissions : []
-        }
+      console.error('[adminController] Models not initialized');
+      return res.status(500).json({
+        success: false,
+        message: 'Database models not initialized',
+        data: null
       });
     }
 
@@ -47,8 +69,8 @@ exports.getDashboardStatsFromDB = async (req, res) => {
       newUsersToday = await dataProvider.count('users', { wrapped: User, raw: UserRaw }, { createdAt: { [Op.gte]: startOfDay } }) || 0;
       newUsersThisMonth = await dataProvider.count('users', { wrapped: User, raw: UserRaw }, { createdAt: { [Op.gte]: startOfMonth } }) || 0;
     } catch (e) {
-      console.warn('[adminController] Error counting users, using defaults:', e.message);
-      totalUsers = 64; totalVendors = 8; newUsersToday = 2; newUsersThisMonth = 10;
+      console.warn('[adminController] Error counting users:', e.message);
+      totalUsers = 0; totalVendors = 0; newUsersToday = 0; newUsersThisMonth = 0;
     }
 
     const productRaw = models._raw && models._raw.Product ? models._raw.Product : null;
@@ -58,8 +80,8 @@ exports.getDashboardStatsFromDB = async (req, res) => {
       pendingProducts = await dataProvider.count('products', { wrapped: Product, raw: productRaw }, { status: 'pending' }) || 0;
       newProductsToday = await dataProvider.count('products', { wrapped: Product, raw: productRaw }, { createdAt: { [Op.gte]: startOfDay } }) || 0;
     } catch (e) {
-      console.warn('[adminController] Error counting products, using defaults:', e.message);
-      totalProducts = 120; activeProducts = 115; pendingProducts = 5; newProductsToday = 4;
+      console.warn('[adminController] Error counting products:', e.message);
+      totalProducts = 0; activeProducts = 0; pendingProducts = 0; newProductsToday = 0;
     }
 
     // Orders might not exist in SQL, provide default values
@@ -75,9 +97,9 @@ exports.getDashboardStatsFromDB = async (req, res) => {
         revenueTodayResult = await dataProvider.sum('orders', { wrapped: Order, raw: orderRaw }, 'totalAmount', { createdAt: { [Op.gte]: startOfDay } }) || 0;
         revenueMonthResult = await dataProvider.sum('orders', { wrapped: Order, raw: orderRaw }, 'totalAmount', { createdAt: { [Op.gte]: startOfMonth } }) || 0;
       } catch (e) {
-        console.warn('[adminController] Error counting orders, using defaults:', e.message);
-        totalOrders = 200; ordersToday = 6; ordersThisMonth = 42;
-        revenueResult = 1250000; revenueTodayResult = 52000; revenueMonthResult = 300000;
+        console.warn('[adminController] Error counting orders:', e.message);
+        totalOrders = 0; ordersToday = 0; ordersThisMonth = 0;
+        revenueResult = 0; revenueTodayResult = 0; revenueMonthResult = 0;
       }
     }
 
@@ -113,18 +135,10 @@ exports.getDashboardStatsFromDB = async (req, res) => {
     });
   } catch (error) {
     console.error('[adminController] Dashboard error:', error);
-    // Return safe demo data instead of 500 error
-    res.json({
-      success: true,
-      data: {
-        overview: {
-          users: { total: 64, vendors: 8, new_today: 2, new_this_month: 10 },
-          products: { total: 120, active: 115, pending: 5, new_today: 4 },
-          orders: { total: 200, today: 6, this_month: 42 },
-          revenue: { total: 1250000, today: 52000, this_month: 300000 }
-        },
-        user_permissions: (req.user && req.user.permissions) ? req.user.permissions : []
-      }
+    res.status(500).json({
+      success: false,
+      message: 'Failed to load dashboard data',
+      data: null
     });
   }
 };
@@ -135,48 +149,23 @@ exports.getDashboardStats = exports.getDashboardStatsFromDB;
 // ✅ Get all users (already fine)
 exports.getAllUsers = async (req, res) => {
   try {
-    const { page = 1, limit = 20, role, department, search } = req.query;
-    const where = {};
+    const { page = 1, limit = 20, role, search } = req.query;
+    
+    const filters = {};
+    if (role && role !== 'all') filters.role = role;
+    if (search) filters.search = search;
 
-    if (role && role !== 'all') where.role = role;
-    if (department && department !== 'all') where.department = department;
-    if (search) {
-      where[Op.or] = [
-        { fullName: { [Op.iLike]: `%${search}%` } },
-        { email: { [Op.iLike]: `%${search}%` } },
-        { username: { [Op.iLike]: `%${search}%` } }
-      ];
-    }
+    const repository = getUserRepository();
+    const result = await repository.getAllUsers(filters, parseInt(page), parseInt(limit));
 
-    if (!User) {
-      return res.status(500).json({ success: false, message: 'User model not initialized' });
-    }
-
-    const users = await User.findAll({
-      where,
-      attributes: { exclude: ['password'] },
-      order: [['createdAt', 'DESC']],
-      limit: parseInt(limit),
-      offset: (parseInt(page) - 1) * parseInt(limit),
-      raw: true
-    });
-
-    const total = await User.count({ where });
-
-    res.json({
-      success: true,
-      data: {
-        users,
-        pagination: {
-          current: parseInt(page),
-          pages: Math.ceil(total / limit),
-          total
-        }
-      }
-    });
+    return res.json(result);
   } catch (error) {
-    console.error('[adminController] Error fetching users:', error);
-    res.status(500).json({ success: false, message: 'Error fetching users', error: error.message });
+    console.error('[adminController] Error in getAllUsers:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching users',
+      error: error.message
+    });
   }
 };
 
@@ -339,62 +328,65 @@ exports.updateUserRoleBySuperAdmin = async (req, res) => {
 exports.getAllProducts = async (req, res) => {
   try {
     const { page = 1, limit = 20, category, status, vendor } = req.query;
-    let query = {};
-    if (category && category !== 'all') query.category = category;
-    if (status && status !== 'all') query.status = status;
-    if (vendor) query.vendor = vendor;
+    
+    const filters = {};
+    if (category && category !== 'all') filters.category = category;
+    if (status && status !== 'all') filters.status = status;
+    if (vendor) filters.vendor = vendor;
 
-    const products = await Product.find(query)
-      .populate('vendor', 'fullName email')
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
+    const repository = getProductRepository();
+    const result = await repository.getAllProducts(filters, parseInt(page), parseInt(limit));
 
-    const total = await Product.countDocuments(query);
-
-    res.json({
-      success: true,
-      data: {
-        products,
-        pagination: { current: parseInt(page), pages: Math.ceil(total / limit), total }
-      }
-    });
+    return res.json(result);
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error fetching products', error: error.message });
+    console.error('[adminController] Error in getAllProducts:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching products',
+      error: error.message
+    });
   }
 };
 
 // ✅ Get all orders
+// ✅ Get all orders (DATABASE-AGNOSTIC - works with MongoDB, PostgreSQL, MySQL)
 exports.getAllOrders = async (req, res) => {
   try {
     const { page = 1, limit = 20, status } = req.query;
-    let query = {};
-    if (status && status !== 'all') query.status = status;
+    
+    const filters = {};
+    if (status && status !== 'all') {
+      filters.status = status;
+    }
 
-    const orders = await Order.find(query)
-      .populate('customer', 'fullName email')
-      .populate('items.product', 'name price')
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit);
-    const total = await Order.countDocuments(query);
+    const repository = getOrderRepository();
+    const result = await repository.getAllOrders(filters, parseInt(page), parseInt(limit));
 
-    res.json({
-      success: true,
-      data: { orders, pagination: { current: parseInt(page), pages: Math.ceil(total / limit), total } }
-    });
+    return res.json(result);
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error fetching orders', error: error.message });
+    console.error('[adminController] Error in getAllOrders:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching orders',
+      error: error.message
+    });
   }
 };
 
 // ✅ Get all vendors
 exports.getAllVendors = async (req, res) => {
   try {
-    const vendors = await User.find({ role: 'vendor' }).select('-password').sort({ createdAt: -1 });
-    res.json({ success: true, data: { vendors } });
+    const repository = getUserRepository();
+    const result = await repository.getUsersByRole('vendor', 1, 1000);
+
+    return res.json(result);
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error fetching vendors', error: error.message });
+    console.error('[adminController] Error in getAllVendors:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching vendors',
+      error: error.message
+    });
   }
 };
 
@@ -471,62 +463,30 @@ exports.getQuickActions = async (req, res) => {
     res.status(500).json({ success: false, message: 'Error fetching quick actions', error: error.message });
   }
 };
-// ✅ Get recent orders for dashboard
+// ✅ Get recent orders for dashboard (DATABASE-AGNOSTIC)
 exports.getRecentOrders = async (req, res) => {
   try {
     const { limit = 5 } = req.query;
-    
-    // Return demo data with all required fields for the dashboard table
-    const recentOrders = [
-      {
-        id: 'ORD-001',
-        customer: 'John Smith',
-        products: 'Summer Dress, Shoes',
-        amount: 2500,
-        date: new Date(Date.now() - 86400000).toLocaleDateString(),
-        status: 'completed'
-      },
-      {
-        id: 'ORD-002',
-        customer: 'Sarah Johnson',
-        products: 'T-Shirt, Jeans',
-        amount: 1850,
-        date: new Date(Date.now() - 172800000).toLocaleDateString(),
-        status: 'processing'
-      },
-      {
-        id: 'ORD-003',
-        customer: 'Mike Davis',
-        products: 'Jacket, Boots, Belt',
-        amount: 3200,
-        date: new Date(Date.now() - 259200000).toLocaleDateString(),
-        status: 'pending'
-      },
-      {
-        id: 'ORD-004',
-        customer: 'Emily Chen',
-        products: 'Sweater',
-        amount: 1500,
-        date: new Date(Date.now() - 345600000).toLocaleDateString(),
-        status: 'completed'
-      },
-      {
-        id: 'ORD-005',
-        customer: 'Robert Wilson',
-        products: 'Shorts, Polo Shirt, Socks',
-        amount: 2800,
-        date: new Date(Date.now() - 432000000).toLocaleDateString(),
-        status: 'completed'
-      }
-    ];
+
+    const repository = getOrderRepository();
+    const result = await repository.getRecentOrders(parseInt(limit));
+
+    if (!result.success) {
+      return res.status(500).json(result);
+    }
 
     res.json({
       success: true,
       data: {
-        recentOrders: recentOrders.slice(0, Math.min(limit, recentOrders.length))
+        recentOrders: result.data.orders
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, message: 'Error fetching recent orders', error: error.message });
+    console.error('[adminController] Unexpected error in getRecentOrders:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching recent orders',
+      error: error.message
+    });
   }
 };
