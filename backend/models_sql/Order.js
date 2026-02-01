@@ -3,6 +3,8 @@ module.exports = (sequelize, DataTypes) => {
     id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
     orderNumber: { type: DataTypes.STRING(50), allowNull: false, unique: true },
     customerId: { type: DataTypes.INTEGER, allowNull: false },
+    // some seeders use userId
+    userId: { type: DataTypes.INTEGER, allowNull: true },
     items: { type: DataTypes.JSON, defaultValue: [] },
     totalAmount: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
     status: { type: DataTypes.ENUM('pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'), defaultValue: 'pending' },

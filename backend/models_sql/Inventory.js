@@ -5,14 +5,14 @@ module.exports = (sequelize, DataTypes) => {
       primaryKey: true, 
       autoIncrement: true 
     },
-    productId: { 
-      type: DataTypes.INTEGER, 
+    productId: {
+      type: DataTypes.INTEGER,
       allowNull: false,
       references: { model: 'products', key: 'id' },
       onDelete: 'CASCADE'
     },
-    warehouseId: { 
-      type: DataTypes.INTEGER, 
+    warehouseId: {
+      type: DataTypes.INTEGER,
       allowNull: false,
       references: { model: 'warehouses', key: 'id' },
       onDelete: 'CASCADE'

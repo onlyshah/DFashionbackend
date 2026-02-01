@@ -18,24 +18,61 @@ module.exports = (sequelize, DataTypes) => {
     },
     password: {
       type: DataTypes.STRING(255),
-      allowNull: false
+      allowNull: false,
+      field: 'passwordHash'  // Map to actual DB column name
     },
-    fullName: {
+    firstName: {
       type: DataTypes.STRING(255),
+      allowNull: true,
+      field: 'firstName'
+    },
+    lastName: {
+      type: DataTypes.STRING(255),
+      allowNull: true,
+      field: 'lastName'
+    },
+    phone: {
+      type: DataTypes.STRING(20),
       allowNull: true
+    },
+    address: {
+      type: DataTypes.TEXT,
+      allowNull: true
+    },
+    city: {
+      type: DataTypes.STRING(100),
+      allowNull: true
+    },
+    state: {
+      type: DataTypes.STRING(100),
+      allowNull: true
+    },
+    zipCode: {
+      type: DataTypes.STRING(20),
+      allowNull: true
+    },
+    roleId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: 'roleId'
     },
     role: {
-      type: DataTypes.STRING(100),
-      allowNull: false,
-      defaultValue: 'customer'
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      field: 'role'
     },
-    department: {
-      type: DataTypes.STRING(150),
-      allowNull: true
+    departmentId: {
+      type: DataTypes.INTEGER,
+      allowNull: true,
+      field: 'departmentId'
     },
     isActive: {
       type: DataTypes.BOOLEAN,
       defaultValue: true
+    },
+    isVerified: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false
     },
     resetPasswordToken: {
       type: DataTypes.STRING(255),
@@ -50,8 +87,7 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true
     }
   }, {
-    tableName: 'users',
-    timestamps: true
+    tableName: 'Users',  // Match actual database table name    timestamps: true
   });
 
   return User;

@@ -1,37 +1,70 @@
-const { Sequelize } = require('sequelize');
 require('dotenv').config();
+const { Sequelize } = require('sequelize');
+const path = require('path');
+const fs = require('fs');
 
-const DB_NAME = process.env.PGDATABASE || process.env.POSTGRES_DB || 'dfashion';
-const DB_USER = process.env.PGUSER || process.env.POSTGRES_USER || 'postgres';
-const DB_PASS = process.env.PGPASSWORD || process.env.POSTGRES_PASSWORD || '123';
-const DB_HOST = process.env.PGHOST || process.env.POSTGRES_HOST || '127.0.0.1';
-const DB_PORT = parseInt(process.env.PGPORT || process.env.POSTGRES_PORT, 10) || 5432;
+// PostgreSQL Connection via Sequelize
+let sequelize = null;
 
-const sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASS, {
-  host: DB_HOST,
-  port: DB_PORT,
-  dialect: 'postgres',
-  logging: false,
-  pool: {
-    max: parseInt(process.env.PG_MAX_POOL_SIZE || '10', 10),
-    min: 0,
-    acquire: 30000,
-    idle: 10000
-  }
-});
-
-const testConnection = async () => {
+const connectSequelize = async () => {
   try {
+    const dbConfig = {
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      username: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion',
+      dialect: 'postgres',
+      logging: false, // Set to console.log for debugging
+      pool: {
+        max: 10,
+        min: 2,
+        acquire: 30000,
+        idle: 10000
+      },
+      dialectOptions: {
+        ssl: false,
+        application_name: 'dfashion_backend'
+      }
+    };
+
+    sequelize = new Sequelize(
+      dbConfig.database,
+      dbConfig.username,
+      dbConfig.password,
+      {
+        host: dbConfig.host,
+        port: dbConfig.port,
+        dialect: dbConfig.dialect,
+        logging: dbConfig.logging,
+        pool: dbConfig.pool,
+        dialectOptions: dbConfig.dialectOptions
+      }
+    );
+
+    // Test connection
     await sequelize.authenticate();
-    console.log('✅ Sequelize authenticated with Postgres');
-  } catch (err) {
-    console.error('❌ Sequelize failed to authenticate:', err.message || err);
-    throw err;
+    console.log('✅ PostgreSQL (Sequelize) connected successfully');
+    
+    return sequelize;
+  } catch (error) {
+    console.error('❌ PostgreSQL connection failed:', error.message);
+    return null;
   }
+};
+
+// Initialize Sequelize if not already initialized
+const getSequelize = async () => {
+  if (!sequelize) {
+    const result = await connectSequelize();
+    if (!result) return null;
+  }
+  return sequelize;
 };
 
 module.exports = {
   sequelize,
   Sequelize,
-  testConnection
+  connectSequelize,
+  getSequelize
 };

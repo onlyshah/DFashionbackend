@@ -1,246 +1,202 @@
 /**
- * Order Controller
- * Handles all business logic for order management
- * Model → Controller → Routes pattern
+ * ============================================================================
+ * ORDER CONTROLLER - PostgreSQL/Sequelize
+ * ============================================================================
+ * Purpose: Order management, tracking, status updates, refunds
+ * Database: PostgreSQL via Sequelize ORM
  */
 
-const dbType = (process.env.DB_TYPE || '').toLowerCase();
-const models = dbType === 'postgres' ? require('../models_sql') : require('../models')();
-const { Order, Product, User } = models;
-
-// ==================== ORDER OPERATIONS ====================
-
-/**
- * Get user's orders with pagination and filtering
- */
-exports.getUserOrders = async (req, res) => {
-  try {
-    const {
-      page = 1,
-      limit = 10,
-      status,
-      sortBy = 'createdAt',
-      sortOrder = 'desc'
-    } = req.query;
-
-    const filter = { customer: req.user.userId };
-    if (status) filter.status = status;
-
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const sortOptions = { [sortBy]: sortOrder === 'desc' ? -1 : 1 };
-
-    const orders = await Order.find(filter)
-      .populate('items.product', 'name images price brand')
-      .sort(sortOptions)
-      .skip(skip)
-      .limit(parseInt(limit));
-
-    const totalOrders = await Order.countDocuments(filter);
-
-    res.json({
-      success: true,
-      data: {
-        orders,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(totalOrders / parseInt(limit)),
-          totalOrders
-        }
-      }
-    });
-  } catch (error) {
-    console.error('Get orders error:', error.message, error.stack);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch orders',
-      error: error.message
-    });
-  }
-};
+const models = require('../models');
+const ApiResponse = require('../utils/ApiResponse');
+const { validatePagination } = require('../utils/validation');
+const { Op } = require('sequelize');
 
 /**
- * Get single order by ID
- */
-exports.getOrderById = async (req, res) => {
-  try {
-    const order = await Order.findById(req.params.id)
-      .populate('customer', 'fullName email username avatar')
-      .populate('items.product', 'name images price brand category')
-      .populate('timeline.updatedBy', 'fullName role');
-
-    if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: 'Order not found'
-      });
-    }
-
-    // Check access permissions
-    const hasAccess = order.customer._id.toString() === req.user.userId ||
-                     ['admin', 'sales_manager', 'support_manager'].includes(req.user.role);
-
-    if (!hasAccess) {
-      return res.status(403).json({
-        success: false,
-        message: 'Access denied'
-      });
-    }
-
-    res.json({
-      success: true,
-      data: { order }
-    });
-  } catch (error) {
-    console.error('Get order error:', error.message, error.stack);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch order',
-      error: error.message
-    });
-  }
-};
-
-/**
- * Create new order
+ * Create new order from cart
  */
 exports.createOrder = async (req, res) => {
   try {
-    const {
-      items,
-      shippingAddress,
-      billingAddress,
-      paymentMethod,
-      couponCode
-    } = req.body;
+    const { shipping_address_id, billing_address_id, payment_method, notes } = req.body;
 
-    // Validate required fields
-    if (!items || items.length === 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Order must have at least one item'
-      });
+    // Validate addresses
+    const shipping_addr = await models.Address.findByPk(shipping_address_id);
+    if (!shipping_addr || shipping_addr.user_id !== req.user.id) {
+      return ApiResponse.notFound(res, 'Shipping address');
     }
 
-    // Verify product availability and calculate total
+    const billing_addr = await models.Address.findByPk(billing_address_id);
+    if (!billing_addr || billing_addr.user_id !== req.user.id) {
+      return ApiResponse.notFound(res, 'Billing address');
+    }
+
+    // Get cart
+    const cart = await models.Cart.findOne({
+      where: { user_id: req.user.id },
+      include: {
+        model: models.CartItem,
+        as: 'items',
+        include: { model: models.Product, attributes: ['id', 'name', 'price', 'stock'] }
+      }
+    });
+
+    if (!cart || !cart.items || cart.items.length === 0) {
+      return ApiResponse.error(res, 'Cart is empty', 422);
+    }
+
+    // Verify stock and calculate total
     let subtotal = 0;
-    const orderItems = [];
-
-    for (const item of items) {
-      const product = await Product.findById(item.productId);
-      
-      if (!product) {
-        return res.status(404).json({
-          success: false,
-          message: `Product ${item.productId} not found`
-        });
+    for (const item of cart.items) {
+      if (item.Product.stock < item.quantity) {
+        return ApiResponse.error(res, `Insufficient stock for ${item.Product.name}`, 409);
       }
-
-      if (product.quantity < item.quantity) {
-        return res.status(400).json({
-          success: false,
-          message: `Insufficient stock for ${product.name}`
-        });
-      }
-
-      orderItems.push({
-        product: item.productId,
-        quantity: item.quantity,
-        price: product.price,
-        discount: item.discount || 0,
-        total: (product.price * item.quantity) - (item.discount || 0)
-      });
-
-      subtotal += (product.price * item.quantity) - (item.discount || 0);
+      subtotal += item.Product.price * item.quantity;
     }
 
-    // Create order
-    const order = new Order({
-      customer: req.user.userId,
-      items: orderItems,
-      subtotal,
-      tax: subtotal * 0.18, // 18% GST
-      shipping: 100, // Default shipping charge
-      total: subtotal + (subtotal * 0.18) + 100,
-      shippingAddress,
-      billingAddress: billingAddress || shippingAddress,
-      paymentMethod,
-      couponCode,
-      status: 'pending',
-      timeline: [{
+    const TAX_RATE = 0.18;
+    const tax_amount = subtotal * TAX_RATE;
+    const shipping_cost = subtotal > 500 ? 0 : 100;
+    const total_amount = subtotal + tax_amount + shipping_cost;
+
+    // Create order (transaction for consistency)
+    const t = await models.sequelize.transaction();
+    try {
+      const order = await models.Order.create({
+        user_id: req.user.id,
+        order_number: `ORD-${Date.now()}`,
         status: 'pending',
-        timestamp: Date.now(),
-        note: 'Order created'
-      }]
-    });
+        subtotal,
+        tax_amount,
+        shipping_cost,
+        total_amount,
+        shipping_address_id,
+        billing_address_id,
+        payment_method,
+        notes
+      }, { transaction: t });
 
-    await order.save();
-    await order.populate('items.product', 'name images price');
+      // Create order items and reduce stock
+      for (const cart_item of cart.items) {
+        await models.OrderItem.create({
+          order_id: order.id,
+          product_id: cart_item.product_id,
+          quantity: cart_item.quantity,
+          unit_price: cart_item.Product.price
+        }, { transaction: t });
 
-    res.status(201).json({
-      success: true,
-      message: 'Order created successfully',
-      data: { order }
-    });
+        await cart_item.Product.decrement('stock', { by: cart_item.quantity, transaction: t });
+      }
+
+      // Clear cart
+      await models.CartItem.destroy({ where: { cart_id: cart.id }, transaction: t });
+
+      await t.commit();
+
+      const created_order = await models.Order.findByPk(order.id, {
+        include: [
+          { model: models.OrderItem, as: 'items' },
+          { model: models.Address, as: 'shipping_address' }
+        ]
+      });
+
+      return ApiResponse.created(res, created_order, 'Order created successfully');
+    } catch (error) {
+      await t.rollback();
+      throw error;
+    }
   } catch (error) {
-    console.error('Create order error:', error.message, error.stack);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to create order',
-      error: error.message
-    });
+    console.error('❌ createOrder error:', error);
+    return ApiResponse.serverError(res, error);
   }
 };
 
 /**
- * Update order status
+ * Get user's orders
+ */
+exports.getUserOrders = exports.getOrders = async (req, res) => {
+  try {
+    const { page, limit } = validatePagination(req.query.page, req.query.limit);
+    const { status } = req.query;
+    const offset = (page - 1) * limit;
+
+    const where = { user_id: req.user.id };
+    if (status) where.status = status;
+
+    const { count, rows } = await models.Order.findAndCountAll({
+      where,
+      include: [
+        { model: models.OrderItem, as: 'items', attributes: ['id', 'quantity', 'unit_price'] },
+        { model: models.Address, as: 'shipping_address', attributes: ['street', 'city', 'state', 'postal_code'] }
+      ],
+      order: [['createdAt', 'DESC']],
+      limit,
+      offset,
+      distinct: true
+    });
+
+    const pagination = { page, limit, total: count, totalPages: Math.ceil(count / limit) };
+
+    return ApiResponse.paginated(res, rows, pagination, 'Orders retrieved successfully');
+  } catch (error) {
+    console.error('❌ getOrders error:', error);
+    return ApiResponse.serverError(res, error);
+  }
+};
+
+/**
+ * Get order by ID
+ */
+exports.getOrderById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const order = await models.Order.findByPk(id, {
+      include: [
+        { model: models.OrderItem, as: 'items', include: { model: models.Product, attributes: ['name', 'images'] } },
+        { model: models.Address, as: 'shipping_address' },
+        { model: models.Address, as: 'billing_address' }
+      ]
+    });
+
+    if (!order) {
+      return ApiResponse.notFound(res, 'Order');
+    }
+
+    // Verify ownership or admin
+    if (order.user_id !== req.user.id && req.user.role !== 'admin' && req.user.role !== 'super_admin') {
+      return ApiResponse.forbidden(res, 'You can only view your own orders');
+    }
+
+    return ApiResponse.success(res, order, 'Order retrieved successfully');
+  } catch (error) {
+    console.error('❌ getOrderById error:', error);
+    return ApiResponse.serverError(res, error);
+  }
+};
+
+/**
+ * Update order status (admin only)
  */
 exports.updateOrderStatus = async (req, res) => {
   try {
-    const { status, note } = req.body;
+    const { id } = req.params;
+    const { status } = req.body;
 
-    const validStatuses = ['pending', 'confirmed', 'processing', 'shipped', 'delivered', 'cancelled', 'returned'];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({
-        success: false,
-        message: 'Invalid order status'
-      });
+    const valid_statuses = ['pending', 'processing', 'shipped', 'delivered', 'cancelled', 'refunded'];
+    if (!valid_statuses.includes(status)) {
+      return ApiResponse.error(res, 'Invalid status', 422);
     }
 
-    const order = await Order.findByIdAndUpdate(
-      req.params.id,
-      {
-        status,
-        $push: {
-          timeline: {
-            status,
-            timestamp: Date.now(),
-            updatedBy: req.user.userId,
-            note: note || `Order ${status}`
-          }
-        }
-      },
-      { new: true }
-    ).populate('items.product', 'name images price');
-
+    const order = await models.Order.findByPk(id);
     if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: 'Order not found'
-      });
+      return ApiResponse.notFound(res, 'Order');
     }
 
-    res.json({
-      success: true,
-      message: 'Order status updated',
-      data: { order }
-    });
+    await order.update({ status });
+
+    return ApiResponse.success(res, order, 'Order status updated successfully');
   } catch (error) {
-    console.error('Update order status error:', error.message, error.stack);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to update order status',
-      error: error.message
-    });
+    console.error('❌ updateOrderStatus error:', error);
+    return ApiResponse.serverError(res, error);
   }
 };
 
@@ -249,104 +205,163 @@ exports.updateOrderStatus = async (req, res) => {
  */
 exports.cancelOrder = async (req, res) => {
   try {
+    const { id } = req.params;
     const { reason } = req.body;
 
-    const order = await Order.findById(req.params.id);
-
+    const order = await models.Order.findByPk(id);
     if (!order) {
-      return res.status(404).json({
-        success: false,
-        message: 'Order not found'
-      });
+      return ApiResponse.notFound(res, 'Order');
     }
 
-    // Check if order can be cancelled
-    if (['delivered', 'returned', 'cancelled'].includes(order.status)) {
-      return res.status(400).json({
-        success: false,
-        message: `Cannot cancel ${order.status} order`
-      });
+    // Verify ownership
+    if (order.user_id !== req.user.id && req.user.role !== 'admin') {
+      return ApiResponse.forbidden(res, 'You can only cancel your own orders');
     }
 
-    order.status = 'cancelled';
-    order.cancellationReason = reason;
-    order.cancelledAt = Date.now();
-    order.timeline.push({
-      status: 'cancelled',
-      timestamp: Date.now(),
-      updatedBy: req.user.userId,
-      note: `Order cancelled: ${reason}`
-    });
+    // Can only cancel pending or processing orders
+    if (!['pending', 'processing'].includes(order.status)) {
+      return ApiResponse.error(res, 'Order cannot be cancelled at current status', 409);
+    }
 
-    await order.save();
-    await order.populate('items.product', 'name images price');
+    const t = await models.sequelize.transaction();
+    try {
+      // Restore stock
+      const items = await models.OrderItem.findAll({ where: { order_id: id }, transaction: t });
+      for (const item of items) {
+        await models.Product.increment('stock', { by: item.quantity, where: { id: item.product_id }, transaction: t });
+      }
 
-    res.json({
-      success: true,
-      message: 'Order cancelled successfully',
-      data: { order }
-    });
+      // Update order status
+      await order.update({ status: 'cancelled', cancellation_reason: reason }, { transaction: t });
+
+      await t.commit();
+
+      return ApiResponse.success(res, order, 'Order cancelled successfully');
+    } catch (error) {
+      await t.rollback();
+      throw error;
+    }
   } catch (error) {
-    console.error('Cancel order error:', error.message, error.stack);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to cancel order',
-      error: error.message
-    });
+    console.error('❌ cancelOrder error:', error);
+    return ApiResponse.serverError(res, error);
   }
 };
 
 /**
- * Get all orders (admin only)
+ * Track order
  */
-exports.getAllOrders = async (req, res) => {
+exports.trackOrder = async (req, res) => {
   try {
-    const {
-      page = 1,
-      limit = 20,
-      status,
-      customer,
-      startDate,
-      endDate
-    } = req.query;
+    const { id } = req.params;
 
-    const filter = {};
-    if (status) filter.status = status;
-    if (customer) filter.customer = customer;
-
-    if (startDate || endDate) {
-      filter.createdAt = {};
-      if (startDate) filter.createdAt.$gte = new Date(startDate);
-      if (endDate) filter.createdAt.$lte = new Date(endDate);
-    }
-
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-
-    const orders = await Order.find(filter)
-      .populate('customer', 'fullName email username')
-      .populate('items.product', 'name price')
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(parseInt(limit));
-
-    const total = await Order.countDocuments(filter);
-
-    res.json({
-      success: true,
-      data: orders,
-      pagination: {
-        currentPage: parseInt(page),
-        limit: parseInt(limit),
-        totalOrders: total,
-        totalPages: Math.ceil(total / parseInt(limit))
+    const order = await models.Order.findByPk(id, {
+      attributes: ['id', 'order_number', 'status', 'createdAt', 'updatedAt', 'shipping_cost'],
+      include: {
+        model: models.Address,
+        as: 'shipping_address',
+        attributes: ['street', 'city', 'state', 'postal_code', 'country']
       }
     });
+
+    if (!order) {
+      return ApiResponse.notFound(res, 'Order');
+    }
+
+    // Verify ownership
+    if (order.user_id !== req.user.id && req.user.role !== 'admin') {
+      return ApiResponse.forbidden(res, 'You can only track your own orders');
+    }
+
+    return ApiResponse.success(res, {
+      order_number: order.order_number,
+      status: order.status,
+      shipping_address: order.shipping_address,
+      timeline: {
+        ordered_at: order.createdAt,
+        last_update: order.updatedAt
+      }
+    }, 'Order tracking information retrieved successfully');
   } catch (error) {
-    console.error('Get all orders error:', error.message, error.stack);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch orders',
-      error: error.message
+    console.error('❌ trackOrder error:', error);
+    return ApiResponse.serverError(res, error);
+  }
+};
+
+/**
+ * Get order statistics (admin)
+ */
+exports.getOrderStats = async (req, res) => {
+  try {
+    const { days = 30 } = req.query;
+    const date = new Date();
+    date.setDate(date.getDate() - parseInt(days));
+
+    const total_orders = await models.Order.count({
+      where: { createdAt: { [Op.gte]: date } }
     });
+
+    const total_revenue = await models.Order.sum('total_amount', {
+      where: { createdAt: { [Op.gte]: date } }
+    });
+
+    const orders_by_status = await models.Order.findAll({
+      attributes: ['status', [models.sequelize.fn('COUNT', models.sequelize.col('id')), 'count']],
+      where: { createdAt: { [Op.gte]: date } },
+      group: ['status'],
+      raw: true
+    });
+
+    return ApiResponse.success(res, {
+      total_orders,
+      total_revenue: total_revenue || 0,
+      orders_by_status
+    }, 'Order statistics retrieved successfully');
+  } catch (error) {
+    console.error('❌ getOrderStats error:', error);
+    return ApiResponse.serverError(res, error);
+  }
+};
+
+/**
+ * Generate invoice for order
+ */
+exports.generateInvoice = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const order = await models.Order.findByPk(orderId, {
+      include: [
+        { model: models.OrderItem, as: 'items', include: { model: models.Product } },
+        { model: models.Address, as: 'shipping_address' }
+      ]
+    });
+
+    if (!order) {
+      return ApiResponse.notFound(res, 'Order');
+    }
+
+    // Verify ownership
+    if (order.user_id !== req.user.id && req.user.role !== 'admin') {
+      return ApiResponse.forbidden(res, 'You can only view your own invoice');
+    }
+
+    // Generate invoice data
+    const invoice = {
+      invoice_number: `INV-${order.order_number}`,
+      order_id: order.id,
+      order_number: order.order_number,
+      date: order.createdAt,
+      items: order.items,
+      subtotal: order.subtotal,
+      tax: order.tax_amount,
+      shipping: order.shipping_cost,
+      total: order.total_amount,
+      shipping_address: order.shipping_address
+    };
+
+    return ApiResponse.success(res, invoice, 'Invoice generated successfully');
+  } catch (error) {
+    console.error('❌ generateInvoice error:', error);
+    return ApiResponse.serverError(res, error);
   }
 };

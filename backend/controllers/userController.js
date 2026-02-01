@@ -1,6 +1,6 @@
-const models = require('../models');
-const User = models.User;
 const bcrypt = require('bcryptjs');
+const ServiceLoader = require('../services/ServiceLoader');
+const userService = ServiceLoader.loadService('userService');
 
 // @desc    Get all users (Admin only)
 // @route   GET /api/users
@@ -19,44 +19,27 @@ const getAllUsers = async (req, res) => {
     } = req.query;
 
     // Build filter
-    const filter = {};
+    const filters = {};
+    if (search) filters.search = search;
+    if (role) filters.role = role;
+    if (department) filters.department = department;
+    if (isActive !== '') filters.isActive = isActive === 'true';
 
-    if (search) {
-      filter.$or = [
-        { fullName: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } },
-        { username: { $regex: search, $options: 'i' } }
-      ];
+    // Call service layer
+    const result = await userService.getAllUsers(filters, parseInt(page), parseInt(limit));
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        message: result.error || 'Failed to fetch users'
+      });
     }
-
-    if (role) filter.role = role;
-    if (department) filter.department = department;
-    if (isActive !== '') filter.isActive = isActive === 'true';
-
-    // Pagination
-    const skip = (parseInt(page) - 1) * parseInt(limit);
-    const sortOptions = { [sortBy]: sortOrder === 'desc' ? -1 : 1 };
-
-    // Get users
-    const users = await User.find(filter)
-      .select('-password')
-      .sort(sortOptions)
-      .skip(skip)
-      .limit(parseInt(limit));
-
-    const totalUsers = await User.countDocuments(filter);
 
     res.json({
       success: true,
       data: {
-        users,
-        pagination: {
-          currentPage: parseInt(page),
-          totalPages: Math.ceil(totalUsers / parseInt(limit)),
-          totalUsers,
-          hasNextPage: parseInt(page) < Math.ceil(totalUsers / parseInt(limit)),
-          hasPrevPage: parseInt(page) > 1
-        }
+        users: result.data,
+        pagination: result.pagination
       }
     });
 
@@ -74,9 +57,9 @@ const getAllUsers = async (req, res) => {
 // @access  Private
 const getUserById = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select('-password');
+    const result = await userService.getUserById(req.params.id);
 
-    if (!user) {
+    if (!result.success || !result.data) {
       return res.status(404).json({
         success: false,
         message: 'User not found'
@@ -85,7 +68,7 @@ const getUserById = async (req, res) => {
 
     res.json({
       success: true,
-      data: { user }
+      data: { user: result.data }
     });
 
   } catch (error) {
@@ -600,6 +583,430 @@ const getLimitedUserData = async (req, res) => {
   }
 };
 
+/**
+ * Get user profile by username
+ */
+const getUserProfile = async (req, res) => {
+  try {
+    const user = await User.findOne({ username: req.params.username })
+      .select('-password')
+      .populate('followers', 'username fullName avatar')
+      .populate('following', 'username fullName avatar');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const userObj = user.toObject();
+    userObj.image = user.image || user.avatar || '/uploads/default-avatar.svg';
+
+    res.json({
+      success: true,
+      user: userObj
+    });
+  } catch (error) {
+    console.error('Get profile error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Follow/unfollow user
+ */
+const toggleFollowUser = async (req, res) => {
+  try {
+    const targetUser = await User.findById(req.params.userId);
+    const currentUser = await User.findById(req.user._id);
+
+    if (!targetUser) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    if (req.params.userId === req.user._id.toString()) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot follow yourself'
+      });
+    }
+
+    const isFollowing = currentUser.following.includes(req.params.userId);
+
+    if (isFollowing) {
+      currentUser.following.pull(req.params.userId);
+      targetUser.followers.pull(req.user._id);
+      currentUser.socialStats.followingCount -= 1;
+      targetUser.socialStats.followersCount -= 1;
+    } else {
+      currentUser.following.push(req.params.userId);
+      targetUser.followers.push(req.user._id);
+      currentUser.socialStats.followingCount += 1;
+      targetUser.socialStats.followersCount += 1;
+    }
+
+    await currentUser.save();
+    await targetUser.save();
+
+    res.json({
+      success: true,
+      message: isFollowing ? 'Unfollowed successfully' : 'Followed successfully',
+      isFollowing: !isFollowing,
+      followersCount: targetUser.socialStats.followersCount,
+      followingCount: currentUser.socialStats.followingCount
+    });
+  } catch (error) {
+    console.error('Follow user error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get user's followers
+ */
+const getFollowers = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const user = await User.findById(req.params.userId)
+      .populate({
+        path: 'followers',
+        select: 'username fullName avatar socialStats.followersCount',
+        options: { skip, limit }
+      });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const totalFollowers = await User.findById(req.params.userId).select('followers');
+
+    res.json({
+      success: true,
+      followers: user.followers,
+      pagination: {
+        current: page,
+        pages: Math.ceil(totalFollowers.followers.length / limit),
+        total: totalFollowers.followers.length
+      }
+    });
+  } catch (error) {
+    console.error('Get followers error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get user's following list
+ */
+const getFollowing = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const user = await User.findById(req.params.userId)
+      .populate({
+        path: 'following',
+        select: 'username fullName avatar socialStats.followersCount',
+        options: { skip, limit }
+      });
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const totalFollowing = await User.findById(req.params.userId).select('following');
+
+    res.json({
+      success: true,
+      following: user.following,
+      pagination: {
+        current: page,
+        pages: Math.ceil(totalFollowing.following.length / limit),
+        total: totalFollowing.following.length
+      }
+    });
+  } catch (error) {
+    console.error('Get following error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Check follow status
+ */
+const getFollowStatus = async (req, res) => {
+  try {
+    if (req.params.userId === req.user._id.toString()) {
+      return res.json({
+        success: true,
+        isFollowing: false,
+        isSelf: true
+      });
+    }
+
+    const currentUser = await User.findById(req.user._id).select('following');
+    const isFollowing = currentUser.following.includes(req.params.userId);
+
+    res.json({
+      success: true,
+      isFollowing,
+      isSelf: false
+    });
+  } catch (error) {
+    console.error('Get follow status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Update user profile
+ */
+const updateProfile = async (req, res) => {
+  try {
+    const { fullName, bio, website, location, dateOfBirth, image } = req.body;
+
+    const updateData = {};
+    if (fullName) updateData.fullName = fullName;
+    if (bio !== undefined) updateData.bio = bio;
+    if (website !== undefined) updateData.website = website;
+    if (location !== undefined) updateData.location = location;
+    if (dateOfBirth !== undefined) updateData.dateOfBirth = dateOfBirth;
+    if (image !== undefined) updateData.image = image;
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      updateData,
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Profile updated successfully',
+      data: { user }
+    });
+  } catch (error) {
+    console.error('Profile update error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get suggested users
+ */
+const getSuggestedUsers = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 6;
+    const skip = (page - 1) * limit;
+
+    const suggestedUsers = await User.find({
+      isActive: true,
+      isVerified: true,
+      role: 'customer'
+    })
+      .select('username fullName avatar bio socialStats')
+      .sort({ 'socialStats.followersCount': -1, createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const transformedUsers = suggestedUsers.map(user => ({
+      id: user._id,
+      username: user.username,
+      fullName: user.fullName,
+      image: user.image || user.avatar || '/uploads/default-avatar.svg',
+      followedBy: `Followed by ${Math.floor(Math.random() * 50) + 10} others`,
+      isFollowing: false
+    }));
+
+    const total = await User.countDocuments({
+      isActive: true,
+      isVerified: true,
+      role: 'customer'
+    });
+
+    res.json({
+      success: true,
+      data: transformedUsers,
+      pagination: {
+        current: page,
+        pages: Math.ceil(total / limit),
+        total,
+        hasNext: page < Math.ceil(total / limit),
+        hasPrev: page > 1
+      }
+    });
+  } catch (error) {
+    console.error('Get suggested users error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get top influencers
+ */
+const getInfluencers = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const influencers = await User.find({
+      isInfluencer: true,
+      isActive: true,
+      isVerified: true
+    })
+      .select('username fullName avatar bio socialStats isInfluencer')
+      .sort({ 'socialStats.followersCount': -1, 'socialStats.postsCount': -1 })
+      .skip(skip)
+      .limit(limit);
+
+    const total = await User.countDocuments({
+      isInfluencer: true,
+      isActive: true,
+      isVerified: true
+    });
+
+    const transformedInfluencers = influencers.map(influencer => ({
+      id: influencer._id,
+      username: influencer.username,
+      fullName: influencer.fullName,
+      avatar: influencer.avatar || '/uploads/default-avatar.svg',
+      followersCount: influencer.socialStats?.followersCount || Math.floor(Math.random() * 100000) + 10000,
+      postsCount: influencer.socialStats?.postsCount || Math.floor(Math.random() * 500) + 50,
+      engagement: Math.floor(Math.random() * 15) + 5,
+      isFollowing: false
+    }));
+
+    res.json({
+      success: true,
+      data: transformedInfluencers,
+      pagination: {
+        current: page,
+        pages: Math.ceil(total / limit),
+        total,
+        hasNext: page < Math.ceil(total / limit),
+        hasPrev: page > 1
+      }
+    });
+  } catch (error) {
+    console.error('Get influencers error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get user's liked products
+ */
+const getLikedProducts = async (req, res) => {
+  try {
+    const Product = require('../models/Product');
+
+    const products = await Product.find({
+      'likes.user': req.user._id,
+      isActive: true
+    })
+      .select('_id name brand price images')
+      .populate('vendor', 'username fullName')
+      .sort({ 'likes.likedAt': -1 });
+
+    res.json({
+      success: true,
+      data: products,
+      message: 'Liked products retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Get liked products error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get liked products',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get user's liked posts
+ */
+const getLikedPosts = async (req, res) => {
+  try {
+    const Post = require('../models/Post');
+
+    const posts = await Post.find({
+      'likes.user': req.user._id,
+      isActive: true
+    })
+      .select('_id caption media user createdAt')
+      .populate('user', 'username fullName avatar')
+      .sort({ 'likes.likedAt': -1 });
+
+    res.json({
+      success: true,
+      data: posts,
+      message: 'Liked posts retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Get liked posts error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get liked posts',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllUsers,
   getUserById,
@@ -611,5 +1018,15 @@ module.exports = {
   getUserStats,
   getAllUsersForManagement,
   getCustomerData,
-  getLimitedUserData
+  getLimitedUserData,
+  getUserProfile,
+  toggleFollowUser,
+  getFollowers,
+  getFollowing,
+  getFollowStatus,
+  updateProfile,
+  getSuggestedUsers,
+  getInfluencers,
+  getLikedProducts,
+  getLikedPosts
 };

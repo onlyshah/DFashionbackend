@@ -9,8 +9,8 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.ENUM('critical', 'warning', 'info'), 
       allowNull: false 
     },
-    productId: { 
-      type: DataTypes.INTEGER, 
+    productId: {
+      type: DataTypes.INTEGER,
       allowNull: false,
       references: { model: 'products', key: 'id' },
       onDelete: 'CASCADE'
@@ -40,7 +40,7 @@ module.exports = (sequelize, DataTypes) => {
     acknowledgedBy: { 
       type: DataTypes.INTEGER,
       allowNull: true,
-      references: { model: 'users', key: 'id' },
+      references: { model: 'Users', key: 'id' },
       onDelete: 'SET NULL'
     },
     acknowledgedAt: { 

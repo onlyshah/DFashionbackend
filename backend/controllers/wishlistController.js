@@ -15,6 +15,17 @@ const { Wishlist, Product, Cart } = models;
  */
 exports.getWishlist = async (req, res) => {
   try {
+    // If no user (optional auth), return empty wishlist
+    if (!req.user) {
+      return res.json({
+        success: true,
+        data: {
+          wishlist: { items: [] },
+          itemCount: 0
+        }
+      });
+    }
+
     let wishlist = await Wishlist.findOne({ userId: req.user.userId })
       .populate('items.productId', 'name price images brand category stock rating');
 

@@ -1,4 +1,56 @@
-const { sequelize, Sequelize } = require('../config/sequelize');
+const postgresModule = require('../config/postgres');
+let sequelize = null;
+const { Sequelize } = require('sequelize');
+const DataTypes = Sequelize.DataTypes;
+
+// Model cache - load models on-demand after sequelize is connected
+const modelCache = {};
+
+// Helper to get sequelize instance
+const getSequelizeInstance = async () => {
+  if (!sequelize) {
+    sequelize = await postgresModule.getPostgresConnection();
+  }
+  return sequelize;
+};
+
+// Dynamically load a model - call this when you actually need the model
+const loadModel = async (modelName, defineFunc) => {
+  // If already cached, return it
+  if (modelCache[modelName]) {
+    return modelCache[modelName];
+  }
+  
+  try {
+    const instance = await getSequelizeInstance();
+    if (!instance) {
+      console.error(`[models_sql] ${modelName}: Sequelize not connected, cannot load model`);
+      return null;
+    }
+    const model = defineFunc(instance, DataTypes);
+    modelCache[modelName] = model;
+    console.log(`[models_sql] Loaded model: ${modelName}`);
+    return model;
+  } catch (err) {
+    console.error(`[models_sql] Failed to load ${modelName}:`, err.message);
+    return null;
+  }
+};
+
+// Define models only after ensuring sequelize exists - immediate attempt (may return null stub)
+const defineModelSafely = (defineFunc, fallbackName) => {
+  try {
+    const instance = postgresModule.sequelizeInstance();
+    if (!instance) {
+      // Sequelize not connected yet - return placeholder that will fail gracefully
+      return null;
+    }
+    return defineFunc(instance, DataTypes);
+  } catch (err) {
+    console.error(`[models_sql] Failed to define ${fallbackName}:`, err.message);
+    return null;
+  }
+};
 
 const defineRole = require('./Role');
 const defineDepartment = require('./Department');
@@ -52,57 +104,72 @@ const defineInventory = require('./Inventory');
 const defineInventoryAlert = require('./InventoryAlert');
 const defineInventoryHistory = require('./InventoryHistory');
 
-const Role = defineRole(sequelize, Sequelize.DataTypes);
-const Department = defineDepartment(sequelize, Sequelize.DataTypes);
-const User = defineUser(sequelize, Sequelize.DataTypes);
-const Brand = defineBrand(sequelize, Sequelize.DataTypes);
-const Category = defineCategory(sequelize, Sequelize.DataTypes);
-const SubCategory = defineSubCategory(sequelize, Sequelize.DataTypes);
-const Product = defineProduct(sequelize, Sequelize.DataTypes);
-const ProductComment = defineProductComment(sequelize, Sequelize.DataTypes);
-const Post = definePost(sequelize, Sequelize.DataTypes);
-const Story = defineStory(sequelize, Sequelize.DataTypes);
-const Reel = defineReel(sequelize, Sequelize.DataTypes);
-const UserBehavior = defineUserBehavior(sequelize, Sequelize.DataTypes);
-const Permission = definePermission(sequelize, Sequelize.DataTypes);
-const Module = defineModule(sequelize, Sequelize.DataTypes);
-const RolePermission = defineRolePermission(sequelize, Sequelize.DataTypes);
-const Session = defineSession(sequelize, Sequelize.DataTypes);
-const Cart = defineCart(sequelize, Sequelize.DataTypes);
-const Wishlist = defineWishlist(sequelize, Sequelize.DataTypes);
-const Order = defineOrder(sequelize, Sequelize.DataTypes);
-const Payment = definePayment(sequelize, Sequelize.DataTypes);
-const Return = defineReturn(sequelize, Sequelize.DataTypes);
-const Courier = defineCourier(sequelize, Sequelize.DataTypes);
-const Shipment = defineShipment(sequelize, Sequelize.DataTypes);
-const ShippingCharge = defineShippingCharge(sequelize, Sequelize.DataTypes);
-const Coupon = defineCoupon(sequelize, Sequelize.DataTypes);
-const FlashSale = defineFlashSale(sequelize, Sequelize.DataTypes);
-const Campaign = defineCampaign(sequelize, Sequelize.DataTypes);
-const Promotion = definePromotion(sequelize, Sequelize.DataTypes);
-const Notification = defineNotification(sequelize, Sequelize.DataTypes);
-const Reward = defineReward(sequelize, Sequelize.DataTypes);
-const Page = definePage(sequelize, Sequelize.DataTypes);
-const Banner = defineBanner(sequelize, Sequelize.DataTypes);
-const FAQ = defineFAQ(sequelize, Sequelize.DataTypes);
-const KYCDocument = defineKYCDocument(sequelize, Sequelize.DataTypes);
-const SellerCommission = defineSellerCommission(sequelize, Sequelize.DataTypes);
-const SellerPerformance = defineSellerPerformance(sequelize, Sequelize.DataTypes);
-const ProductShare = defineProductShare(sequelize, Sequelize.DataTypes);
-const SearchHistory = defineSearchHistory(sequelize, Sequelize.DataTypes);
-const SearchSuggestion = defineSearchSuggestion(sequelize, Sequelize.DataTypes);
-const TrendingSearch = defineTrendingSearch(sequelize, Sequelize.DataTypes);
-const LiveStream = defineLiveStream(sequelize, Sequelize.DataTypes);
-const AuditLog = defineAuditLog(sequelize, Sequelize.DataTypes);
-const Transaction = defineTransaction(sequelize, Sequelize.DataTypes);
-const Ticket = defineTicket(sequelize, Sequelize.DataTypes);
-const QuickAction = defineQuickAction(sequelize, Sequelize.DataTypes);
-const StyleInspiration = defineStyleInspiration(sequelize, Sequelize.DataTypes);
-const Warehouse = defineWarehouse(sequelize, Sequelize.DataTypes);
-const Supplier = defineSupplier(sequelize, Sequelize.DataTypes);
-const Inventory = defineInventory(sequelize, Sequelize.DataTypes);
-const InventoryAlert = defineInventoryAlert(sequelize, Sequelize.DataTypes);
-const InventoryHistory = defineInventoryHistory(sequelize, Sequelize.DataTypes);
+// Create null-safe stub models for initialization phase
+const createNullStub = (name) => {
+  return {
+    name: name,
+    findAll: async () => [],
+    findByPk: async () => null,
+    create: async () => null,
+    update: async () => null,
+    destroy: async () => null,
+    findOne: async () => null,
+    count: async () => 0
+  };
+};
+
+// Safely define models - returns null stub if sequelize not ready
+const Role = defineModelSafely(defineRole, 'Role') || createNullStub('Role');
+const Department = defineModelSafely(defineDepartment, 'Department') || createNullStub('Department');
+const User = defineModelSafely(defineUser, 'User') || createNullStub('User');
+const Brand = defineModelSafely(defineBrand, 'Brand') || createNullStub('Brand');
+const Category = defineModelSafely(defineCategory, 'Category') || createNullStub('Category');
+const SubCategory = defineModelSafely(defineSubCategory, 'SubCategory') || createNullStub('SubCategory');
+const Product = defineModelSafely(defineProduct, 'Product') || createNullStub('Product');
+const ProductComment = defineModelSafely(defineProductComment, 'ProductComment') || createNullStub('ProductComment');
+const Post = defineModelSafely(definePost, 'Post') || createNullStub('Post');
+const Story = defineModelSafely(defineStory, 'Story') || createNullStub('Story');
+const Reel = defineModelSafely(defineReel, 'Reel') || createNullStub('Reel');
+const UserBehavior = defineModelSafely(defineUserBehavior, 'UserBehavior') || createNullStub('UserBehavior');
+const Permission = defineModelSafely(definePermission, 'Permission') || createNullStub('Permission');
+const Module = defineModelSafely(defineModule, 'Module') || createNullStub('Module');
+const RolePermission = defineModelSafely(defineRolePermission, 'RolePermission') || createNullStub('RolePermission');
+const Session = defineModelSafely(defineSession, 'Session') || createNullStub('Session');
+const Cart = defineModelSafely(defineCart, 'Cart') || createNullStub('Cart');
+const Wishlist = defineModelSafely(defineWishlist, 'Wishlist') || createNullStub('Wishlist');
+const Order = defineModelSafely(defineOrder, 'Order') || createNullStub('Order');
+const Payment = defineModelSafely(definePayment, 'Payment') || createNullStub('Payment');
+const Return = defineModelSafely(defineReturn, 'Return') || createNullStub('Return');
+const Courier = defineModelSafely(defineCourier, 'Courier') || createNullStub('Courier');
+const Shipment = defineModelSafely(defineShipment, 'Shipment') || createNullStub('Shipment');
+const ShippingCharge = defineModelSafely(defineShippingCharge, 'ShippingCharge') || createNullStub('ShippingCharge');
+const Coupon = defineModelSafely(defineCoupon, 'Coupon') || createNullStub('Coupon');
+const FlashSale = defineModelSafely(defineFlashSale, 'FlashSale') || createNullStub('FlashSale');
+const Campaign = defineModelSafely(defineCampaign, 'Campaign') || createNullStub('Campaign');
+const Promotion = defineModelSafely(definePromotion, 'Promotion') || createNullStub('Promotion');
+const Notification = defineModelSafely(defineNotification, 'Notification') || createNullStub('Notification');
+const Reward = defineModelSafely(defineReward, 'Reward') || createNullStub('Reward');
+const Page = defineModelSafely(definePage, 'Page') || createNullStub('Page');
+const Banner = defineModelSafely(defineBanner, 'Banner') || createNullStub('Banner');
+const FAQ = defineModelSafely(defineFAQ, 'FAQ') || createNullStub('FAQ');
+const KYCDocument = defineModelSafely(defineKYCDocument, 'KYCDocument') || createNullStub('KYCDocument');
+const SellerCommission = defineModelSafely(defineSellerCommission, 'SellerCommission') || createNullStub('SellerCommission');
+const SellerPerformance = defineModelSafely(defineSellerPerformance, 'SellerPerformance') || createNullStub('SellerPerformance');
+const ProductShare = defineModelSafely(defineProductShare, 'ProductShare') || createNullStub('ProductShare');
+const SearchHistory = defineModelSafely(defineSearchHistory, 'SearchHistory') || createNullStub('SearchHistory');
+const SearchSuggestion = defineModelSafely(defineSearchSuggestion, 'SearchSuggestion') || createNullStub('SearchSuggestion');
+const TrendingSearch = defineModelSafely(defineTrendingSearch, 'TrendingSearch') || createNullStub('TrendingSearch');
+const LiveStream = defineModelSafely(defineLiveStream, 'LiveStream') || createNullStub('LiveStream');
+const AuditLog = defineModelSafely(defineAuditLog, 'AuditLog') || createNullStub('AuditLog');
+const Transaction = defineModelSafely(defineTransaction, 'Transaction') || createNullStub('Transaction');
+const Ticket = defineModelSafely(defineTicket, 'Ticket') || createNullStub('Ticket');
+const QuickAction = defineModelSafely(defineQuickAction, 'QuickAction') || createNullStub('QuickAction');
+const StyleInspiration = defineModelSafely(defineStyleInspiration, 'StyleInspiration') || createNullStub('StyleInspiration');
+const Warehouse = defineModelSafely(defineWarehouse, 'Warehouse') || createNullStub('Warehouse');
+const Supplier = defineModelSafely(defineSupplier, 'Supplier') || createNullStub('Supplier');
+const Inventory = defineModelSafely(defineInventory, 'Inventory') || createNullStub('Inventory');
+const InventoryAlert = defineModelSafely(defineInventoryAlert, 'InventoryAlert') || createNullStub('InventoryAlert');
+const InventoryHistory = defineModelSafely(defineInventoryHistory, 'InventoryHistory') || createNullStub('InventoryHistory');
 
 // SequelizeQueryWrapper class - provides Promise-based chainable interface
 class SequelizeQueryWrapper {
@@ -180,7 +247,28 @@ class SequelizeQueryWrapper {
 }
 
 // Create adapter wrapper for Mongoose-like query interface
-const createMongooseLikeWrapper = (sequelizeModel) => {
+const createMongooseLikeWrapper = (sequelizeModel, defineFunc, modelName) => {
+  // This wrapper lazy-loads the actual model if the initial one was a null stub
+  const getActualModel = async () => {
+    // Check if it's a real Sequelize model (has attributes property) vs a null stub
+    if (sequelizeModel && sequelizeModel.rawAttributes && typeof sequelizeModel.create === 'function') {
+      return sequelizeModel; // Already a real model
+    }
+    // If it's null or a stub, try to reload with the connected Sequelize instance
+    try {
+      const instance = await getSequelizeInstance();
+      if (instance && defineFunc) {
+        const model = defineFunc(instance, DataTypes);
+        if (model && model.rawAttributes) {
+          return model;
+        }
+      }
+    } catch (err) {
+      console.error(`[wrapper] Error lazy-loading ${modelName}:`, err.message);
+    }
+    return sequelizeModel; // Fallback to original (may be null stub)
+  };
+
   return {
     // find() - returns chainable query wrapper
     find: (query = {}, projection = null, options = {}) => {
@@ -200,14 +288,15 @@ const createMongooseLikeWrapper = (sequelizeModel) => {
     // findOne() - returns single object or null
     findOne: async (query = {}, projection = null, options = {}) => {
       try {
+        const model = await getActualModel();
         if (query && query.where) {
-          const result = await sequelizeModel.findOne({ ...query, raw: true });
+          const result = await model.findOne({ ...query, raw: true });
           return result || null;
         }
-        const result = await sequelizeModel.findOne({ where: query, raw: true });
+        const result = await model.findOne({ where: query, raw: true });
         return result || null;
       } catch (err) {
-        console.error(`Error in findOne for ${sequelizeModel.name}:`, err);
+        console.error(`Error in findOne for ${modelName}:`, err);
         return null;
       }
     },
@@ -215,10 +304,11 @@ const createMongooseLikeWrapper = (sequelizeModel) => {
     // findById()
     findById: async (id, projection = null, options = {}) => {
       try {
-        const result = await sequelizeModel.findByPk(id, { raw: true });
+        const model = await getActualModel();
+        const result = await model.findByPk(id, { raw: true });
         return result || null;
       } catch (err) {
-        console.error(`Error in findById for ${sequelizeModel.name}:`, err);
+        console.error(`Error in findById for ${modelName}:`, err);
         return null;
       }
     },
@@ -226,9 +316,10 @@ const createMongooseLikeWrapper = (sequelizeModel) => {
     // countDocuments()
     countDocuments: async (query = {}, options = {}) => {
       try {
-        return await sequelizeModel.count({ where: query });
+        const model = await getActualModel();
+        return await model.count({ where: query });
       } catch (err) {
-        console.error(`Error in countDocuments for ${sequelizeModel.name}:`, err);
+        console.error(`Error in countDocuments for ${modelName}:`, err);
         return 0;
       }
     },
@@ -236,10 +327,11 @@ const createMongooseLikeWrapper = (sequelizeModel) => {
     // aggregate() - simplified aggregation
     aggregate: async (pipeline = []) => {
       try {
+        const model = await getActualModel();
         // Basic aggregation support - would need more work for complex pipelines
-        return await sequelizeModel.findAll({ raw: true });
+        return await model.findAll({ raw: true });
       } catch (err) {
-        console.error(`Error in aggregate for ${sequelizeModel.name}:`, err);
+        console.error(`Error in aggregate for ${modelName}:`, err);
         return [];
       }
     },
@@ -247,12 +339,13 @@ const createMongooseLikeWrapper = (sequelizeModel) => {
     // Sequelize-style count() method
     count: async (options = {}) => {
       try {
-        console.log(`[WRAPPER] count called on ${sequelizeModel.name} with options:`, options);
-        const result = await sequelizeModel.count(options);
+        console.log(`[WRAPPER] count called on ${modelName} with options:`, options);
+        const model = await getActualModel();
+        const result = await model.count(options);
         console.log(`[WRAPPER] count result:`, result);
         return result;
       } catch (err) {
-        console.error(`Error in count for ${sequelizeModel.name}:`, err);
+        console.error(`Error in count for ${modelName}:`, err);
         return 0;
       }
     },
@@ -260,12 +353,13 @@ const createMongooseLikeWrapper = (sequelizeModel) => {
     // Sequelize-style findAll() method
     findAll: async (options = {}) => {
       try {
-        console.log(`[WRAPPER] findAll called on ${sequelizeModel.name} with options:`, JSON.stringify(options));
-        const result = await sequelizeModel.findAll(options);
+        console.log(`[WRAPPER] findAll called on ${modelName} with options:`, JSON.stringify(options));
+        const model = await getActualModel();
+        const result = await model.findAll(options);
         console.log(`[WRAPPER] findAll result count:`, result?.length);
         return result;
       } catch (err) {
-        console.error(`Error in findAll for ${sequelizeModel.name}:`, err);
+        console.error(`Error in findAll for ${modelName}:`, err);
         return [];
       }
     },
@@ -273,12 +367,37 @@ const createMongooseLikeWrapper = (sequelizeModel) => {
     // Sequelize-style findByIdAndUpdate()
     findByIdAndUpdate: async (id, update, options = {}) => {
       try {
-        const result = await sequelizeModel.findByPk(id);
+        const model = await getActualModel();
+        const result = await model.findByPk(id);
         if (!result) return null;
         return await result.update(update);
       } catch (err) {
-        console.error(`Error in findByIdAndUpdate for ${sequelizeModel.name}:`, err);
+        console.error(`Error in findByIdAndUpdate for ${modelName}:`, err);
         return null;
+      }
+    },
+
+    // Sequelize-style create() method
+    create: async (data, options = {}) => {
+      try {
+        const model = await getActualModel();
+        if (!model) {
+          console.error(`[wrapper] ${modelName}: getActualModel returned null`);
+          throw new Error(`Model ${modelName} not available`);
+        }
+        if (!model.create || typeof model.create !== 'function') {
+          console.error(`[wrapper] ${modelName}: model does not have create method. Has methods: ${Object.keys(model).filter(k => typeof model[k] === 'function').join(', ')}`);
+          throw new Error(`${modelName} model does not have create method`);
+        }
+        const result = await model.create(data, options);
+        if (!result) {
+          console.error(`[wrapper] ${modelName}: create() returned null/undefined for data:`, data);
+          throw new Error(`create() returned null for ${modelName}`);
+        }
+        return result;
+      } catch (err) {
+        console.error(`Error in create for ${modelName}:`, err.message);
+        throw err;
       }
     },
 
@@ -287,65 +406,68 @@ const createMongooseLikeWrapper = (sequelizeModel) => {
   };
 };
 
-// Wrap all models with Mongoose-like interface
-const wrappedProduct = createMongooseLikeWrapper(Product);
-const wrappedUser = createMongooseLikeWrapper(User);
-const wrappedPost = createMongooseLikeWrapper(Post);
-const wrappedStory = createMongooseLikeWrapper(Story);
-const wrappedBrand = createMongooseLikeWrapper(Brand);
-const wrappedCategory = createMongooseLikeWrapper(Category);
-const wrappedRole = createMongooseLikeWrapper(Role);
-const wrappedDepartment = createMongooseLikeWrapper(Department);
-const wrappedProductComment = createMongooseLikeWrapper(ProductComment);
-const wrappedReel = createMongooseLikeWrapper(Reel);
-const wrappedUserBehavior = createMongooseLikeWrapper(UserBehavior);
-const wrappedPermission = createMongooseLikeWrapper(Permission);
-const wrappedModule = createMongooseLikeWrapper(Module);
-const wrappedRolePermission = createMongooseLikeWrapper(RolePermission);
-const wrappedSession = createMongooseLikeWrapper(Session);
-const wrappedCart = createMongooseLikeWrapper(Cart);
-const wrappedWishlist = createMongooseLikeWrapper(Wishlist);
-const wrappedOrder = createMongooseLikeWrapper(Order);
-const wrappedPayment = createMongooseLikeWrapper(Payment);
-const wrappedReturn = createMongooseLikeWrapper(Return);
-const wrappedCourier = createMongooseLikeWrapper(Courier);
-const wrappedShipment = createMongooseLikeWrapper(Shipment);
-const wrappedShippingCharge = createMongooseLikeWrapper(ShippingCharge);
-const wrappedCoupon = createMongooseLikeWrapper(Coupon);
-const wrappedFlashSale = createMongooseLikeWrapper(FlashSale);
-const wrappedCampaign = createMongooseLikeWrapper(Campaign);
-const wrappedPromotion = createMongooseLikeWrapper(Promotion);
-const wrappedNotification = createMongooseLikeWrapper(Notification);
-const wrappedReward = createMongooseLikeWrapper(Reward);
-const wrappedPage = createMongooseLikeWrapper(Page);
-const wrappedBanner = createMongooseLikeWrapper(Banner);
-const wrappedFAQ = createMongooseLikeWrapper(FAQ);
-const wrappedKYCDocument = createMongooseLikeWrapper(KYCDocument);
-const wrappedSellerCommission = createMongooseLikeWrapper(SellerCommission);
-const wrappedSellerPerformance = createMongooseLikeWrapper(SellerPerformance);
-const wrappedProductShare = createMongooseLikeWrapper(ProductShare);
-const wrappedSearchHistory = createMongooseLikeWrapper(SearchHistory);
-const wrappedSearchSuggestion = createMongooseLikeWrapper(SearchSuggestion);
-const wrappedTrendingSearch = createMongooseLikeWrapper(TrendingSearch);
-const wrappedLiveStream = createMongooseLikeWrapper(LiveStream);
-const wrappedAuditLog = createMongooseLikeWrapper(AuditLog);
-const wrappedTransaction = createMongooseLikeWrapper(Transaction);
-const wrappedTicket = createMongooseLikeWrapper(Ticket);
-const wrappedQuickAction = createMongooseLikeWrapper(QuickAction);
-const wrappedStyleInspiration = createMongooseLikeWrapper(StyleInspiration);
-const wrappedWarehouse = createMongooseLikeWrapper(Warehouse);
-const wrappedSupplier = createMongooseLikeWrapper(Supplier);
-const wrappedInventory = createMongooseLikeWrapper(Inventory);
-const wrappedInventoryAlert = createMongooseLikeWrapper(InventoryAlert);
-const wrappedInventoryHistory = createMongooseLikeWrapper(InventoryHistory);
-const wrappedSubCategory = createMongooseLikeWrapper(SubCategory);
+// Wrap all models with Mongoose-like interface (with lazy loading)
+const wrappedProduct = createMongooseLikeWrapper(Product, defineProduct, 'Product');
+const wrappedUser = createMongooseLikeWrapper(User, defineUser, 'User');
+const wrappedPost = createMongooseLikeWrapper(Post, definePost, 'Post');
+const wrappedStory = createMongooseLikeWrapper(Story, defineStory, 'Story');
+const wrappedBrand = createMongooseLikeWrapper(Brand, defineBrand, 'Brand');
+const wrappedCategory = createMongooseLikeWrapper(Category, defineCategory, 'Category');
+const wrappedRole = createMongooseLikeWrapper(Role, defineRole, 'Role');
+const wrappedDepartment = createMongooseLikeWrapper(Department, defineDepartment, 'Department');
+const wrappedProductComment = createMongooseLikeWrapper(ProductComment, defineProductComment, 'ProductComment');
+const wrappedReel = createMongooseLikeWrapper(Reel, defineReel, 'Reel');
+const wrappedUserBehavior = createMongooseLikeWrapper(UserBehavior, defineUserBehavior, 'UserBehavior');
+const wrappedPermission = createMongooseLikeWrapper(Permission, definePermission, 'Permission');
+const wrappedModule = createMongooseLikeWrapper(Module, defineModule, 'Module');
+const wrappedRolePermission = createMongooseLikeWrapper(RolePermission, defineRolePermission, 'RolePermission');
+const wrappedSession = createMongooseLikeWrapper(Session, defineSession, 'Session');
+const wrappedCart = createMongooseLikeWrapper(Cart, defineCart, 'Cart');
+const wrappedWishlist = createMongooseLikeWrapper(Wishlist, defineWishlist, 'Wishlist');
+const wrappedOrder = createMongooseLikeWrapper(Order, defineOrder, 'Order');
+const wrappedPayment = createMongooseLikeWrapper(Payment, definePayment, 'Payment');
+const wrappedReturn = createMongooseLikeWrapper(Return, defineReturn, 'Return');
+const wrappedCourier = createMongooseLikeWrapper(Courier, defineCourier, 'Courier');
+const wrappedShipment = createMongooseLikeWrapper(Shipment, defineShipment, 'Shipment');
+const wrappedShippingCharge = createMongooseLikeWrapper(ShippingCharge, defineShippingCharge, 'ShippingCharge');
+const wrappedCoupon = createMongooseLikeWrapper(Coupon, defineCoupon, 'Coupon');
+const wrappedFlashSale = createMongooseLikeWrapper(FlashSale, defineFlashSale, 'FlashSale');
+const wrappedCampaign = createMongooseLikeWrapper(Campaign, defineCampaign, 'Campaign');
+const wrappedPromotion = createMongooseLikeWrapper(Promotion, definePromotion, 'Promotion');
+const wrappedNotification = createMongooseLikeWrapper(Notification, defineNotification, 'Notification');
+const wrappedReward = createMongooseLikeWrapper(Reward, defineReward, 'Reward');
+const wrappedPage = createMongooseLikeWrapper(Page, definePage, 'Page');
+const wrappedBanner = createMongooseLikeWrapper(Banner, defineBanner, 'Banner');
+const wrappedFAQ = createMongooseLikeWrapper(FAQ, defineFAQ, 'FAQ');
+const wrappedKYCDocument = createMongooseLikeWrapper(KYCDocument, defineKYCDocument, 'KYCDocument');
+const wrappedSellerCommission = createMongooseLikeWrapper(SellerCommission, defineSellerCommission, 'SellerCommission');
+const wrappedSellerPerformance = createMongooseLikeWrapper(SellerPerformance, defineSellerPerformance, 'SellerPerformance');
+const wrappedProductShare = createMongooseLikeWrapper(ProductShare, defineProductShare, 'ProductShare');
+const wrappedSearchHistory = createMongooseLikeWrapper(SearchHistory, defineSearchHistory, 'SearchHistory');
+const wrappedSearchSuggestion = createMongooseLikeWrapper(SearchSuggestion, defineSearchSuggestion, 'SearchSuggestion');
+const wrappedTrendingSearch = createMongooseLikeWrapper(TrendingSearch, defineTrendingSearch, 'TrendingSearch');
+const wrappedLiveStream = createMongooseLikeWrapper(LiveStream, defineLiveStream, 'LiveStream');
+const wrappedAuditLog = createMongooseLikeWrapper(AuditLog, defineAuditLog, 'AuditLog');
+const wrappedTransaction = createMongooseLikeWrapper(Transaction, defineTransaction, 'Transaction');
+const wrappedTicket = createMongooseLikeWrapper(Ticket, defineTicket, 'Ticket');
+const wrappedQuickAction = createMongooseLikeWrapper(QuickAction, defineQuickAction, 'QuickAction');
+const wrappedStyleInspiration = createMongooseLikeWrapper(StyleInspiration, defineStyleInspiration, 'StyleInspiration');
+const wrappedWarehouse = createMongooseLikeWrapper(Warehouse, defineWarehouse, 'Warehouse');
+const wrappedSupplier = createMongooseLikeWrapper(Supplier, defineSupplier, 'Supplier');
+const wrappedInventory = createMongooseLikeWrapper(Inventory, defineInventory, 'Inventory');
+const wrappedInventoryAlert = createMongooseLikeWrapper(InventoryAlert, defineInventoryAlert, 'InventoryAlert');
+const wrappedInventoryHistory = createMongooseLikeWrapper(InventoryHistory, defineInventoryHistory, 'InventoryHistory');
+const wrappedSubCategory = createMongooseLikeWrapper(SubCategory, defineSubCategory, 'SubCategory');
 
 // ============================================================================
 // SET UP SEQUELIZE RELATIONSHIPS & ASSOCIATIONS
 // ============================================================================
-// Category ↔ SubCategory (Critical for admin endpoints)
-Category.hasMany(SubCategory, { foreignKey: 'categoryId', as: 'SubCategories' });
-SubCategory.belongsTo(Category, { foreignKey: 'categoryId', as: 'Category' });
+// Only set up relationships if models are properly initialized (not null stubs)
+if (Category && Category.hasMany && SubCategory && SubCategory.belongsTo) {
+  // Category ↔ SubCategory (Critical for admin endpoints)
+  Category.hasMany(SubCategory, { foreignKey: 'categoryId', as: 'SubCategories' });
+  SubCategory.belongsTo(Category, { foreignKey: 'categoryId', as: 'Category' });
+}
 
 // NOTE: Other associations disabled to avoid naming collisions with existing attributes
 // These can be re-enabled if attribute names are changed to avoid conflicts
@@ -354,6 +476,138 @@ SubCategory.belongsTo(Category, { foreignKey: 'categoryId', as: 'Category' });
 User.belongsTo(Role, { foreignKey: 'role_id', as: 'userRole' });
 Role.hasMany(User, { foreignKey: 'role_id', as: 'users' });
 */
+
+// Reinitialize models after Sequelize connection (call after DB is connected)
+const reinitializeModels = async () => {
+  try {
+    const instance = await getSequelizeInstance();
+    if (!instance) {
+      console.error('[models_sql] Cannot reinitialize: Sequelize not connected');
+      return false;
+    }
+    
+    // Now redefine all models with the connected Sequelize instance
+    // This replaces the null stubs with actual models
+    try {
+      // Define models with the live Sequelize instance and directly reassign them
+      const Role_new = defineRole(instance, DataTypes);
+      const Department_new = defineDepartment(instance, DataTypes);
+      const User_new = defineUser(instance, DataTypes);
+      const Brand_new = defineBrand(instance, DataTypes);
+      const Category_new = defineCategory(instance, DataTypes);
+      const SubCategory_new = defineSubCategory(instance, DataTypes);
+      const Product_new = defineProduct(instance, DataTypes);
+      const ProductComment_new = defineProductComment(instance, DataTypes);
+      const Post_new = definePost(instance, DataTypes);
+      const Story_new = defineStory(instance, DataTypes);
+      const Reel_new = defineReel(instance, DataTypes);
+      const UserBehavior_new = defineUserBehavior(instance, DataTypes);
+      const Permission_new = definePermission(instance, DataTypes);
+      const Module_new = defineModule(instance, DataTypes);
+      const RolePermission_new = defineRolePermission(instance, DataTypes);
+      const Session_new = defineSession(instance, DataTypes);
+      const Cart_new = defineCart(instance, DataTypes);
+      const Wishlist_new = defineWishlist(instance, DataTypes);
+      const Order_new = defineOrder(instance, DataTypes);
+      const Payment_new = definePayment(instance, DataTypes);
+      const Return_new = defineReturn(instance, DataTypes);
+      const Courier_new = defineCourier(instance, DataTypes);
+      const Shipment_new = defineShipment(instance, DataTypes);
+      const ShippingCharge_new = defineShippingCharge(instance, DataTypes);
+      const Coupon_new = defineCoupon(instance, DataTypes);
+      const FlashSale_new = defineFlashSale(instance, DataTypes);
+      const Campaign_new = defineCampaign(instance, DataTypes);
+      const Promotion_new = definePromotion(instance, DataTypes);
+      const Notification_new = defineNotification(instance, DataTypes);
+      const Reward_new = defineReward(instance, DataTypes);
+      const Page_new = definePage(instance, DataTypes);
+      const Banner_new = defineBanner(instance, DataTypes);
+      const FAQ_new = defineFAQ(instance, DataTypes);
+      const KYCDocument_new = defineKYCDocument(instance, DataTypes);
+      const SellerCommission_new = defineSellerCommission(instance, DataTypes);
+      const SellerPerformance_new = defineSellerPerformance(instance, DataTypes);
+      const ProductShare_new = defineProductShare(instance, DataTypes);
+      const SearchHistory_new = defineSearchHistory(instance, DataTypes);
+      const SearchSuggestion_new = defineSearchSuggestion(instance, DataTypes);
+      const TrendingSearch_new = defineTrendingSearch(instance, DataTypes);
+      const LiveStream_new = defineLiveStream(instance, DataTypes);
+      const AuditLog_new = defineAuditLog(instance, DataTypes);
+      const Transaction_new = defineTransaction(instance, DataTypes);
+      const Ticket_new = defineTicket(instance, DataTypes);
+      const QuickAction_new = defineQuickAction(instance, DataTypes);
+      const StyleInspiration_new = defineStyleInspiration(instance, DataTypes);
+      const Warehouse_new = defineWarehouse(instance, DataTypes);
+      const Supplier_new = defineSupplier(instance, DataTypes);
+      const Inventory_new = defineInventory(instance, DataTypes);
+      const InventoryAlert_new = defineInventoryAlert(instance, DataTypes);
+      const InventoryHistory_new = defineInventoryHistory(instance, DataTypes);
+      
+      // Directly update all models in the _raw export
+      module.exports._raw = {
+        Role: Role_new,
+        Department: Department_new,
+        User: User_new,
+        Brand: Brand_new,
+        Category: Category_new,
+        SubCategory: SubCategory_new,
+        Product: Product_new,
+        ProductComment: ProductComment_new,
+        Post: Post_new,
+        Story: Story_new,
+        Reel: Reel_new,
+        UserBehavior: UserBehavior_new,
+        Permission: Permission_new,
+        Module: Module_new,
+        RolePermission: RolePermission_new,
+        Session: Session_new,
+        Cart: Cart_new,
+        Wishlist: Wishlist_new,
+        Order: Order_new,
+        Payment: Payment_new,
+        Return: Return_new,
+        Courier: Courier_new,
+        Shipment: Shipment_new,
+        ShippingCharge: ShippingCharge_new,
+        Coupon: Coupon_new,
+        FlashSale: FlashSale_new,
+        Campaign: Campaign_new,
+        Promotion: Promotion_new,
+        Notification: Notification_new,
+        Reward: Reward_new,
+        Page: Page_new,
+        Banner: Banner_new,
+        FAQ: FAQ_new,
+        KYCDocument: KYCDocument_new,
+        SellerCommission: SellerCommission_new,
+        SellerPerformance: SellerPerformance_new,
+        ProductShare: ProductShare_new,
+        SearchHistory: SearchHistory_new,
+        SearchSuggestion: SearchSuggestion_new,
+        TrendingSearch: TrendingSearch_new,
+        LiveStream: LiveStream_new,
+        AuditLog: AuditLog_new,
+        Transaction: Transaction_new,
+        Ticket: Ticket_new,
+        QuickAction: QuickAction_new,
+        StyleInspiration: StyleInspiration_new,
+        Warehouse: Warehouse_new,
+        Supplier: Supplier_new,
+        Inventory: Inventory_new,
+        InventoryAlert: InventoryAlert_new,
+        InventoryHistory: InventoryHistory_new
+      };
+
+      console.log('[models_sql] ✅ All 53 models reinitialized with active Sequelize connection');
+      return true;
+    } catch (redefErr) {
+      console.error('[models_sql] Error redefining models:', redefErr.message);
+      return false;
+    }
+  } catch (err) {
+    console.error('[models_sql] Error reinitializing models:', err);
+    return false;
+  }
+};
 
 module.exports = {
   sequelize,
@@ -461,5 +715,9 @@ module.exports = {
     Inventory: wrappedInventory,
     InventoryAlert: wrappedInventoryAlert,
     InventoryHistory: wrappedInventoryHistory
-  }
+  },
+  // Initialization helper
+  getSequelizeInstance,
+  getPostgresConnection: postgresModule.getPostgresConnection,
+  reinitializeModels
 };

@@ -1,6 +1,5 @@
 const jwt = require('jsonwebtoken');
-const models = require('../models');
-const User = models.User;
+const { User: UserModel } = require('../models_sql')._raw;
 const crypto = require('crypto');
 
 // Track failed login attempts
@@ -40,8 +39,10 @@ const auth = async (req, res, next) => {
     console.log('🔐 Auth middleware - Token decoded, userId:', decoded.userId);
 
     try {
-      // Use findById and select with proper Mongoose syntax
-      const user = await User.findById(decoded.userId).select('-password').lean();
+      // Use Sequelize findByPk for Postgres
+      const user = await UserModel.findByPk(decoded.userId, {
+        attributes: { exclude: ['password'] }
+      });
       console.log('🔐 Auth middleware - User found:', !!user);
 
       if (!user) {
@@ -96,6 +97,55 @@ const isAdmin = (req, res, next) => {
   }
   console.log('🔐 isAdmin middleware - Access granted for role:', req.user.role);
   next();
+};
+
+// Optional authentication - doesn't fail if no token, but sets req.user if token is valid
+const optionalAuth = async (req, res, next) => {
+  try {
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    
+    if (!token) {
+      // No token provided, continue without authentication
+      req.user = null;
+      return next();
+    }
+
+    if (!process.env.JWT_SECRET) {
+      console.error('❌ JWT_SECRET not found in environment variables');
+      req.user = null;
+      return next();
+    }
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    try {
+      // Use Sequelize findByPk for Postgres
+      const user = await UserModel.findByPk(decoded.userId, {
+        attributes: { exclude: ['password'] }
+      });
+      
+      if (user) {
+        req.user = {
+          userId: user.id,
+          _id: user.id,
+          email: user.email,
+          role: user.role,
+          isActive: user.isActive
+        };
+      } else {
+        req.user = null;
+      }
+    } catch (dbError) {
+      console.warn('Optional auth: DB error, continuing without user:', dbError.message);
+      req.user = null;
+    }
+    
+    next();
+  } catch (error) {
+    // Invalid token, continue without authentication
+    req.user = null;
+    next();
+  }
 };
 
 // Require admin role (admin, sales, marketing, etc.)
@@ -169,27 +219,6 @@ const requireCustomer = (req, res, next) => {
     });
   }
   next();
-};
-
-// Optional auth - doesn't fail if no token
-const optionalAuth = async (req, res, next) => {
-  try {
-    const token = req.header('Authorization')?.replace('Bearer ', '');
-
-    if (token && process.env.JWT_SECRET) {
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await User.findById(decoded.userId).select('-password');
-
-      if (user && user.isActive) {
-        req.user = user;
-      }
-    }
-
-    next();
-  } catch (error) {
-    // Continue without user if token is invalid
-    next();
-  }
 };
 
 // Security enhancement functions

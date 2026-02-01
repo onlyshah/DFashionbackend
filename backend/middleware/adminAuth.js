@@ -6,6 +6,25 @@ const { Op } = require('sequelize');
 let User = models.User;
 let UserRaw = models._raw && models._raw.User ? models._raw.User : null;
 
+// Get User model - delay loading to ensure Sequelize is connected
+const getUserModel = async () => {
+  const models = require('../models_sql');
+  let User = models._raw && models._raw.User ? models._raw.User : models.User;
+  
+  // If model is null stub, try to load the actual model
+  if (!User || (User && typeof User.findOne !== 'function')) {
+    console.log('[adminAuth] User model is stub, attempting to reload...');
+    await models.getSequelizeInstance();
+    
+    // Re-require to get fresh models
+    delete require.cache[require.resolve('../models_sql')];
+    const freshModels = require('../models_sql');
+    User = freshModels._raw && freshModels._raw.User ? freshModels._raw.User : freshModels.User;
+  }
+  
+  return User;
+};
+
 // Admin roles that can access dashboard
 const ADMIN_ROLES = [
   'super_admin', 'admin', 'sales_manager', 'sales_executive', 
@@ -55,14 +74,12 @@ exports.verifyAdminToken = async (req, res, next) => {
     // If the backend is running in Postgres mode, avoid calling Mongoose methods
     // with numeric IDs — prefer raw Sequelize or wrapped findOne with a `where`.
     const dbType = (process.env.DB_TYPE || '').toLowerCase();
+    const User = await getUserModel();
     let user;
 
     try {
       if (dbType.includes('postgres')) {
-        if (UserRaw) {
-          user = await UserRaw.findOne({ where: { id: decoded.userId } });
-        } else if (User.findOne) {
-          // Use wrapped model's findOne with a Sequelize-style `where` object
+        if (User) {
           user = await User.findOne({ where: { id: decoded.userId } });
         } else {
           throw new Error('Postgres configured but User model lacks query methods');

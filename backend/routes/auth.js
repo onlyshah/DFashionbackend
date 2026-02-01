@@ -69,9 +69,29 @@ router.post('/admin/login', async (req, res) => {
     res.status(500).json({ success: false, message: 'Admin login error' });
   }
 });
-router.get('/verify', verifyToken, (req, res) => res.json({ success: true, data: { user: req.user } }));
-router.get('/me', verifyToken, (req, res) => res.json({ success: true, user: req.user }));
-router.post('/logout', (req, res) => controller.logout(req, res));
+router.get('/verify', verifyToken, async (req, res) => {
+  try {
+    res.json({ success: true, data: { user: req.user } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Verification error' });
+  }
+});
+
+router.get('/me', verifyToken, async (req, res) => {
+  try {
+    res.json({ success: true, user: req.user });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Get user error' });
+  }
+});
+
+router.post('/logout', async (req, res) => {
+  try {
+    await controller.logout(req, res);
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'Logout error' });
+  }
+});
 
 // Password recovery routes
 router.post('/forgot-password', async (req, res) => {

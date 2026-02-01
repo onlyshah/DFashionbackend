@@ -12,7 +12,7 @@ module.exports = (sequelize, DataTypes) => {
     },
     location: { 
       type: DataTypes.STRING(255), 
-      allowNull: false 
+      allowNull: true 
     },
     address: { 
       type: DataTypes.TEXT 

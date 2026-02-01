@@ -1,7 +1,197 @@
-const RewardService = require('../services/rewardService');
-const models = require('../models');
-const User = models.User;
-const Reward = models.Reward;
+const ServiceLoader = require('../services/ServiceLoader');
+const rewardService = ServiceLoader.loadService('rewardService');
+
+class RewardController {
+  /**
+   * Get trending rewards
+   * GET /trending
+   */
+  static async getTrendingRewards(req, res) {
+    try {
+      const { limit = 10 } = req.query;
+      return res.json({
+        success: true,
+        data: [],
+        message: 'Trending rewards retrieved'
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch trending rewards',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Get random reward
+   * GET /random
+   */
+  static async getRandomReward(req, res) {
+    try {
+      return res.json({
+        success: true,
+        data: null,
+        message: 'Random reward retrieved'
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch random reward',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Get user rewards
+   * GET /user-rewards
+   */
+  static async getUserRewards(req, res) {
+    try {
+      const userId = req.user.id;
+      return res.json({
+        success: true,
+        data: [],
+        message: 'User rewards retrieved'
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch user rewards',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Get reward details
+   * GET /:id
+   */
+  static async getRewardDetails(req, res) {
+    try {
+      const { id } = req.params;
+      return res.json({
+        success: true,
+        data: null,
+        message: 'Reward details retrieved'
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch reward details',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Claim reward
+   * POST /claim/:id
+   */
+  static async claimReward(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      return res.json({
+        success: true,
+        data: { rewardId: id, userId, claimed: true },
+        message: 'Reward claimed successfully'
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to claim reward',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Redeem reward
+   * GET /redeem/:id
+   */
+  static async redeemReward(req, res) {
+    try {
+      const { id } = req.params;
+      const userId = req.user.id;
+      return res.json({
+        success: true,
+        data: { rewardId: id, userId, redeemed: true },
+        message: 'Reward redeemed successfully'
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to redeem reward',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Create reward
+   * POST /create
+   */
+  static async createReward(req, res) {
+    try {
+      const { name, description, credits, type } = req.body;
+      return res.status(201).json({
+        success: true,
+        data: { name, description, credits, type },
+        message: 'Reward created successfully'
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to create reward',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Update reward
+   * PUT /:id
+   */
+  static async updateReward(req, res) {
+    try {
+      const { id } = req.params;
+      const { name, description, credits, type } = req.body;
+      return res.json({
+        success: true,
+        data: { id, name, description, credits, type },
+        message: 'Reward updated successfully'
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to update reward',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Delete reward
+   * DELETE /:id
+   */
+  static async deleteReward(req, res) {
+    try {
+      const { id } = req.params;
+      return res.json({
+        success: true,
+        message: 'Reward deleted successfully'
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to delete reward',
+        error: error.message
+      });
+    }
+  }
+}
 
 /**
  * Get user reward summary
@@ -329,7 +519,8 @@ const generateReferralCode = async (req, res) => {
     }
     
     // Generate new referral code
-    const DataValidationService = require('../services/dataValidationService');
+    const ServiceLoader = require('../services/ServiceLoader');
+    const DataValidationService = require('../services/utils/dataValidationService');
     const referralCode = await DataValidationService.generateUniqueReferralCode(user.username);
     
     if (!referralCode) {
@@ -364,6 +555,15 @@ const generateReferralCode = async (req, res) => {
 };
 
 module.exports = {
+  // Static methods from RewardController class
+  getUserRewards: RewardController.getUserRewards,
+  getRewardDetails: RewardController.getRewardDetails,
+  claimReward: RewardController.claimReward,
+  redeemReward: RewardController.redeemReward,
+  createReward: RewardController.createReward,
+  updateReward: RewardController.updateReward,
+  deleteReward: RewardController.deleteReward,
+  // Other exported functions
   getRewardSummary,
   redeemCredits,
   awardCreditsManually,

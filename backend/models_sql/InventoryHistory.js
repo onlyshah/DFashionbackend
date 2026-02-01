@@ -10,8 +10,8 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false,
       unique: true
     },
-    productId: { 
-      type: DataTypes.INTEGER, 
+    productId: {
+      type: DataTypes.INTEGER,
       allowNull: false,
       references: { model: 'products', key: 'id' },
       onDelete: 'CASCADE'
@@ -24,8 +24,8 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.INTEGER, 
       allowNull: false 
     },
-    warehouseId: { 
-      type: DataTypes.INTEGER, 
+    warehouseId: {
+      type: DataTypes.INTEGER,
       allowNull: false,
       references: { model: 'warehouses', key: 'id' },
       onDelete: 'CASCADE'
@@ -41,7 +41,7 @@ module.exports = (sequelize, DataTypes) => {
     userId: { 
       type: DataTypes.INTEGER, 
       allowNull: false,
-      references: { model: 'users', key: 'id' },
+      references: { model: 'Users', key: 'id' },
       onDelete: 'CASCADE'
     },
     notes: { 

@@ -1,11 +1,7 @@
-const models = require('../models');
-const Post = models.Post;
-const Story = models.Story;
-const Reel = models.Reel;
-const Product = models.Product;
-const User = models.User;
-const DataValidationService = require('../services/dataValidationService');
-const RewardService = require('../services/rewardService');
+const ServiceLoader = require('../services/ServiceLoader');
+const contentService = ServiceLoader.loadService('contentService');
+const DataValidationService = require('../services/utils/dataValidationService');
+const RewardService = ServiceLoader.loadService('rewardService');
 const multer = require('multer');
 const path = require('path');
 

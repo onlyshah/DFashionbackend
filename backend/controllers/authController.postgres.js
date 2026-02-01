@@ -1,9 +1,27 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const models = require('../models_sql');
-const User = models._raw && models._raw.User ? models._raw.User : models.User;
 const crypto = require('crypto');
 const nodemailer = require('nodemailer');
+const { getRedirectPathForRole } = require('../config/roleRedirectMap');
+
+// Get User model - delay loading to ensure Sequelize is connected
+const getUserModel = async () => {
+  const models = require('../models_sql');
+  let User = models._raw && models._raw.User ? models._raw.User : models.User;
+  
+  // If model is null stub, try to load the actual model
+  if (!User || (User && typeof User.findOne !== 'function')) {
+    console.log('[auth] User model is stub, attempting to reload...');
+    await models.getSequelizeInstance();
+    
+    // Re-require to get fresh models
+    delete require.cache[require.resolve('../models_sql')];
+    const freshModels = require('../models_sql');
+    User = freshModels._raw && freshModels._raw.User ? freshModels._raw.User : freshModels.User;
+  }
+  
+  return User;
+};
 
 // Initialize email transporter
 const emailTransporter = nodemailer.createTransport({
@@ -25,6 +43,9 @@ const generateToken = (userId, role) => {
   );
 };
 
+// Role -> redirect mapping is now centralized in config/roleRedirectMap.js
+// and imported above as getRedirectPathForRole()
+
 // Generate password reset token
 const generateResetToken = () => {
   return crypto.randomBytes(32).toString('hex');
@@ -35,6 +56,14 @@ const generateResetToken = () => {
 // @access  Public
 const register = async (req, res) => {
   try {
+    const User = await getUserModel();
+    if (!User) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection error'
+      });
+    }
+
     const { username, email, password, fullName, role = 'customer' } = req.body;
 
     // Validation
@@ -107,6 +136,14 @@ const register = async (req, res) => {
 // @access  Public
 const login = async (req, res) => {
   try {
+    const User = await getUserModel();
+    if (!User) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection error'
+      });
+    }
+
     const { email, password } = req.body;
     console.log('[auth.postgres] Login attempt for:', email, 'from IP:', req.ip);
     console.log('[auth.postgres] Request body:', req.body);
@@ -130,6 +167,25 @@ const login = async (req, res) => {
       }
     });
 
+    // Get role name if roleId exists (use raw query via User.sequelize to avoid missing associations)
+    let roleName = null;
+    if (user && user.roleId) {
+      try {
+        const QueryTypes = require('sequelize').QueryTypes;
+        const roleResult = await User.sequelize.query(
+          'SELECT name FROM "roles" WHERE id = $1',
+          { bind: [user.roleId], type: QueryTypes.SELECT }
+        );
+        roleName = Array.isArray(roleResult) && roleResult[0] ? roleResult[0].name : null;
+        console.log('[auth.postgres] Role lookup for roleId', user.roleId, '->', roleName);
+      } catch (err) {
+        console.warn('[auth.postgres] Failed to fetch role name via raw query:', err.message);
+        roleName = user.role || null;
+      }
+    }
+
+    console.log('[auth.postgres] User lookup result:', user ? `Found: ${user.email}` : 'Not found');
+    
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -145,8 +201,20 @@ const login = async (req, res) => {
       });
     }
 
-    // Check password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    // Check password - handle both 'password' and 'password_hash' columns
+    const passwordField = user.password || user.password_hash;
+    console.log('[auth.postgres] Password field check:', { hasPassword: !!user.password, hasPasswordHash: !!user.password_hash, passwordFieldExists: !!passwordField });
+    
+    if (!passwordField) {
+      console.error('[auth.postgres] No password field found for user:', user.email);
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid credentials'
+      });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, passwordField);
+    console.log('[auth.postgres] Password comparison result:', { isValid: isPasswordValid, inputLength: password.length, storedLength: passwordField.length });
 
     if (!isPasswordValid) {
       return res.status(401).json({
@@ -160,23 +228,26 @@ const login = async (req, res) => {
     await user.save();
 
     // Generate token
-    const token = generateToken(user.id, user.role);
+    const token = generateToken(user.id, roleName || user.role);
 
+    const redirectPath = getRedirectPathForRole(roleName || user.role);
     res.json({
       success: true,
       message: 'Login successful',
       data: {
         token,
+        redirectPath,
         user: {
           id: user.id,
           username: user.username,
           email: user.email,
-          fullName: user.fullName,
-          role: user.role,
+          fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.username,
+          role: roleName || user.role,
           isActive: user.isActive
         }
       }
     });
+
 
   } catch (error) {
     console.error('Login error:', error);
@@ -197,14 +268,22 @@ const adminLogin = async (req, res) => {
     // Find admin user
     const user = await User.findOne({
       where: {
-        email: email.toLowerCase(),
-        role: {
-          [require('sequelize').Op.in]: ['admin', 'sales', 'marketing', 'accounting', 'support', 'super_admin']
-        }
+        email: email.toLowerCase()
       }
     });
 
-    if (!user) {
+    // Get role name if roleId exists
+    let userRole = null;
+    if (user && user.roleId) {
+      const Role = require('../models_sql').Role;
+      const role = await Role.findByPk(user.roleId);
+      userRole = role ? role.name : null;
+    }
+
+    // Check if user has admin role
+    const isAdminRole = ['admin', 'sales', 'marketing', 'accounting', 'support', 'super_admin'].includes(userRole);
+
+    if (!user || !isAdminRole) {
       return res.status(401).json({
         success: false,
         message: 'Invalid admin credentials'
@@ -236,19 +315,22 @@ const adminLogin = async (req, res) => {
     );
 
     // Generate token
-    const token = generateToken(user.id, user.role);
+    const token = generateToken(user.id, userRole);
 
+    const redirectPath = getRedirectPathForRole(userRole);
     res.json({
       success: true,
       message: 'Admin login successful',
       data: {
         token,
+        redirectPath,
         user: {
           id: user.id,
           username: user.username,
           email: user.email,
           fullName: user.fullName,
-          role: user.role
+          role: userRole,
+          isActive: user.isActive
         }
       }
     });

@@ -12,11 +12,12 @@ const fs = require('fs');
 require('dotenv').config();
 
 // Local modules
-const socketService = require('./services/socketService');
+const ServiceLoader = require('./services/ServiceLoader');
+const socketService = require('./services/utils/socketService');
 const BasicSecurity = require('./middleware/basicSecurity');
 const { connectDB } = require('./config/database');
 const { connectPostgres } = require('./config/postgres');
-const dataProvider = require('./services/dataProvider');
+const dataProvider = require('./services/utils/dataProvider');
 
 // -------- Basic sanity checks --------
 if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
@@ -75,6 +76,11 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions)); // apply CORS globally
+
+// -------- Static file serving --------
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/assets', express.static(path.join(__dirname, 'assets')));
+app.use('/public', express.static(path.join(__dirname, 'public')));
 
 // -------- Request body parsing --------
 app.use(express.urlencoded({ extended: false, limit: '10mb' }));

@@ -57,6 +57,12 @@ const complianceRoutes = require('./compliance');
 const socialAdminRoutes = require('./socialAdmin');
 const usersAdminRoutes = require('./usersAdmin');
 
+// Super admin routes
+const auditLogsRoutes = require('./auditLogs');
+const featureFlagsRoutes = require('./featureFlags');
+const dataGovernanceRoutes = require('./dataGovernance');
+const supportRoutes = require('./support');
+
 // Mount additional routes
 router.use(`/cart`, cartRoutes);
 router.use(`/wishlist`, wishlistRoutes);
@@ -85,7 +91,13 @@ router.use(`/cms`, cmsRoutes);
 router.use(`/compliance`, complianceRoutes);
 router.use(`/admin/social`, socialAdminRoutes);
 router.use(`/admin/users`, usersAdminRoutes);
-router.use(`/admin/activity-logs`, usersAdminRoutes);  // Mount activity-logs at admin level
+router.use(`/admin/support`, supportRoutes);
+router.use(`/admin/activity-logs`, usersAdminRoutes);
+
+// Mount super admin routes
+router.use(`/admin/audit-logs`, auditLogsRoutes);
+router.use(`/admin/feature-flags`, featureFlagsRoutes);
+router.use(`/admin/data-governance`, dataGovernanceRoutes);
 
 // Mount admin routes (keep at the end)
 router.use(`/admin`, adminRoutes);

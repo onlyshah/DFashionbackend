@@ -1,0 +1,23 @@
+    // Get role name if roleId exists - use raw query to avoid model loading issues
+    let roleName = null;
+    if (user && user.roleId) {
+      try {
+        const models = require('../models_sql');
+        const postgresModule = require('../config/postgres');
+        const seq = postgresModule.sequelizeInstance();
+        
+        if (seq) {
+          const QueryTypes = require('sequelize').QueryTypes;
+          const roleResult = await seq.query(
+            'SELECT name FROM "Roles" WHERE id = $1',
+            { bind: [user.roleId], type: QueryTypes.SELECT }
+          );
+          roleName = roleResult && roleResult[0] ? roleResult[0].name : null;
+          console.log('[auth.postgres] Role lookup for roleId', user.roleId, '-> name:', roleName);
+        }
+      } catch (err) {
+        console.warn('[auth.postgres] Failed to fetch role name:', err.message);
+        // Fall back to user.role if available
+        roleName = user.role || null;
+      }
+    }
