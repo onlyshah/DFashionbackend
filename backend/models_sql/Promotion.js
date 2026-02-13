@@ -1,6 +1,6 @@
 module.exports = (sequelize, DataTypes) => {
   return sequelize.define('Promotion', {
-    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
     title: { type: DataTypes.STRING(200), allowNull: false },
     description: { type: DataTypes.TEXT },
     type: { type: DataTypes.STRING(50) },
@@ -10,5 +10,5 @@ module.exports = (sequelize, DataTypes) => {
     validFrom: { type: DataTypes.DATE },
     validUntil: { type: DataTypes.DATE },
     isActive: { type: DataTypes.BOOLEAN, defaultValue: true }
-  }, { tableName: 'promotions', timestamps: true });
+  }, { tableName: 'promotions', timestamps: true, underscored: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 };

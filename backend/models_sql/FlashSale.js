@@ -1,6 +1,6 @@
 module.exports = (sequelize, DataTypes) => {
   return sequelize.define('FlashSale', {
-    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
     name: { type: DataTypes.STRING(200), allowNull: false },
     // alternate field used in other scripts
     title: { type: DataTypes.STRING(200), allowNull: true },
@@ -11,5 +11,5 @@ module.exports = (sequelize, DataTypes) => {
     products: { type: DataTypes.JSON, defaultValue: [] },
     categories: { type: DataTypes.JSON, defaultValue: [] },
     isActive: { type: DataTypes.BOOLEAN, defaultValue: true }
-  }, { tableName: 'flash_sales', timestamps: true });
+  }, { tableName: 'flash_sales', timestamps: true, underscored: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 };

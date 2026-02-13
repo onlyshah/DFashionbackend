@@ -1,6 +1,6 @@
 module.exports = (sequelize, DataTypes) => {
   return sequelize.define('TrendingSearch', {
-    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
     // allow alternate field 'searchQuery' used by seeders
     keyword: { type: DataTypes.STRING(200), allowNull: true },
     searchQuery: { type: DataTypes.STRING(200), allowNull: true },

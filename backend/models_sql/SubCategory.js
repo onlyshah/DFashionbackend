@@ -1,12 +1,12 @@
 module.exports = (sequelize, DataTypes) => {
   return sequelize.define('SubCategory', {
     id: { 
-      type: DataTypes.INTEGER, 
+      type: DataTypes.UUID, 
       primaryKey: true, 
-      autoIncrement: true 
+      defaultValue: DataTypes.UUIDV4 
     },
     categoryId: { 
-      type: DataTypes.INTEGER, 
+      type: DataTypes.UUID, 
       allowNull: false,
       references: {
         model: 'categories',
@@ -42,10 +42,11 @@ module.exports = (sequelize, DataTypes) => {
   }, { 
     tableName: 'sub_categories', 
     timestamps: true,
+    underscored: true,
     indexes: [
-      { fields: ['categoryId'] },
+      { fields: ['category_id'] },
       { fields: ['slug'] },
-      { fields: ['categoryId', 'slug'], unique: true }
+      { fields: ['category_id', 'slug'], unique: true }
     ]
   });
 };

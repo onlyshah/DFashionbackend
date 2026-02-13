@@ -1,6 +1,6 @@
 module.exports = (sequelize, DataTypes) => {
   return sequelize.define('Courier', {
-    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
     name: { type: DataTypes.STRING(100), allowNull: false, unique: true },
     code: { type: DataTypes.STRING(50), unique: true },
     website: { type: DataTypes.STRING(200) },
@@ -8,5 +8,5 @@ module.exports = (sequelize, DataTypes) => {
     isActive: { type: DataTypes.BOOLEAN, defaultValue: true },
     supportEmail: { type: DataTypes.STRING(100) },
     supportPhone: { type: DataTypes.STRING(20) }
-  }, { tableName: 'couriers', timestamps: true });
+  }, { tableName: 'couriers', timestamps: true, underscored: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 };

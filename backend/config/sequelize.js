@@ -38,7 +38,13 @@ const connectSequelize = async () => {
         dialect: dbConfig.dialect,
         logging: dbConfig.logging,
         pool: dbConfig.pool,
-        dialectOptions: dbConfig.dialectOptions
+        dialectOptions: dbConfig.dialectOptions,
+        // Map camelCase properties to snake_case database columns
+        underscored: true,
+        // Configure timestamp columns
+        timestamps: true,
+        createdAt: 'created_at',
+        updatedAt: 'updated_at'
       }
     );
 

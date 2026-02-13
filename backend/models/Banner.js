@@ -1,17 +1,46 @@
 const mongoose = require('mongoose');
 
 const bannerSchema = new mongoose.Schema({
-  title: String,
-  imageUrl: String,
-  imageAlt: String,
-  redirectUrl: String,
-  type: { type: String, enum: ['hero','promo','category_highlight'], default: 'promo' },
-  position: Number,
-  active: { type: Boolean, default: true },
-  startDate: Date,
-  endDate: Date,
-  displayOn: [String],
-  createdAt: { type: Date, default: Date.now }
+  id: {
+    type: Number,
+    index: true
+  },
+  title: {
+    type: String,
+    required: true,
+    maxlength: 200
+  },
+  image: {
+    type: String,
+    maxlength: 500
+  },
+  imageUrl: {
+    type: String,
+    maxlength: 500
+  },
+  link: {
+    type: String,
+    maxlength: 500
+  },
+  position: {
+    type: String,
+    enum: ['header', 'footer', 'sidebar', 'modal'],
+    default: 'header'
+  },
+  startDate: {
+    type: Date
+  },
+  endDate: {
+    type: Date
+  },
+  isActive: {
+    type: Boolean,
+    default: true
+  }
+}, {
+  timestamps: true
 });
+
+bannerSchema.index({ id: 1 });
 
 module.exports = mongoose.model('Banner', bannerSchema);

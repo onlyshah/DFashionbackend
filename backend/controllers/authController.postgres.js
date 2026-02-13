@@ -201,9 +201,9 @@ const login = async (req, res) => {
       });
     }
 
-    // Check password - handle both 'password' and 'password_hash' columns
-    const passwordField = user.password || user.password_hash;
-    console.log('[auth.postgres] Password field check:', { hasPassword: !!user.password, hasPasswordHash: !!user.password_hash, passwordFieldExists: !!passwordField });
+    // Check password - handle both 'password' and 'passwordHash' columns
+    const passwordField = user.password || user.passwordHash;
+    console.log('[auth.postgres] Password field check:', { hasPassword: !!user.password, hasPasswordHash: !!user.passwordHash, passwordFieldExists: !!passwordField });
     
     if (!passwordField) {
       console.error('[auth.postgres] No password field found for user:', user.email);

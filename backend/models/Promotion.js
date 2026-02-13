@@ -1,56 +1,48 @@
 const mongoose = require('mongoose');
 
 const promotionSchema = new mongoose.Schema({
-  name: {
+  id: {
+    type: Number,
+    index: true
+  },
+  title: {
     type: String,
     required: true,
+    maxlength: 200
   },
-  description: String,
+  description: {
+    type: String
+  },
   type: {
     type: String,
-    enum: ['percentage', 'fixed', 'bogo', 'tiered'],
-    required: true,
-  },
-  code: {
-    type: String,
-    unique: true,
-    sparse: true,
+    maxlength: 50
   },
   discountValue: {
-    type: Number,
-    required: true,
+    type: Number
   },
-  maxUses: Number,
-  usedCount: {
-    type: Number,
-    default: 0,
-  },
-  applicableProducts: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'Product',
-  }],
-  applicableCategories: [String],
-  minOrderValue: Number,
-  maxDiscount: Number,
-  status: {
+  discountType: {
     type: String,
-    enum: ['active', 'inactive', 'expired'],
-    default: 'active',
+    enum: ['percentage', 'fixed'],
+    default: 'percentage'
   },
-  startDate: Date,
-  endDate: Date,
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+  appliesTo: {
+    type: Array,
+    default: []
   },
-  createdAt: {
-    type: Date,
-    default: Date.now,
+  validFrom: {
+    type: Date
   },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
+  validUntil: {
+    type: Date
   },
+  isActive: {
+    type: Boolean,
+    default: true
+  }
+}, {
+  timestamps: true
 });
+
+promotionSchema.index({ id: 1 });
 
 module.exports = mongoose.model('Promotion', promotionSchema);

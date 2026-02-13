@@ -80,21 +80,66 @@ exports.getDashboardStatsFromDB = async (req, res) => {
     let revenueResult = 0, revenueTodayResult = 0, revenueMonthResult = 0;
 
     try {
-      totalUsers = await UserModel.count() || 0;
-      totalVendors = await UserModel.count({ where: { role: 'vendor' } }) || 0;
-      newUsersToday = await UserModel.count({ where: { createdAt: { [Op.gte]: startOfDay } } }) || 0;
-      newUsersThisMonth = await UserModel.count({ where: { createdAt: { [Op.gte]: startOfMonth } } }) || 0;
+      // Use raw SQL queries to work with actual database schema
+      const { Client } = require('pg');
+      const client = new Client({
+        host: process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.DB_PORT) || 5432,
+        user: process.env.DB_USER || 'postgres',
+        password: process.env.DB_PASSWORD || '1234',
+        database: process.env.DB_NAME || 'dfashion'
+      });
+      await client.connect();
+
+      const userResults = await client.query(`
+        SELECT
+          COUNT(*) as total,
+          COUNT(CASE WHEN role = 'vendor' THEN 1 END) as vendors,
+          COUNT(CASE WHEN created_at >= $1 THEN 1 END) as new_today,
+          COUNT(CASE WHEN created_at >= $2 THEN 1 END) as new_month
+        FROM users
+      `, [startOfDay, startOfMonth]);
+
+      if (userResults && userResults.rows && userResults.rows[0]) {
+        totalUsers = parseInt(userResults.rows[0].total) || 0;
+        totalVendors = parseInt(userResults.rows[0].vendors) || 0;
+        newUsersToday = parseInt(userResults.rows[0].new_today) || 0;
+        newUsersThisMonth = parseInt(userResults.rows[0].new_month) || 0;
+      }
+
+      await client.end();
     } catch (e) {
       console.warn('[adminController] Error counting users:', e.message);
       totalUsers = 0; totalVendors = 0; newUsersToday = 0; newUsersThisMonth = 0;
     }
 
     try {
-      totalProducts = await ProductModel.count() || 0;
-      // Skip status counts if column doesn't exist
-      activeProducts = 0;
-      pendingProducts = 0;
-      newProductsToday = await ProductModel.count({ where: { createdAt: { [Op.gte]: startOfDay } } }) || 0;
+      // Use raw SQL for products
+      const { Client } = require('pg');
+      const client = new Client({
+        host: process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.DB_PORT) || 5432,
+        user: process.env.DB_USER || 'postgres',
+        password: process.env.DB_PASSWORD || '1234',
+        database: process.env.DB_NAME || 'dfashion'
+      });
+      await client.connect();
+
+      const productResults = await client.query(`
+        SELECT
+          COUNT(*) as total,
+          COUNT(CASE WHEN created_at >= $1 THEN 1 END) as new_today
+        FROM products
+      `, [startOfDay]);
+
+      if (productResults && productResults.rows && productResults.rows[0]) {
+        totalProducts = parseInt(productResults.rows[0].total) || 0;
+        newProductsToday = parseInt(productResults.rows[0].new_today) || 0;
+      }
+      activeProducts = 0; // Skip for now
+      pendingProducts = 0; // Skip for now
+
+      await client.end();
     } catch (e) {
       console.warn('[adminController] Error counting products:', e.message);
       totalProducts = 0; activeProducts = 0; pendingProducts = 0; newProductsToday = 0;
@@ -102,24 +147,38 @@ exports.getDashboardStatsFromDB = async (req, res) => {
 
     // Orders might not exist in SQL, provide default values
     try {
-      totalOrders = await OrderModel.count() || 0;
-      ordersToday = await OrderModel.count({ where: { createdAt: { [Op.gte]: startOfDay } } }) || 0;
-      ordersThisMonth = await OrderModel.count({ where: { createdAt: { [Op.gte]: startOfMonth } } }) || 0;
+      // Use raw SQL for orders
+      const { Client } = require('pg');
+      const client = new Client({
+        host: process.env.DB_HOST || 'localhost',
+        port: parseInt(process.env.DB_PORT) || 5432,
+        user: process.env.DB_USER || 'postgres',
+        password: process.env.DB_PASSWORD || '1234',
+        database: process.env.DB_NAME || 'dfashion'
+      });
+      await client.connect();
 
-      // Sum totalAmount - use aggregate if sum not available
-      try {
-        const revenueAgg = await OrderModel.sum('totalAmount') || 0;
-        const revenueTodayAgg = await OrderModel.sum('totalAmount', { where: { createdAt: { [Op.gte]: startOfDay } } }) || 0;
-        const revenueMonthAgg = await OrderModel.sum('totalAmount', { where: { createdAt: { [Op.gte]: startOfMonth } } }) || 0;
-        revenueResult = revenueAgg;
-        revenueTodayResult = revenueTodayAgg;
-        revenueMonthResult = revenueMonthAgg;
-      } catch (sumError) {
-        console.warn('[adminController] Order.sum not available, using 0');
-        revenueResult = 0;
-        revenueTodayResult = 0;
-        revenueMonthResult = 0;
+      const orderResults = await client.query(`
+        SELECT
+          COUNT(*) as total,
+          COUNT(CASE WHEN created_at >= $1 THEN 1 END) as today,
+          COUNT(CASE WHEN created_at >= $2 THEN 1 END) as month,
+          COALESCE(SUM(total_amount), 0) as revenue,
+          COALESCE(SUM(CASE WHEN created_at >= $1 THEN total_amount END), 0) as revenue_today,
+          COALESCE(SUM(CASE WHEN created_at >= $2 THEN total_amount END), 0) as revenue_month
+        FROM orders
+      `, [startOfDay, startOfMonth]);
+
+      if (orderResults && orderResults.rows && orderResults.rows[0]) {
+        totalOrders = parseInt(orderResults.rows[0].total) || 0;
+        ordersToday = parseInt(orderResults.rows[0].today) || 0;
+        ordersThisMonth = parseInt(orderResults.rows[0].month) || 0;
+        revenueResult = parseFloat(orderResults.rows[0].revenue) || 0;
+        revenueTodayResult = parseFloat(orderResults.rows[0].revenue_today) || 0;
+        revenueMonthResult = parseFloat(orderResults.rows[0].revenue_month) || 0;
       }
+
+      await client.end();
     } catch (e) {
       console.warn('[adminController] Error counting orders:', e.message);
       totalOrders = 0; ordersToday = 0; ordersThisMonth = 0;
@@ -173,36 +232,46 @@ exports.getDashboardStats = exports.getDashboardStatsFromDB;
 exports.getAllUsers = async (req, res) => {
   try {
     const { page = 1, limit = 20, role, search } = req.query;
-    
-    const UserModel = await getUserModel();
-    const where = {};
-    if (role && role !== 'all') where.role = role;
-    if (search) {
-      where[Op.or] = [
-        { username: { [Op.iLike]: `%${search}%` } },
-        { email: { [Op.iLike]: `%${search}%` } },
-        { firstName: { [Op.iLike]: `%${search}%` } },
-        { lastName: { [Op.iLike]: `%${search}%` } }
-      ];
-    }
-
     const offset = (parseInt(page) - 1) * parseInt(limit);
-    const result = await UserModel.findAndCountAll({
-      where,
-      limit: parseInt(limit),
-      offset,
-      order: [['createdAt', 'DESC']],
-      attributes: { exclude: ['password'] }
+
+    // Use raw SQL via pg client to avoid Sequelize attribute mapping issues
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
     });
+    await client.connect();
+
+    const filters = [];
+    const values = [];
+    let idx = 1;
+    if (role && role !== 'all') { filters.push(`role = $${idx++}`); values.push(role); }
+    if (search) { filters.push(`(username ILIKE $${idx} OR email ILIKE $${idx} OR first_name ILIKE $${idx} OR last_name ILIKE $${idx})`); values.push(`%${search}%`); idx++; }
+
+    const whereClause = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
+
+    const rowsQuery = `SELECT id, username, email, first_name, last_name, role, is_active, created_at FROM users ${whereClause} ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`;
+    values.push(parseInt(limit), offset);
+
+    const countQuery = `SELECT COUNT(*) AS total FROM users ${whereClause}`;
+
+    const rowsRes = await client.query(rowsQuery, values);
+    const countRes = await client.query(countQuery, values.slice(0, values.length - 2));
+    await client.end();
+
+    const total = parseInt(countRes.rows[0].total || 0);
 
     return res.json({
       success: true,
       data: {
-        users: result.rows,
-        total: result.count,
+        users: rowsRes.rows,
+        total,
         page: parseInt(page),
         limit: parseInt(limit),
-        totalPages: Math.ceil(result.count / parseInt(limit))
+        totalPages: Math.ceil(total / parseInt(limit))
       }
     });
   } catch (error) {
@@ -417,7 +486,7 @@ exports.getAllProducts = async (req, res) => {
 exports.getAllOrders = async (req, res) => {
   try {
     const { page = 1, limit = 20, status } = req.query;
-    
+
     const OrderModel = await getOrderModel();
     const where = {};
     if (status && status !== 'all') {
@@ -429,7 +498,9 @@ exports.getAllOrders = async (req, res) => {
       where,
       limit: parseInt(limit),
       offset,
-      order: [['createdAt', 'DESC']]
+      order: [['createdAt', 'DESC']],
+      raw: true,
+      attributes: ['id', 'orderNumber', 'userId', 'totalAmount', 'status', 'paymentStatus', 'paymentMethod', 'shippingAddress', 'createdAt', 'updatedAt']
     });
 
     return res.json({
@@ -552,35 +623,6 @@ exports.getQuickActions = async (req, res) => {
     res.status(500).json({ success: false, message: 'Error fetching quick actions', error: error.message });
   }
 };
-// ✅ Get recent orders for dashboard (DATABASE-AGNOSTIC)
-exports.getRecentOrders = async (req, res) => {
-  try {
-    const { limit = 5 } = req.query;
-
-    const OrderModel = await getOrderModel();
-    const orders = await OrderModel.findAll({
-      limit: parseInt(limit),
-      order: [['createdAt', 'DESC']]
-      // TODO: Add user association when models are properly linked
-    });
-
-    res.json({
-      success: true,
-      data: {
-        recentOrders: orders
-      }
-    });
-  } catch (error) {
-    console.error('[adminController] Unexpected error in getRecentOrders:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error fetching recent orders',
-      error: error.message
-    });
-  }
-};
-
-// @desc    Update admin settings
 // @route   PUT /api/admin/settings
 // @access  Private/Admin
 exports.updateAdminSettings = async (req, res) => {
@@ -814,4 +856,55 @@ exports.updateOrderReturn = async (req, res) => {
 
 exports.deleteOrderReturn = async (req, res) => {
   res.status(501).json({ success: false, message: 'Delete order return feature not implemented' });
+};
+
+// ✅ Get recent orders for dashboard
+exports.getRecentOrders = async (req, res) => {
+  try {
+    const { limit = 10 } = req.query;
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
+    });
+    await client.connect();
+
+    // Join orders with users to get customer name/email
+
+    const query = `
+      SELECT o.id, o.order_number, o.total_amount, o.status, o.payment_status, o.created_at, o.user_id,
+             u.first_name, u.last_name, u.email
+      FROM orders o
+      LEFT JOIN users u ON o.user_id = u.id
+      ORDER BY o.created_at DESC
+      LIMIT $1
+    `;
+    const result = await client.query(query, [parseInt(limit)]);
+    await client.end();
+
+    const formattedOrders = result.rows.map(order => ({
+      id: order.id,
+      orderNumber: order.order_number,
+      customer: order.first_name || order.last_name ? `${order.first_name || ''} ${order.last_name || ''}`.trim() : (order.email || `User ${order.user_id}`),
+      amount: parseFloat(order.total_amount || 0),
+      status: order.status || 'pending',
+      paymentStatus: order.payment_status || 'pending',
+      date: order.created_at ? new Date(order.created_at).toISOString() : null
+    }));
+
+    return res.json({
+      success: true,
+      data: formattedOrders
+    });
+  } catch (error) {
+    console.error('[adminController] Error fetching recent orders:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching recent orders',
+      error: error.message
+    });
+  }
 };

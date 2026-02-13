@@ -1,40 +1,43 @@
 const mongoose = require('mongoose');
 
 const campaignSchema = new mongoose.Schema({
+  id: {
+    type: Number,
+    index: true
+  },
   name: {
     type: String,
     required: true,
+    maxlength: 200
   },
-  description: String,
+  description: {
+    type: String
+  },
+  type: {
+    type: String,
+    enum: ['promotional', 'seasonal', 'flash_sale', 'clearance', 'loyalty', 'seasonal_sale'],
+    default: 'promotional'
+  },
   startDate: {
     type: Date,
-    required: true,
+    required: true
   },
   endDate: {
     type: Date,
-    required: true,
+    required: true
   },
-  budget: {
-    type: Number,
-    default: 0,
-  },
-  spent: {
-    type: Number,
-    default: 0,
-  },
-  status: {
+  banner: {
     type: String,
-    enum: ['draft', 'active', 'paused', 'completed'],
-    default: 'draft',
+    maxlength: 500
   },
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
+  isActive: {
+    type: Boolean,
+    default: true
   }
+}, {
+  timestamps: true
 });
+
+campaignSchema.index({ id: 1 });
 
 module.exports = mongoose.model('Campaign', campaignSchema);

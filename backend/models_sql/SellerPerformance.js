@@ -1,7 +1,7 @@
 module.exports = (sequelize, DataTypes) => {
   return sequelize.define('SellerPerformance', {
-    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    sellerId: { type: DataTypes.INTEGER, allowNull: false, unique: true },
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    sellerId: { type: DataTypes.UUID, allowNull: false, unique: true },
     totalSales: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
     totalOrders: { type: DataTypes.INTEGER, defaultValue: 0 },
     averageRating: { type: DataTypes.DECIMAL(3, 2), defaultValue: 0 },

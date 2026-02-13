@@ -1,15 +1,50 @@
 const mongoose = require('mongoose');
 
 const flashSaleSchema = new mongoose.Schema({
-  title: String,
-  description: String,
-  startDate: Date,
-  endDate: Date,
-  discountPercent: Number,
-  products: [{ productId: mongoose.Schema.Types.ObjectId, salePrice: Number, stockLimit: Number, claimed: Number }],
-  status: { type: String, enum: ['scheduled','live','ended'], default: 'scheduled' },
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  createdAt: { type: Date, default: Date.now }
+  id: {
+    type: Number,
+    index: true
+  },
+  name: {
+    type: String,
+    required: true,
+    maxlength: 200
+  },
+  title: {
+    type: String,
+    maxlength: 200
+  },
+  description: {
+    type: String
+  },
+  discountPercentage: {
+    type: Number,
+    required: true
+  },
+  startTime: {
+    type: Date,
+    required: true
+  },
+  endTime: {
+    type: Date,
+    required: true
+  },
+  products: {
+    type: Array,
+    default: []
+  },
+  categories: {
+    type: Array,
+    default: []
+  },
+  isActive: {
+    type: Boolean,
+    default: true
+  }
+}, {
+  timestamps: true
 });
+
+flashSaleSchema.index({ id: 1 });
 
 module.exports = mongoose.model('FlashSale', flashSaleSchema);

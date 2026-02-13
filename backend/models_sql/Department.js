@@ -1,8 +1,8 @@
 module.exports = (sequelize, DataTypes) => {
   const Department = sequelize.define('Department', {
     id: {
-      type: DataTypes.INTEGER,
-      autoIncrement: true,
+      type: DataTypes.UUID,
+      defaultValue: DataTypes.UUIDV4,
       primaryKey: true
     },
     name: {
@@ -24,7 +24,10 @@ module.exports = (sequelize, DataTypes) => {
     }
   }, {
     tableName: 'departments',
-    timestamps: true
+    timestamps: true,
+    underscored: true,
+    createdAt: 'created_at',
+    updatedAt: 'updated_at'
   });
 
   return Department;

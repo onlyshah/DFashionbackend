@@ -1,9 +1,9 @@
 module.exports = (sequelize, DataTypes) => {
   return sequelize.define('InventoryHistory', {
     id: { 
-      type: DataTypes.INTEGER, 
+      type: DataTypes.UUID, 
       primaryKey: true, 
-      autoIncrement: true 
+      defaultValue: DataTypes.UUIDV4 
     },
     transactionId: { 
       type: DataTypes.STRING(100), 
@@ -11,7 +11,7 @@ module.exports = (sequelize, DataTypes) => {
       unique: true
     },
     productId: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
       allowNull: false,
       references: { model: 'products', key: 'id' },
       onDelete: 'CASCADE'
@@ -25,7 +25,7 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: false 
     },
     warehouseId: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
       allowNull: false,
       references: { model: 'warehouses', key: 'id' },
       onDelete: 'CASCADE'
@@ -39,9 +39,9 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 'Purchase' 
     },
     userId: { 
-      type: DataTypes.INTEGER, 
+      type: DataTypes.UUID, 
       allowNull: false,
-      references: { model: 'Users', key: 'id' },
+      references: { model: 'users', key: 'id' },
       onDelete: 'CASCADE'
     },
     notes: { 

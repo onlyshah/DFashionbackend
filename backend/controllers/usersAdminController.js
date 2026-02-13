@@ -51,17 +51,38 @@ exports.getAllUsers = async (req, res) => {
       ];
     }
 
-    const { count, rows } = await models.User.findAndCountAll({
-      where,
-      attributes: { exclude: ['password'] },
-      include: [
-        { model: models.UserProfile, attributes: ['bio', 'avatar_url', 'date_of_birth'] }
-      ],
-      order: [['createdAt', 'DESC']],
-      limit: validated_limit,
-      offset,
-      distinct: true
+    // Use raw SQL to avoid Sequelize/attribute mapping issues in the admin panel
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
     });
+    await client.connect();
+
+    const filters = [];
+    const vals = [];
+    let i = 1;
+    if (role && USER_ROLES.includes(role)) { filters.push(`role = $${i++}`); vals.push(role); }
+    if (status && USER_STATUSES.includes(status)) { filters.push(`account_status = $${i++}`); vals.push(status); }
+    if (department) { filters.push(`department = $${i++}`); vals.push(department); }
+    if (created_after) { filters.push(`created_at >= $${i++}`); vals.push(new Date(created_after)); }
+    if (search) { filters.push(`(name ILIKE $${i} OR email ILIKE $${i} OR phone ILIKE $${i})`); vals.push(`%${search}%`); i++; }
+
+    const whereClause = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const rowsQuery = `SELECT u.*, up.bio, up.avatar_url, up.date_of_birth FROM users u LEFT JOIN user_profiles up ON up.user_id = u.id ${whereClause} ORDER BY u.created_at DESC LIMIT $${i++} OFFSET $${i++}`;
+    vals.push(validated_limit, offset);
+
+    const countQuery = `SELECT COUNT(*) as total FROM users u ${whereClause}`;
+
+    const rowsRes = await client.query(rowsQuery, vals);
+    const countRes = await client.query(countQuery, vals.slice(0, vals.length - 2));
+    await client.end();
+
+    const rows = rowsRes.rows;
+    const count = parseInt(countRes.rows[0].total || 0);
 
     const pagination = {
       page: parseInt(page),

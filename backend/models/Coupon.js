@@ -1,21 +1,56 @@
 const mongoose = require('mongoose');
 
 const couponSchema = new mongoose.Schema({
-  code: { type: String, required: true, unique: true },
-  type: { type: String, enum: ['percentage','flat_amount'], required: true },
-  value: Number,
-  minOrderValue: Number,
-  maxDiscountAmount: Number,
-  validFrom: Date,
-  validUpto: Date,
-  usageLimit: Number,
-  usagePerCustomer: Number,
-  applicableCategories: [String],
-  applicableProducts: [String],
-  usageCount: { type: Number, default: 0 },
-  status: { type: String, enum: ['active','inactive','expired'], default: 'active' },
-  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  createdAt: { type: Date, default: Date.now }
+  id: {
+    type: Number,
+    index: true
+  },
+  code: {
+    type: String,
+    required: true,
+    unique: true,
+    maxlength: 50
+  },
+  description: {
+    type: String
+  },
+  discountType: {
+    type: String,
+    enum: ['percentage', 'fixed'],
+    default: 'percentage'
+  },
+  discountValue: {
+    type: Number,
+    required: true
+  },
+  minPurchase: {
+    type: Number,
+    default: 0
+  },
+  maxDiscount: {
+    type: Number
+  },
+  usageLimit: {
+    type: Number
+  },
+  usageCount: {
+    type: Number,
+    default: 0
+  },
+  validFrom: {
+    type: Date
+  },
+  validUntil: {
+    type: Date
+  },
+  isActive: {
+    type: Boolean,
+    default: true
+  }
+}, {
+  timestamps: true
 });
+
+couponSchema.index({ id: 1 });
 
 module.exports = mongoose.model('Coupon', couponSchema);

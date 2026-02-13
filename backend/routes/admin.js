@@ -38,7 +38,38 @@ router.get('/analytics',
 // =============================================================
 // USER MANAGEMENT
 // =============================================================
-router.get('/users', requirePermission('users', 'view'), adminController.getAllUsers);
+router.get('/users', requirePermission('users', 'view'), async (req, res) => {
+  try {
+    const { page = 1, limit = 20, role, search } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
+    });
+    await client.connect();
+    const filters = [];
+    const values = [];
+    let idx = 1;
+    if (role && role !== 'all') { filters.push(`role = $${idx++}`); values.push(role); }
+    if (search) { filters.push(`(username ILIKE $${idx} OR email ILIKE $${idx} OR first_name ILIKE $${idx} OR last_name ILIKE $${idx})`); values.push(`%${search}%`); idx++; }
+    const whereClause = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
+    const rowsQuery = `SELECT id, username, email, first_name, last_name, role, is_active, created_at FROM users ${whereClause} ORDER BY created_at DESC LIMIT $${idx++} OFFSET $${idx++}`;
+    values.push(parseInt(limit), offset);
+    const countQuery = `SELECT COUNT(*) AS total FROM users ${whereClause}`;
+    const rowsRes = await client.query(rowsQuery, values);
+    const countRes = await client.query(countQuery, values.slice(0, values.length - 2));
+    await client.end();
+    const total = parseInt(countRes.rows[0].total || 0);
+    return res.json({ success: true, data: { users: rowsRes.rows, total, page: parseInt(page), limit: parseInt(limit), totalPages: Math.ceil(total / parseInt(limit)) } });
+  } catch (error) {
+    console.error('[routes/admin] Raw users handler error:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching users', error: error.message });
+  }
+});
 
 router.post(
   '/users',
@@ -147,7 +178,41 @@ router.put('/products/:id/status', requirePermission('products', 'edit'), adminC
 // ORDERS
 // =============================================================
 router.get('/orders/recent', verifyAdminToken, adminController.getRecentOrders);
-router.get('/orders', requirePermission('orders', 'view'), adminController.getAllOrders);
+router.get('/orders', requirePermission('orders', 'view'), async (req, res) => {
+  try {
+    const { page = 1, limit = 20, status } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
+    });
+    await client.connect();
+
+    const filters = [];
+    const vals = [];
+    let i = 1;
+    if (status && status !== 'all') { filters.push(`status = $${i++}`); vals.push(status); }
+
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const rowsQuery = `SELECT id, order_number, user_id, total_amount, status, payment_status, payment_method, shipping_address, created_at, updated_at FROM orders ${where} ORDER BY created_at DESC LIMIT $${i++} OFFSET $${i++}`;
+    vals.push(parseInt(limit), offset);
+    const countQuery = `SELECT COUNT(*) AS total FROM orders ${where}`;
+
+    const rowsRes = await client.query(rowsQuery, vals);
+    const countRes = await client.query(countQuery, vals.slice(0, vals.length - 2));
+    await client.end();
+
+    const total = parseInt(countRes.rows[0].total || 0);
+    return res.json({ success: true, data: { orders: rowsRes.rows, total, page: parseInt(page), limit: parseInt(limit), totalPages: Math.ceil(total / parseInt(limit)) } });
+  } catch (error) {
+    console.error('[routes/admin] Raw orders handler error:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching orders', error: error.message });
+  }
+});
 
 router.put('/orders/:id/status', requirePermission('orders', 'edit'), adminController.updateOrderStatus);
 

@@ -1,59 +1,52 @@
 const mongoose = require('mongoose');
 
 const ticketSchema = new mongoose.Schema({
+  id: {
+    type: Number,
+    index: true
+  },
+  ticketNumber: {
+    type: String,
+    unique: true,
+    maxlength: 50
+  },
+  userId: {
+    type: Number,
+    required: true
+  },
   subject: {
     type: String,
     required: true,
-    trim: true,
+    maxlength: 300
   },
-  message: {
+  description: {
     type: String,
-    required: true,
+    required: true
   },
-  status: {
+  category: {
     type: String,
-    enum: ['open', 'in_progress', 'resolved', 'closed'],
-    default: 'open',
+    maxlength: 100
   },
   priority: {
     type: String,
-    enum: ['low', 'medium', 'high'],
-    default: 'medium',
+    enum: ['low', 'medium', 'high', 'critical'],
+    default: 'medium'
   },
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true,
+  status: {
+    type: String,
+    enum: ['open', 'in_progress', 'waiting', 'resolved', 'closed'],
+    default: 'open'
   },
   assignedTo: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+    type: Number
   },
-  department: {
-    type: String,
-    enum: ['support', 'sales', 'marketing', 'technical', 'billing'],
-    default: 'support',
-  },
-  replies: [
-    {
-      message: String,
-      author: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-      createdAt: { type: Date, default: Date.now },
-    }
-  ],
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now,
+  resolvedAt: {
+    type: Date
   }
+}, {
+  timestamps: true
 });
 
-ticketSchema.pre('save', function (next) {
-  this.updatedAt = Date.now();
-  next();
-});
+ticketSchema.index({ id: 1 });
 
 module.exports = mongoose.model('Ticket', ticketSchema);

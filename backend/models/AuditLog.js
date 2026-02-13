@@ -1,21 +1,40 @@
 const mongoose = require('mongoose');
 
 const auditLogSchema = new mongoose.Schema({
-  actor: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+  id: {
+    type: Number,
+    index: true
+  },
+  userId: {
+    type: Number,
+    required: false
   },
   action: {
     type: String,
-    required: true
+    required: true,
+    maxlength: 100
   },
-  resourceType: String,
-  resourceId: mongoose.Schema.Types.Mixed,
-  details: mongoose.Schema.Types.Mixed,
-  ip: String,
-  userAgent: String
+  module: {
+    type: String,
+    maxlength: 100
+  },
+  description: {
+    type: String
+  },
+  oldValue: {
+    type: mongoose.Schema.Types.Mixed
+  },
+  newValue: {
+    type: mongoose.Schema.Types.Mixed
+  },
+  ipAddress: {
+    type: String,
+    maxlength: 50
+  }
 }, {
   timestamps: true
 });
+
+auditLogSchema.index({ id: 1 });
 
 module.exports = mongoose.model('AuditLog', auditLogSchema);

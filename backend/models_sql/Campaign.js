@@ -1,6 +1,6 @@
 module.exports = (sequelize, DataTypes) => {
   return sequelize.define('Campaign', {
-    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
     name: { type: DataTypes.STRING(200), allowNull: false },
     description: { type: DataTypes.TEXT },
     // allow additional campaign type aliases used by seeders
@@ -9,5 +9,5 @@ module.exports = (sequelize, DataTypes) => {
     endDate: { type: DataTypes.DATE, allowNull: false },
     banner: { type: DataTypes.STRING(500) },
     isActive: { type: DataTypes.BOOLEAN, defaultValue: true }
-  }, { tableName: 'campaigns', timestamps: true });
+  }, { tableName: 'campaigns', timestamps: true, underscored: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 };

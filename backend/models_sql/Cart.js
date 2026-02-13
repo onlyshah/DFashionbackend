@@ -1,10 +1,9 @@
 module.exports = (sequelize, DataTypes) => {
   return sequelize.define('Cart', {
-    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    userId: { type: DataTypes.INTEGER, allowNull: false },
-    items: { type: DataTypes.JSON, defaultValue: [] },
-    totalPrice: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 },
-    totalQuantity: { type: DataTypes.INTEGER, defaultValue: 0 },
-    lastUpdated: { type: DataTypes.DATE, defaultValue: DataTypes.NOW }
-  }, { tableName: 'carts', timestamps: true });
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    userId: { type: DataTypes.UUID, allowNull: false },
+    productId: { type: DataTypes.UUID, allowNull: false },
+    quantity: { type: DataTypes.INTEGER, defaultValue: 1 },
+    price: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0 }
+  }, { tableName: 'carts', timestamps: true, underscored: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 };

@@ -1,30 +1,33 @@
 const mongoose = require('mongoose');
 
 const permissionSchema = new mongoose.Schema({
+  id: {
+    type: Number,
+    index: true
+  },
   name: {
     type: String,
     required: true,
     unique: true,
-    trim: true
+    maxlength: 100
   },
   displayName: {
     type: String,
     required: true,
-    trim: true
+    maxlength: 150
   },
   description: {
-    type: String,
-    trim: true
+    type: String
   },
   module: {
     type: String,
     required: true,
-    trim: true
+    maxlength: 100
   },
-  actions: [{
-    type: String,
-    enum: ['create', 'read', 'update', 'delete', 'approve', 'export', 'import', 'manage']
-  }],
+  actions: {
+    type: Array,
+    default: []
+  },
   isSystemPermission: {
     type: Boolean,
     default: false
@@ -34,11 +37,12 @@ const permissionSchema = new mongoose.Schema({
     default: true
   },
   createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
+    type: Number
   }
 }, {
   timestamps: true
 });
+
+permissionSchema.index({ id: 1 });
 
 module.exports = mongoose.model('Permission', permissionSchema);

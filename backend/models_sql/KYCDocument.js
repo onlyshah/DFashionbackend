@@ -1,7 +1,7 @@
 module.exports = (sequelize, DataTypes) => {
   return sequelize.define('KYCDocument', {
-    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    userId: { type: DataTypes.INTEGER, allowNull: false },
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    userId: { type: DataTypes.UUID, allowNull: false },
     // allow flexible document types from various seeders
     documentType: { type: DataTypes.STRING(60), defaultValue: 'aadhar' },
     documentNumber: { type: DataTypes.STRING(100), unique: true },
@@ -9,5 +9,5 @@ module.exports = (sequelize, DataTypes) => {
     status: { type: DataTypes.ENUM('pending', 'verified', 'rejected', 'expired'), defaultValue: 'pending' },
     verifiedAt: { type: DataTypes.DATE },
     expiryDate: { type: DataTypes.DATE }
-  }, { tableName: 'kyc_documents', timestamps: true });
+  }, { tableName: 'kyc_documents', timestamps: true, underscored: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 };

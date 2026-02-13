@@ -1,7 +1,7 @@
 module.exports = (sequelize, DataTypes) => {
   return sequelize.define('Reward', {
-    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    userId: { type: DataTypes.INTEGER, allowNull: false },
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    userId: { type: DataTypes.UUID, allowNull: false },
     points: { type: DataTypes.INTEGER, defaultValue: 0 },
     description: { type: DataTypes.TEXT },
     type: { type: DataTypes.ENUM('purchase', 'referral', 'review', 'social', 'milestone'), defaultValue: 'purchase' },

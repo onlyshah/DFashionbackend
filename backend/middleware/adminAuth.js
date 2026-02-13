@@ -65,10 +65,10 @@ exports.verifyAdminToken = async (req, res, next) => {
       });
     }
 
-    const secret = process.env.JWT_SECRET || 'your-secret-key';
+    const secret = process.env.JWT_SECRET || 'dfashion_secret_key';
     // Verify token
     const decoded = jwt.verify(token, secret);
-    console.log('✅ verifyAdminToken: Token verified, userId:', decoded.userId);
+    console.log('✅ verifyAdminToken: Token verified, userId:', decoded.userId, 'role:', decoded.role);
     
     // Get user from database.
     // If the backend is running in Postgres mode, avoid calling Mongoose methods
@@ -102,11 +102,11 @@ exports.verifyAdminToken = async (req, res, next) => {
         _id: decoded.userId,
         id: decoded.userId,
         email: decoded.email || 'unknown',
-        role: 'super_admin', // Use super_admin to bypass permission checks
+        role: decoded.role || 'super_admin', // Use role from token
         isActive: true,
         permissions: [] // Empty permissions - super_admin bypasses these anyway
       };
-      console.log('⚠️ Using token data as fallback for user info, role: super_admin');
+      console.log('⚠️ Using token data as fallback for user info, role:', user.role);
     }
     
     if (!user) {
@@ -115,6 +115,11 @@ exports.verifyAdminToken = async (req, res, next) => {
         message: 'Invalid token. User not found.',
         code: 'USER_NOT_FOUND'
       });
+    }
+
+    // Use role from token (most reliable source)
+    if (decoded.role) {
+      user.role = decoded.role;
     }
 
     // Check if user is active

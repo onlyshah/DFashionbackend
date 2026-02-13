@@ -35,6 +35,12 @@ const connectPostgres = async () => {
         dialectOptions: {
           ssl: false,
           application_name: 'dfashion_backend'
+        },
+        define: {
+          underscored: true,
+          timestamps: true,
+          createdAt: 'created_at',
+          updatedAt: 'updated_at'
         }
       }
     );

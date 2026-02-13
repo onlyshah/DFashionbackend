@@ -1,40 +1,31 @@
 const mongoose = require('mongoose');
 
 const departmentSchema = new mongoose.Schema({
+  id: {
+    type: Number,
+    index: true
+  },
   name: {
     type: String,
     required: true,
     unique: true,
-    trim: true
+    maxlength: 100
   },
   displayName: {
     type: String,
-    required: true,
-    trim: true
+    maxlength: 200
   },
   description: {
-    type: String,
-    trim: true
-  },
-  head: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    default: null
+    type: String
   },
   isActive: {
     type: Boolean,
     default: true
-  },
-  createdBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
   }
 }, {
   timestamps: true
 });
 
-// Index for better performance
-departmentSchema.index({ name: 1 });
-departmentSchema.index({ isActive: 1 });
+departmentSchema.index({ id: 1 });
 
 module.exports = mongoose.model('Department', departmentSchema);

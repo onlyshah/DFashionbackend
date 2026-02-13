@@ -1,11 +1,11 @@
 module.exports = (sequelize, DataTypes) => {
   return sequelize.define('UserBehavior', {
-    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
     userId: { 
-      type: DataTypes.INTEGER, 
+      type: DataTypes.UUID, 
       allowNull: false,
       references: {
-        model: 'Users',
+        model: 'users',
         key: 'id'
       }
     },

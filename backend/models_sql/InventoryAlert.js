@@ -1,22 +1,22 @@
 module.exports = (sequelize, DataTypes) => {
   return sequelize.define('InventoryAlert', {
     id: { 
-      type: DataTypes.INTEGER, 
+      type: DataTypes.UUID, 
       primaryKey: true, 
-      autoIncrement: true 
+      defaultValue: DataTypes.UUIDV4 
     },
     type: { 
       type: DataTypes.ENUM('critical', 'warning', 'info'), 
       allowNull: false 
     },
     productId: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
       allowNull: false,
       references: { model: 'products', key: 'id' },
       onDelete: 'CASCADE'
     },
     warehouseId: { 
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
       allowNull: true,
       references: { model: 'warehouses', key: 'id' },
       onDelete: 'SET NULL'
@@ -38,9 +38,9 @@ module.exports = (sequelize, DataTypes) => {
       defaultValue: 10 
     },
     acknowledgedBy: { 
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
       allowNull: true,
-      references: { model: 'Users', key: 'id' },
+      references: { model: 'users', key: 'id' },
       onDelete: 'SET NULL'
     },
     acknowledgedAt: { 

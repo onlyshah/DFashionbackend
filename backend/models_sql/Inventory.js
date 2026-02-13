@@ -1,18 +1,18 @@
 module.exports = (sequelize, DataTypes) => {
   return sequelize.define('Inventory', {
     id: { 
-      type: DataTypes.INTEGER, 
+      type: DataTypes.UUID, 
       primaryKey: true, 
-      autoIncrement: true 
+      defaultValue: DataTypes.UUIDV4 
     },
     productId: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
       allowNull: false,
       references: { model: 'products', key: 'id' },
       onDelete: 'CASCADE'
     },
     warehouseId: {
-      type: DataTypes.INTEGER,
+      type: DataTypes.UUID,
       allowNull: false,
       references: { model: 'warehouses', key: 'id' },
       onDelete: 'CASCADE'

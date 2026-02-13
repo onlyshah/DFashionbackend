@@ -103,6 +103,10 @@ const defineSupplier = require('./Supplier');
 const defineInventory = require('./Inventory');
 const defineInventoryAlert = require('./InventoryAlert');
 const defineInventoryHistory = require('./InventoryHistory');
+const defineAnalytics = require('./Analytics');
+const defineFeatureFlag = require('./FeatureFlag');
+const defineSmartCollection = require('./SmartCollection');
+const defineUpload = require('./Upload');
 
 // Create null-safe stub models for initialization phase
 const createNullStub = (name) => {
@@ -170,6 +174,10 @@ const Supplier = defineModelSafely(defineSupplier, 'Supplier') || createNullStub
 const Inventory = defineModelSafely(defineInventory, 'Inventory') || createNullStub('Inventory');
 const InventoryAlert = defineModelSafely(defineInventoryAlert, 'InventoryAlert') || createNullStub('InventoryAlert');
 const InventoryHistory = defineModelSafely(defineInventoryHistory, 'InventoryHistory') || createNullStub('InventoryHistory');
+const Analytics = defineModelSafely(defineAnalytics, 'Analytics') || createNullStub('Analytics');
+const FeatureFlag = defineModelSafely(defineFeatureFlag, 'FeatureFlag') || createNullStub('FeatureFlag');
+const SmartCollection = defineModelSafely(defineSmartCollection, 'SmartCollection') || createNullStub('SmartCollection');
+const Upload = defineModelSafely(defineUpload, 'Upload') || createNullStub('Upload');
 
 // SequelizeQueryWrapper class - provides Promise-based chainable interface
 class SequelizeQueryWrapper {
@@ -250,10 +258,19 @@ class SequelizeQueryWrapper {
 const createMongooseLikeWrapper = (sequelizeModel, defineFunc, modelName) => {
   // This wrapper lazy-loads the actual model if the initial one was a null stub
   const getActualModel = async () => {
-    // Check if it's a real Sequelize model (has attributes property) vs a null stub
+    // First check if reinitialized model exists in _raw (priority access)
+    if (module.exports._raw && module.exports._raw[modelName]) {
+      const model = module.exports._raw[modelName];
+      if (model && model.rawAttributes && typeof model.create === 'function') {
+        return model;
+      }
+    }
+    
+    // Check if current model is a real Sequelize model (has attributes property) vs a null stub
     if (sequelizeModel && sequelizeModel.rawAttributes && typeof sequelizeModel.create === 'function') {
       return sequelizeModel; // Already a real model
     }
+    
     // If it's null or a stub, try to reload with the connected Sequelize instance
     try {
       const instance = await getSequelizeInstance();
@@ -364,6 +381,30 @@ const createMongooseLikeWrapper = (sequelizeModel, defineFunc, modelName) => {
       }
     },
 
+    // Sequelize-style findAndCountAll() - used by admin controllers
+    findAndCountAll: async (options = {}) => {
+      try {
+        console.log(`[WRAPPER] findAndCountAll called on ${modelName} with options:`, JSON.stringify(options));
+        const model = await getActualModel();
+        if (model.findAndCountAll && typeof model.findAndCountAll === 'function') {
+          const result = await model.findAndCountAll(options);
+          return result;
+        }
+
+        // Fallback: emulate findAndCountAll using the actual Sequelize model where possible
+        const realModel = model && model.findAll ? model : (module.exports._raw && module.exports._raw[modelName] ? module.exports._raw[modelName] : null);
+        const rows = realModel && realModel.findAll ? await realModel.findAll(options) : [];
+        // Count respects where clause if provided
+        const countOptions = {};
+        if (options && options.where) countOptions.where = options.where;
+        const count = realModel && realModel.count ? await realModel.count(countOptions) : 0;
+        return { rows, count };
+      } catch (err) {
+        console.error(`Error in findAndCountAll for ${modelName}:`, err);
+        return { rows: [], count: 0 };
+      }
+    },
+
     // Sequelize-style findByIdAndUpdate()
     findByIdAndUpdate: async (id, update, options = {}) => {
       try {
@@ -397,6 +438,37 @@ const createMongooseLikeWrapper = (sequelizeModel, defineFunc, modelName) => {
         return result;
       } catch (err) {
         console.error(`Error in create for ${modelName}:`, err.message);
+        throw err;
+      }
+    },
+
+    // Sequelize-style destroy() method - bulk delete
+    destroy: async (options = {}) => {
+      try {
+        const model = await getActualModel();
+        if (!model || !model.destroy) {
+          console.warn(`[wrapper] ${modelName}: model does not have destroy method`);
+          return 0;
+        }
+        const result = await model.destroy(options);
+        return result;
+      } catch (err) {
+        console.error(`Error in destroy for ${modelName}:`, err.message);
+        throw err;
+      }
+    },
+
+    // Sequelize-style update() method
+    update: async (data, options = {}) => {
+      try {
+        const model = await getActualModel();
+        if (!model || !model.update) {
+          throw new Error(`${modelName} model does not have update method`);
+        }
+        const result = await model.update(data, options);
+        return result;
+      } catch (err) {
+        console.error(`Error in update for ${modelName}:`, err.message);
         throw err;
       }
     },
@@ -457,6 +529,10 @@ const wrappedSupplier = createMongooseLikeWrapper(Supplier, defineSupplier, 'Sup
 const wrappedInventory = createMongooseLikeWrapper(Inventory, defineInventory, 'Inventory');
 const wrappedInventoryAlert = createMongooseLikeWrapper(InventoryAlert, defineInventoryAlert, 'InventoryAlert');
 const wrappedInventoryHistory = createMongooseLikeWrapper(InventoryHistory, defineInventoryHistory, 'InventoryHistory');
+const wrappedAnalytics = createMongooseLikeWrapper(Analytics, defineAnalytics, 'Analytics');
+const wrappedFeatureFlag = createMongooseLikeWrapper(FeatureFlag, defineFeatureFlag, 'FeatureFlag');
+const wrappedSmartCollection = createMongooseLikeWrapper(SmartCollection, defineSmartCollection, 'SmartCollection');
+const wrappedUpload = createMongooseLikeWrapper(Upload, defineUpload, 'Upload');
 const wrappedSubCategory = createMongooseLikeWrapper(SubCategory, defineSubCategory, 'SubCategory');
 
 // ============================================================================
@@ -541,6 +617,10 @@ const reinitializeModels = async () => {
       const Inventory_new = defineInventory(instance, DataTypes);
       const InventoryAlert_new = defineInventoryAlert(instance, DataTypes);
       const InventoryHistory_new = defineInventoryHistory(instance, DataTypes);
+      const Analytics_new = defineAnalytics(instance, DataTypes);
+      const FeatureFlag_new = defineFeatureFlag(instance, DataTypes);
+      const SmartCollection_new = defineSmartCollection(instance, DataTypes);
+      const Upload_new = defineUpload(instance, DataTypes);
       
       // Directly update all models in the _raw export
       module.exports._raw = {
@@ -594,10 +674,14 @@ const reinitializeModels = async () => {
         Supplier: Supplier_new,
         Inventory: Inventory_new,
         InventoryAlert: InventoryAlert_new,
-        InventoryHistory: InventoryHistory_new
+        InventoryHistory: InventoryHistory_new,
+        Analytics: Analytics_new,
+        FeatureFlag: FeatureFlag_new,
+        SmartCollection: SmartCollection_new,
+        Upload: Upload_new
       };
 
-      console.log('[models_sql] ✅ All 53 models reinitialized with active Sequelize connection');
+      console.log('[models_sql] ✅ All 57 models reinitialized with active Sequelize connection');
       return true;
     } catch (redefErr) {
       console.error('[models_sql] Error redefining models:', redefErr.message);
@@ -663,6 +747,10 @@ module.exports = {
   Inventory: wrappedInventory,
   InventoryAlert: wrappedInventoryAlert,
   InventoryHistory: wrappedInventoryHistory,
+  Analytics: wrappedAnalytics,
+  FeatureFlag: wrappedFeatureFlag,
+  SmartCollection: wrappedSmartCollection,
+  Upload: wrappedUpload,
   // Export raw Sequelize models for direct access if needed
   _raw: {
     Role,
@@ -712,9 +800,14 @@ module.exports = {
     QuickAction,
     StyleInspiration,
     Warehouse,
+    Supplier,
     Inventory: wrappedInventory,
     InventoryAlert: wrappedInventoryAlert,
-    InventoryHistory: wrappedInventoryHistory
+    InventoryHistory: wrappedInventoryHistory,
+    Analytics,
+    FeatureFlag,
+    SmartCollection,
+    Upload
   },
   // Initialization helper
   getSequelizeInstance,

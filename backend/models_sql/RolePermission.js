@@ -1,7 +1,7 @@
 module.exports = (sequelize, DataTypes) => {
   return sequelize.define('RolePermission', {
-    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    roleId: { type: DataTypes.INTEGER, allowNull: false },
-    permissionId: { type: DataTypes.INTEGER, allowNull: false }
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    roleId: { type: DataTypes.UUID, allowNull: false },
+    permissionId: { type: DataTypes.UUID, allowNull: false },
   }, { tableName: 'role_permissions', timestamps: true });
 };

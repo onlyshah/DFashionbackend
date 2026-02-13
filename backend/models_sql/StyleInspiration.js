@@ -1,6 +1,6 @@
 module.exports = (sequelize, DataTypes) => {
   return sequelize.define('StyleInspiration', {
-    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
     title: { type: DataTypes.STRING(200), allowNull: false },
     description: { type: DataTypes.TEXT },
     image: { type: DataTypes.STRING(500) },
@@ -8,5 +8,5 @@ module.exports = (sequelize, DataTypes) => {
     style: { type: DataTypes.STRING(100) },
     relatedProducts: { type: DataTypes.JSON, defaultValue: [] },
     isActive: { type: DataTypes.BOOLEAN, defaultValue: true }
-  }, { tableName: 'style_inspiration', timestamps: true });
+  }, { tableName: 'style_inspiration', timestamps: true, underscored: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 };

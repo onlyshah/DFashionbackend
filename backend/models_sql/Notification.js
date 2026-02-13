@@ -1,7 +1,7 @@
 module.exports = (sequelize, DataTypes) => {
   return sequelize.define('Notification', {
-    id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-    userId: { type: DataTypes.INTEGER, allowNull: false },
+    id: { type: DataTypes.UUID, primaryKey: true, defaultValue: DataTypes.UUIDV4 },
+    userId: { type: DataTypes.UUID, allowNull: false },
     title: { type: DataTypes.STRING(200), allowNull: false },
     message: { type: DataTypes.TEXT, allowNull: false },
     // allow flexible types to avoid enum mismatches from seeders
@@ -10,5 +10,5 @@ module.exports = (sequelize, DataTypes) => {
     link: { type: DataTypes.STRING(500) },
     isRead: { type: DataTypes.BOOLEAN, defaultValue: false },
     readAt: { type: DataTypes.DATE }
-  }, { tableName: 'notifications', timestamps: true });
+  }, { tableName: 'notification_preferences', timestamps: true, underscored: true, createdAt: 'created_at', updatedAt: 'updated_at' });
 };

@@ -5,7 +5,7 @@
  */
 
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
-const models = dbType === 'postgres' ? require('../models_sql') : require('../models')();
+const models = dbType === 'postgres' ? require('../models_sql') : require('../models');
 const { Wishlist, Product, Cart } = models;
 
 // ==================== WISHLIST OPERATIONS ====================
