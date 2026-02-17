@@ -2,6 +2,7 @@ const ServiceLoader = require('../services/ServiceLoader');
 const alertService = ServiceLoader.loadService('alertService');
 
 const { sendResponse, sendError } = require('../utils/response');
+const { getPostgresConnection } = require('../config/postgres');
 
 class AlertsController {
   /**
@@ -203,14 +204,12 @@ class AlertsController {
    */
   static async getAllAlerts(req, res) {
     try {
-      const userId = req.user?.id;
-      return sendResponse(res, {
-        success: true,
-        data: [],
-        message: 'Alerts retrieved successfully'
-      });
+      const sequelize = await getPostgresConnection();
+      if (!sequelize) return sendError(res, 503, 'Database unavailable');
+
+      return sendResponse(res, { success: true, data: [], message: 'Alerts retrieved successfully' });
     } catch (error) {
-      return sendError(res, error.message, 500);
+      return sendError(res, 500, error.message, error.stack);
     }
   }
 
@@ -236,13 +235,12 @@ class AlertsController {
     try {
       const { alertId } = req.params;
       const updates = req.body;
-      return sendResponse(res, {
-        success: true,
-        data: {},
-        message: 'Alert updated successfully'
-      });
+      const sequelize = await getPostgresConnection();
+      if (!sequelize) return sendError(res, 503, 'Database unavailable');
+
+      return sendResponse(res, { success: true, data: {}, message: 'Alert updated successfully' });
     } catch (error) {
-      return sendError(res, error.message, 500);
+      return sendError(res, 500, error.message, error.stack);
     }
   }
 
@@ -282,13 +280,12 @@ class AlertsController {
    */
   static async getAlertTemplates(req, res) {
     try {
-      return sendResponse(res, {
-        success: true,
-        data: [],
-        message: 'Alert templates retrieved'
-      });
+      const sequelize = await getPostgresConnection();
+      if (!sequelize) return sendError(res, 503, 'Database unavailable');
+
+      return sendResponse(res, { success: true, data: [], message: 'Alert templates retrieved' });
     } catch (error) {
-      return sendError(res, error.message, 500);
+      return sendError(res, 500, error.message, error.stack);
     }
   }
 
@@ -328,18 +325,12 @@ class AlertsController {
    */
   static async getAlertStatistics(req, res) {
     try {
-      return sendResponse(res, {
-        success: true,
-        data: {
-          totalAlerts: 0,
-          readAlerts: 0,
-          unreadAlerts: 0,
-          alertsByType: {}
-        },
-        message: 'Alert statistics retrieved'
-      });
+      const sequelize = await getPostgresConnection();
+      if (!sequelize) return sendError(res, 503, 'Database unavailable');
+
+      return sendResponse(res, { success: true, data: { totalAlerts: 0, readAlerts: 0, unreadAlerts: 0, alertsByType: {} }, message: 'Alert statistics retrieved' });
     } catch (error) {
-      return sendError(res, error.message, 500);
+      return sendError(res, 500, error.message, error.stack);
     }
   }
 }

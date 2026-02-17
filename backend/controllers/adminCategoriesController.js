@@ -1,4 +1,5 @@
 const { sendResponse, sendError } = require('../utils/response');
+const { getPostgresConnection } = require('../config/postgres');
 
 module.exports = {
   /**
@@ -6,15 +7,14 @@ module.exports = {
    */
   getAllCategories: async (req, res) => {
     try {
-      const { page = 1, limit = 20 } = req.query;
-      return sendResponse(res, {
-        success: true,
-        data: [],
-        pagination: { currentPage: page, totalPages: 0, total: 0 },
-        message: 'Categories retrieved'
-      });
+      const sequelize = await getPostgresConnection();
+      if (!sequelize) return sendError(res, 503, 'Database unavailable');
+
+      // TODO: implement real query using initialized models
+      // If models or queries fail, let the error bubble to centralized handler
+      return sendResponse(res, { success: true, data: [], pagination: { currentPage: 1, totalPages: 0, total: 0 }, message: 'Categories retrieved', code: 200 });
     } catch (error) {
-      return sendError(res, error.message, 500);
+      return sendError(res, 500, error.message, error.stack);
     }
   },
 
@@ -24,13 +24,12 @@ module.exports = {
   getCategoryById: async (req, res) => {
     try {
       const { categoryId } = req.params;
-      return sendResponse(res, {
-        success: true,
-        data: {},
-        message: 'Category retrieved'
-      });
+      const sequelize = await getPostgresConnection();
+      if (!sequelize) return sendError(res, 503, 'Database unavailable');
+
+      return sendResponse(res, { success: true, data: {}, message: 'Category retrieved' });
     } catch (error) {
-      return sendError(res, error.message, 500);
+      return sendError(res, 500, error.message, error.stack);
     }
   },
 
@@ -40,13 +39,13 @@ module.exports = {
   createCategory: async (req, res) => {
     try {
       const { name, description } = req.body;
-      return sendResponse(res, {
-        success: true,
-        data: { id: null, name, description },
-        message: 'Category created'
-      }, 201);
+      const sequelize = await getPostgresConnection();
+      if (!sequelize) return sendError(res, 503, 'Database unavailable');
+
+      // TODO: implement create using models
+      return sendResponse(res, { success: true, data: { id: null, name, description }, message: 'Category created' }, 201);
     } catch (error) {
-      return sendError(res, error.message, 500);
+      return sendError(res, 500, error.message, error.stack);
     }
   },
 
@@ -57,13 +56,12 @@ module.exports = {
     try {
       const { categoryId } = req.params;
       const updates = req.body;
-      return sendResponse(res, {
-        success: true,
-        data: {},
-        message: 'Category updated'
-      });
+      const sequelize = await getPostgresConnection();
+      if (!sequelize) return sendError(res, 503, 'Database unavailable');
+
+      return sendResponse(res, { success: true, data: {}, message: 'Category updated' });
     } catch (error) {
-      return sendError(res, error.message, 500);
+      return sendError(res, 500, error.message, error.stack);
     }
   },
 
@@ -73,12 +71,12 @@ module.exports = {
   deleteCategory: async (req, res) => {
     try {
       const { categoryId } = req.params;
-      return sendResponse(res, {
-        success: true,
-        message: 'Category deleted'
-      });
+      const sequelize = await getPostgresConnection();
+      if (!sequelize) return sendError(res, 503, 'Database unavailable');
+
+      return sendResponse(res, { success: true, message: 'Category deleted' });
     } catch (error) {
-      return sendError(res, error.message, 500);
+      return sendError(res, 500, error.message, error.stack);
     }
   },
 
@@ -88,13 +86,12 @@ module.exports = {
   getSubCategories: async (req, res) => {
     try {
       const { categoryId } = req.params;
-      return sendResponse(res, {
-        success: true,
-        data: [],
-        message: 'Subcategories retrieved'
-      });
+      const sequelize = await getPostgresConnection();
+      if (!sequelize) return sendError(res, 503, 'Database unavailable');
+
+      return sendResponse(res, { success: true, data: [], message: 'Subcategories retrieved' });
     } catch (error) {
-      return sendError(res, error.message, 500);
+      return sendError(res, 500, error.message, error.stack);
     }
   },
 
@@ -105,13 +102,12 @@ module.exports = {
     try {
       const { categoryId } = req.params;
       const { name, description } = req.body;
-      return sendResponse(res, {
-        success: true,
-        data: { id: null, categoryId, name, description },
-        message: 'Subcategory created'
-      }, 201);
+      const sequelize = await getPostgresConnection();
+      if (!sequelize) return sendError(res, 503, 'Database unavailable');
+
+      return sendResponse(res, { success: true, data: { id: null, categoryId, name, description }, message: 'Subcategory created' }, 201);
     } catch (error) {
-      return sendError(res, error.message, 500);
+      return sendError(res, 500, error.message, error.stack);
     }
   },
 
@@ -120,17 +116,12 @@ module.exports = {
    */
   getStats: async (req, res) => {
     try {
-      return sendResponse(res, {
-        success: true,
-        data: {
-          totalCategories: 0,
-          productsPerCategory: [],
-          salesByCategory: []
-        },
-        message: 'Category stats retrieved'
-      });
+      const sequelize = await getPostgresConnection();
+      if (!sequelize) return sendError(res, 503, 'Database unavailable');
+
+      return sendResponse(res, { success: true, data: { totalCategories: 0, productsPerCategory: [], salesByCategory: [] }, message: 'Category stats retrieved' });
     } catch (error) {
-      return sendError(res, error.message, 500);
+      return sendError(res, 500, error.message, error.stack);
     }
   },
 
@@ -141,13 +132,12 @@ module.exports = {
     try {
       const { categoryId, subCategoryId } = req.params;
       const updates = req.body;
-      return sendResponse(res, {
-        success: true,
-        data: {},
-        message: 'Subcategory updated'
-      });
+      const sequelize = await getPostgresConnection();
+      if (!sequelize) return sendError(res, 503, 'Database unavailable');
+
+      return sendResponse(res, { success: true, data: {}, message: 'Subcategory updated' });
     } catch (error) {
-      return sendError(res, error.message, 500);
+      return sendError(res, 500, error.message, error.stack);
     }
   },
 
@@ -157,12 +147,12 @@ module.exports = {
   deleteSubCategory: async (req, res) => {
     try {
       const { categoryId, subCategoryId } = req.params;
-      return sendResponse(res, {
-        success: true,
-        message: 'Subcategory deleted'
-      });
+      const sequelize = await getPostgresConnection();
+      if (!sequelize) return sendError(res, 503, 'Database unavailable');
+
+      return sendResponse(res, { success: true, message: 'Subcategory deleted' });
     } catch (error) {
-      return sendError(res, error.message, 500);
+      return sendError(res, 500, error.message, error.stack);
     }
   },
 
@@ -171,13 +161,12 @@ module.exports = {
    */
   bulkImportCategories: async (req, res) => {
     try {
-      return sendResponse(res, {
-        success: true,
-        data: { imported: 0, failed: 0 },
-        message: 'Categories imported'
-      });
+      const sequelize = await getPostgresConnection();
+      if (!sequelize) return sendError(res, 503, 'Database unavailable');
+
+      return sendResponse(res, { success: true, data: { imported: 0, failed: 0 }, message: 'Categories imported' });
     } catch (error) {
-      return sendError(res, error.message, 500);
+      return sendError(res, 500, error.message, error.stack);
     }
   },
 
@@ -186,13 +175,12 @@ module.exports = {
    */
   bulkExportCategories: async (req, res) => {
     try {
-      return sendResponse(res, {
-        success: true,
-        data: [],
-        message: 'Categories exported'
-      });
+      const sequelize = await getPostgresConnection();
+      if (!sequelize) return sendError(res, 503, 'Database unavailable');
+
+      return sendResponse(res, { success: true, data: [], message: 'Categories exported' });
     } catch (error) {
-      return sendError(res, error.message, 500);
+      return sendError(res, 500, error.message, error.stack);
     }
   }
 };

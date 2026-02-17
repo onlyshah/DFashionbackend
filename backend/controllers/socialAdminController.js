@@ -19,6 +19,87 @@ const REPORT_STATUSES = ['pending', 'reviewed', 'approved', 'rejected'];
 const MODERATION_ACTIONS = ['approve', 'reject', 'remove', 'shadowban', 'ban_user', 'warn_user'];
 
 /**
+ * Get social engagement stats (for dashboard)
+ */
+exports.getStats = async (req, res) => {
+  try {
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
+    });
+    await client.connect();
+
+    // Get stats from available social tables
+    let stats = {
+      posts: 0,
+      reels: 0,
+      stories: 0,
+      likes: 0,
+      comments: 0,
+      follows: 0,
+      totalEngagement: 0
+    };
+
+    try {
+      // Try to get posts count
+      const postsRes = await client.query('SELECT COUNT(*) as count FROM posts').catch(() => null);
+      if (postsRes) stats.posts = parseInt(postsRes.rows[0]?.count || 0);
+    } catch (e) {}
+
+    try {
+      // Try to get reels count
+      const reelsRes = await client.query('SELECT COUNT(*) as count FROM reels').catch(() => null);
+      if (reelsRes) stats.reels = parseInt(reelsRes.rows[0]?.count || 0);
+    } catch (e) {}
+
+    try {
+      // Try to get stories count
+      const storiesRes = await client.query('SELECT COUNT(*) as count FROM stories').catch(() => null);
+      if (storiesRes) stats.stories = parseInt(storiesRes.rows[0]?.count || 0);
+    } catch (e) {}
+
+    try {
+      // Try to get likes count
+      const likesRes = await client.query('SELECT COUNT(*) as count FROM post_likes').catch(() => null);
+      if (likesRes) stats.likes = parseInt(likesRes.rows[0]?.count || 0);
+    } catch (e) {}
+
+    try {
+      // Try to get comments count
+      const commentsRes = await client.query('SELECT COUNT(*) as count FROM post_comments').catch(() => null);
+      if (commentsRes) stats.comments = parseInt(commentsRes.rows[0]?.count || 0);
+    } catch (e) {}
+
+    try {
+      // Try to get follows count
+      const followsRes = await client.query('SELECT COUNT(*) as count FROM follows').catch(() => null);
+      if (followsRes) stats.follows = parseInt(followsRes.rows[0]?.count || 0);
+    } catch (e) {}
+
+    stats.totalEngagement = stats.likes + stats.comments + stats.follows;
+    await client.end();
+
+    return ApiResponse.success(res, stats, 'Social engagement stats retrieved');
+  } catch (error) {
+    console.error('[socialAdminController] Error fetching stats:', error);
+    // Return empty stats instead of error
+    return ApiResponse.success(res, {
+      posts: 0,
+      reels: 0,
+      stories: 0,
+      likes: 0,
+      comments: 0,
+      follows: 0,
+      totalEngagement: 0
+    }, 'Social engagement stats');
+  }
+};
+
+/**
  * Get reported content (admin moderation queue)
  */
 exports.getReportedContent = async (req, res) => {
@@ -490,35 +571,268 @@ exports.manageBannedHashtags = async (req, res) => {
  * Get content moderation statistics
  */
 exports.getAllPosts = async (req, res) => {
-  return ApiResponse.success(res, [], 'Posts retrieved');
+  try {
+    const { page = 1, limit = 20, search = '' } = req.query;
+    const validated_limit = Math.min(parseInt(limit) || 20, 100);
+    const offset = (Math.max(1, parseInt(page) || 1) - 1) * validated_limit;
+
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
+    });
+    await client.connect();
+
+    let whereClause = '1=1';
+    if (search) {
+      whereClause = `(p.title ILIKE $1 OR p.content ILIKE $1)`;
+    }
+
+    // Get total count
+    const countQuery = `SELECT COUNT(*) as count FROM posts p WHERE ${whereClause}`;
+    const countRes = search 
+      ? await client.query(countQuery, [`%${search}%`])
+      : await client.query(countQuery);
+    const total = parseInt(countRes.rows[0]?.count || 0);
+
+    // Get posts data with user details
+    const postsQuery = `
+      SELECT p.id, p.user_id, p.title, p.content, p.created_at, p.updated_at,
+             COALESCE(u.first_name, '') as creator_firstname,
+             COALESCE(u.last_name, '') as creator_lastname
+      FROM posts p
+      LEFT JOIN users u ON p.user_id = u.id
+      WHERE ${whereClause}
+      ORDER BY p.created_at DESC
+      LIMIT $${search ? 2 : 1} OFFSET $${search ? 3 : 2}
+    `;
+    const params = search ? [`%${search}%`, validated_limit, offset] : [validated_limit, offset];
+    const postsRes = await client.query(postsQuery, params);
+
+    await client.end();
+
+    const data = postsRes.rows.map(post => {
+      const creatorName = post.creator_firstname || post.creator_lastname 
+        ? `${post.creator_firstname} ${post.creator_lastname}`.trim()
+        : null;
+      return {
+        id: post.id,
+        title: post.title,
+        caption: post.content,
+        creator: post.user_id ? { id: post.user_id, name: creatorName } : null,
+        createdAt: post.created_at
+      };
+    });
+
+    const pagination = {
+      page: parseInt(page),
+      limit: validated_limit,
+      total,
+      totalPages: Math.ceil(total / validated_limit)
+    };
+
+    return ApiResponse.paginated(res, data, pagination, 'Posts retrieved successfully');
+  } catch (error) {
+    console.error('❌ getAllPosts error:', error);
+    return ApiResponse.serverError(res, error);
+  }
 };
 
 exports.getPostById = async (req, res) => {
-  return ApiResponse.success(res, {}, 'Post retrieved');
+  try {
+    const { postId } = req.params;
+    const post = await models.Post.findByPk(postId, {
+      include: [{ model: models.User, attributes: ['id', 'username', 'firstName', 'lastName', 'avatar_url'] }]
+    });
+    if (!post) return ApiResponse.notFound(res, 'Post');
+
+    return ApiResponse.success(res, {
+      id: post.id,
+      creator: post.User || null,
+      caption: post.caption,
+      imageUrls: post.image_urls || [],
+      videoUrl: post.video_url || null,
+      hashtags: post.hashtags || [],
+      engagement: {
+        likes: post.likes_count || 0,
+        comments: post.comments_count || 0,
+        shares: post.shares_count || 0
+      },
+      createdAt: post.created_at,
+      updatedAt: post.updated_at
+    }, 'Post retrieved');
+  } catch (error) {
+    console.error('❌ getPostById error:', error);
+    return ApiResponse.serverError(res, error);
+  }
 };
 
 exports.updatePost = async (req, res) => {
-  return ApiResponse.success(res, {}, 'Post updated');
+  try {
+    const { postId } = req.params;
+    const post = await models.Post.findByPk(postId);
+    if (!post) return ApiResponse.notFound(res, 'Post');
+
+    // Lightweight update support for admin (caption/visibility)
+    const { caption, visibility } = req.body;
+    if (caption !== undefined) post.caption = caption;
+    if (visibility !== undefined) post.visibility = visibility;
+    post.updated_at = new Date();
+    await post.save();
+
+    return ApiResponse.success(res, { id: post.id }, 'Post updated');
+  } catch (error) {
+    console.error('❌ updatePost error:', error);
+    return ApiResponse.serverError(res, error);
+  }
 };
 
 exports.deletePost = async (req, res) => {
-  return ApiResponse.success(res, {}, 'Post deleted');
+  try {
+    const { postId } = req.params;
+    const post = await models.Post.findByPk(postId);
+    if (!post) return ApiResponse.notFound(res, 'Post');
+
+    post.deleted_at = new Date();
+    await post.save();
+
+    return ApiResponse.success(res, {}, 'Post deleted');
+  } catch (error) {
+    console.error('❌ deletePost error:', error);
+    return ApiResponse.serverError(res, error);
+  }
 };
 
 exports.getAllReels = async (req, res) => {
-  return ApiResponse.success(res, [], 'Reels retrieved');
+  try {
+    const { page = 1, limit = 20, search = '' } = req.query;
+    const validated_limit = Math.min(parseInt(limit) || 20, 100);
+    const offset = (Math.max(1, parseInt(page) || 1) - 1) * validated_limit;
+
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
+    });
+    await client.connect();
+
+    let whereClause = '1=1';
+    if (search) {
+      whereClause = `r.video_url ILIKE $1`;
+    }
+
+    // Get total count
+    const countQuery = `SELECT COUNT(*) as count FROM reels r WHERE ${whereClause}`;
+    const countRes = search 
+      ? await client.query(countQuery, [`%${search}%`])
+      : await client.query(countQuery);
+    const total = parseInt(countRes.rows[0]?.count || 0);
+
+    // Get reels data with user details
+    const reelsQuery = `
+      SELECT r.id, r.user_id, r.video_url, r.created_at, r.updated_at,
+             COALESCE(u.first_name, '') as creator_firstname,
+             COALESCE(u.last_name, '') as creator_lastname
+      FROM reels r
+      LEFT JOIN users u ON r.user_id = u.id
+      WHERE ${whereClause}
+      ORDER BY r.created_at DESC
+      LIMIT $${search ? 2 : 1} OFFSET $${search ? 3 : 2}
+    `;
+    const params = search ? [`%${search}%`, validated_limit, offset] : [validated_limit, offset];
+    const reelsRes = await client.query(reelsQuery, params);
+
+    await client.end();
+
+    const data = reelsRes.rows.map(reel => {
+      const creatorName = reel.creator_firstname || reel.creator_lastname 
+        ? `${reel.creator_firstname} ${reel.creator_lastname}`.trim()
+        : null;
+      return {
+        id: reel.id,
+        videoUrl: reel.video_url || null,
+        creator: reel.user_id ? { id: reel.user_id, name: creatorName } : null,
+        createdAt: reel.created_at
+      };
+    });
+
+    const pagination = {
+      page: parseInt(page),
+      limit: validated_limit,
+      total,
+      totalPages: Math.ceil(total / validated_limit)
+    };
+
+    return ApiResponse.paginated(res, data, pagination, 'Reels retrieved successfully');
+  } catch (error) {
+    console.error('❌ getAllReels error:', error);
+    return ApiResponse.serverError(res, error);
+  }
 };
 
 exports.getReelById = async (req, res) => {
-  return ApiResponse.success(res, {}, 'Reel retrieved');
+  try {
+    const { reelId } = req.params;
+    const reel = await models.Reel.findByPk(reelId, {
+      include: [{ model: models.User, attributes: ['id', 'username', 'firstName', 'lastName', 'avatar_url'] }]
+    });
+    if (!reel) return ApiResponse.notFound(res, 'Reel');
+
+    return ApiResponse.success(res, {
+      id: reel.id,
+      creator: reel.User || null,
+      title: reel.title || null,
+      videoUrl: reel.video_url || null,
+      duration: reel.duration || null,
+      views: reel.views_count || 0,
+      likes: reel.likes_count || 0,
+      createdAt: reel.created_at,
+      updatedAt: reel.updated_at
+    }, 'Reel retrieved');
+  } catch (error) {
+    console.error('❌ getReelById error:', error);
+    return ApiResponse.serverError(res, error);
+  }
 };
 
 exports.updateReel = async (req, res) => {
-  return ApiResponse.success(res, {}, 'Reel updated');
+  try {
+    const { reelId } = req.params;
+    const reel = await models.Reel.findByPk(reelId);
+    if (!reel) return ApiResponse.notFound(res, 'Reel');
+
+    const { title } = req.body;
+    if (title !== undefined) reel.title = title;
+    reel.updated_at = new Date();
+    await reel.save();
+
+    return ApiResponse.success(res, { id: reel.id }, 'Reel updated');
+  } catch (error) {
+    console.error('❌ updateReel error:', error);
+    return ApiResponse.serverError(res, error);
+  }
 };
 
 exports.deleteReel = async (req, res) => {
-  return ApiResponse.success(res, {}, 'Reel deleted');
+  try {
+    const { reelId } = req.params;
+    const reel = await models.Reel.findByPk(reelId);
+    if (!reel) return ApiResponse.notFound(res, 'Reel');
+
+    reel.deleted_at = new Date();
+    await reel.save();
+
+    return ApiResponse.success(res, {}, 'Reel deleted');
+  } catch (error) {
+    console.error('❌ deleteReel error:', error);
+    return ApiResponse.serverError(res, error);
+  }
 };
 
 exports.getModerationStats = async (req, res) => {

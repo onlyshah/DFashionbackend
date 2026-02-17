@@ -28,13 +28,20 @@ async function seedPosts() {
     const count = await Post.count();
     if (count > 0) {
       console.log(`✅ Post data already exists (${count} records)`);
+      // Patch existing posts that have NULL user_id to a default creator
+      try {
+        const [affected] = await Post.update({ userId: user.id, user_id: user.id }, { where: { user_id: null } });
+        console.log(`🔧 Updated ${affected} existing posts to set user_id`);
+      } catch (err) {
+        console.warn('⚠️  Failed to update existing posts user_id:', err.message);
+      }
       return true;
     }
 
     const postData = [
-      { title: 'New Collection Launch', content: 'Check out our summer collection...', userId: null },
-      { title: 'Fashion Tips', content: 'How to style the perfect outfit...', userId: null },
-      { title: 'Customer Spotlight', content: 'Meet our amazing customers...', userId: null }
+      { title: 'New Collection Launch', content: 'Check out our summer collection...', userId: user.id, user_id: user.id },
+      { title: 'Fashion Tips', content: 'How to style the perfect outfit...', userId: user.id, user_id: user.id },
+      { title: 'Customer Spotlight', content: 'Meet our amazing customers...', userId: user.id, user_id: user.id }
     ];
 
     for (const post of postData) {

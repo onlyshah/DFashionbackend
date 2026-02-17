@@ -18,6 +18,8 @@ const BasicSecurity = require('./middleware/basicSecurity');
 const { connectDB } = require('./config/database');
 const { connectPostgres } = require('./config/postgres');
 const dataProvider = require('./services/utils/dataProvider');
+const dbHealth = require('./middleware/dbHealth');
+const centralizedErrorHandler = require('./middleware/errorHandler');
 
 // -------- Basic sanity checks --------
 if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
@@ -97,6 +99,13 @@ app.use(BasicSecurity.validateInput);
 // Rate limiting (applied per route group)
 app.use('/api/auth', BasicSecurity.authLimiter);
 app.use('/api', BasicSecurity.generalLimiter);
+
+// Enforce database health for all /api routes early
+app.use('/api', (req, res, next) => {
+  // allow health endpoint to run even if DB down
+  if (req.path === '/health' || req.path === '/csrf-token') return next();
+  return dbHealth(req, res, next);
+});
 
 console.log('✅ Basic security middleware applied successfully');
 
@@ -348,27 +357,13 @@ safeMount('/api/returns', './routes/returns');
 // }
 
 // -------- Error handling --------
+// 404 handler (standardized)
 app.use((req, res, next) => {
-  res.status(404).json({
-    success: false,
-    message: 'Endpoint not found'
-  });
+  res.status(404).json({ success: false, message: 'Endpoint not found', data: null });
 });
 
-app.use((err, req, res, next) => {
-  console.error('Unhandled Error:', err && err.stack ? err.stack : err);
-  const status = err && err.status ? err.status : 500;
-  res.status(status).json({
-    success: false,
-    message: err && err.message ? err.message : 'Something went wrong',
-    error:
-      process.env.NODE_ENV === 'development'
-        ? err && err.stack
-          ? err.stack
-          : err
-        : {}
-  });
-});
+// Centralized error handler (returns standardized error payloads)
+app.use(centralizedErrorHandler);
 
 // catch unhandled rejections
 process.on('unhandledRejection', (reason, promise) => {
@@ -385,7 +380,8 @@ const startServer = async () => {
     if (dbType.includes('postgres')) {
       try {
         console.log('🔌 Attempting to connect to PostgreSQL...');
-        await connectPostgres();
+        const pg = await connectPostgres();
+        if (!pg) throw new Error('Postgres connection returned null');
         // Mark DB available for metrics
         dataProvider.enableDb();
       } catch (err) {

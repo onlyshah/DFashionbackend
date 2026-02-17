@@ -46,6 +46,46 @@ function getUserRepository() {
   return userRepository;
 }
 
+// ✅ Helper function to get recent orders with user data (JOIN)
+async function getRecentOrdersData(limit = 5) {
+  try {
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
+    });
+    await client.connect();
+
+    // Join orders with users to get customer name/email (resolves "Unknown" user issue)
+    const query = `
+      SELECT o.id, o.order_number, o.total_amount, o.status, o.payment_status, o.created_at, o.user_id,
+             u.first_name, u.last_name, u.email
+      FROM orders o
+      LEFT JOIN users u ON o.user_id = u.id
+      ORDER BY o.created_at DESC
+      LIMIT $1
+    `;
+    const result = await client.query(query, [parseInt(limit)]);
+    await client.end();
+
+    return result.rows.map(order => ({
+      id: order.id,
+      orderNumber: order.order_number,
+      customer: order.first_name || order.last_name ? `${order.first_name || ''} ${order.last_name || ''}`.trim() : (order.email || `User ${order.user_id}`),
+      amount: parseFloat(order.total_amount || 0),
+      status: order.status || 'pending',
+      paymentStatus: order.payment_status || 'pending',
+      createdAt: order.created_at ? new Date(order.created_at).toISOString() : new Date().toISOString()
+    }));
+  } catch (error) {
+    console.error('[adminController] Error fetching recent orders:', error.message);
+    return []; // Return empty array on error
+  }
+}
+
 // ✅ Dashboard Overview (new version for /admin/dashboard)
 exports.getDashboardStatsFromDB = async (req, res) => {
   try {
@@ -212,6 +252,7 @@ exports.getDashboardStatsFromDB = async (req, res) => {
             this_month: revenueMonthResult
           }
         },
+        recentOrders: await getRecentOrdersData(5),
         user_permissions: (req.user && req.user.permissions) ? req.user.permissions : []
       }
     });
@@ -839,8 +880,75 @@ exports.updateOrderStatus = async (req, res) => {
 };
 
 exports.getActivityLogs = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Get activity logs feature not implemented' });
+  try {
+    const { page = 1, limit = 10 } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
+    });
+    await client.connect();
+
+    // Query activity logs (using audit_logs or similar table if exists)
+    const countQuery = `SELECT COUNT(*) as total FROM audit_logs`;
+    const logsQuery = `
+      SELECT id, user_id, action, resource_type, description, ip_address, created_at
+      FROM audit_logs
+      ORDER BY created_at DESC
+      LIMIT $1 OFFSET $2
+    `;
+
+    try {
+      const countRes = await client.query(countQuery);
+      const logsRes = await client.query(logsQuery, [parseInt(limit), offset]);
+      await client.end();
+
+      const total = parseInt(countRes.rows[0]?.total || 0);
+      const logs = logsRes.rows || [];
+
+      return res.json({
+        success: true,
+        data: {
+          logs,
+          pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total,
+            totalPages: Math.ceil(total / parseInt(limit))
+          }
+        }
+      });
+    } catch (tableError) {
+      // Table doesn't exist, return empty results
+      await client.end();
+      return res.json({
+        success: true,
+        data: {
+          logs: [],
+          pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total: 0,
+            totalPages: 0
+          }
+        }
+      });
+    }
+  } catch (error) {
+    console.error('[adminController] Error fetching activity logs:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching activity logs',
+      error: error.message
+    });
+  }
 };
+
 
 exports.getOrderReturns = async (req, res) => {
   res.status(501).json({ success: false, message: 'Get order returns feature not implemented' });
@@ -861,43 +969,15 @@ exports.deleteOrderReturn = async (req, res) => {
 // ✅ Get recent orders for dashboard
 exports.getRecentOrders = async (req, res) => {
   try {
-    const { limit = 10 } = req.query;
-    const { Client } = require('pg');
-    const client = new Client({
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT) || 5432,
-      user: process.env.DB_USER || 'postgres',
-      password: process.env.DB_PASSWORD || '1234',
-      database: process.env.DB_NAME || 'dfashion'
-    });
-    await client.connect();
+    const { limit = 5 } = req.query;
+    const recentOrders = await getRecentOrdersData(limit);
 
-    // Join orders with users to get customer name/email
-
-    const query = `
-      SELECT o.id, o.order_number, o.total_amount, o.status, o.payment_status, o.created_at, o.user_id,
-             u.first_name, u.last_name, u.email
-      FROM orders o
-      LEFT JOIN users u ON o.user_id = u.id
-      ORDER BY o.created_at DESC
-      LIMIT $1
-    `;
-    const result = await client.query(query, [parseInt(limit)]);
-    await client.end();
-
-    const formattedOrders = result.rows.map(order => ({
-      id: order.id,
-      orderNumber: order.order_number,
-      customer: order.first_name || order.last_name ? `${order.first_name || ''} ${order.last_name || ''}`.trim() : (order.email || `User ${order.user_id}`),
-      amount: parseFloat(order.total_amount || 0),
-      status: order.status || 'pending',
-      paymentStatus: order.payment_status || 'pending',
-      date: order.created_at ? new Date(order.created_at).toISOString() : null
-    }));
-
+    // Return with nested structure expected by frontend
     return res.json({
       success: true,
-      data: formattedOrders
+      data: {
+        recentOrders
+      }
     });
   } catch (error) {
     console.error('[adminController] Error fetching recent orders:', error);

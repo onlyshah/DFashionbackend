@@ -3,6 +3,7 @@ const notificationsService = ServiceLoader.loadService('notificationsService');
 
 
 const { sendResponse, sendError } = require('../utils/response');
+const { getPostgresConnection } = require('../config/postgres');
 
 class NotificationsController {
   /**
@@ -213,14 +214,12 @@ class NotificationsController {
     try {
       const userId = req.user?.id;
       const { page = 1, limit = 20 } = req.query;
-      return sendResponse(res, {
-        success: true,
-        data: [],
-        pagination: { currentPage: page, totalPages: 0, total: 0 },
-        message: 'Notifications retrieved successfully'
-      });
+      const sequelize = await getPostgresConnection();
+      if (!sequelize) return sendError(res, 503, 'Database unavailable');
+
+      return sendResponse(res, { success: true, data: [], pagination: { currentPage: page, totalPages: 0, total: 0 }, message: 'Notifications retrieved successfully' });
     } catch (error) {
-      return sendError(res, error.message, 500);
+      return sendError(res, 500, error.message, error.stack);
     }
   }
 
@@ -231,14 +230,12 @@ class NotificationsController {
     try {
       const userId = req.user?.id;
       const { page = 1, limit = 20 } = req.query;
-      return sendResponse(res, {
-        success: true,
-        data: [],
-        pagination: { currentPage: page, totalPages: 0, total: 0 },
-        message: 'Unread notifications retrieved'
-      });
+      const sequelize = await getPostgresConnection();
+      if (!sequelize) return sendError(res, 503, 'Database unavailable');
+
+      return sendResponse(res, { success: true, data: [], pagination: { currentPage: page, totalPages: 0, total: 0 }, message: 'Unread notifications retrieved' });
     } catch (error) {
-      return sendError(res, error.message, 500);
+      return sendError(res, 500, error.message, error.stack);
     }
   }
 
@@ -248,13 +245,12 @@ class NotificationsController {
   static async readNotification(req, res) {
     try {
       const { id } = req.params;
-      return sendResponse(res, {
-        success: true,
-        data: {},
-        message: 'Notification marked as read'
-      });
+      const sequelize = await getPostgresConnection();
+      if (!sequelize) return sendError(res, 503, 'Database unavailable');
+
+      return sendResponse(res, { success: true, data: {}, message: 'Notification marked as read' });
     } catch (error) {
-      return sendError(res, error.message, 500);
+      return sendError(res, 500, error.message, error.stack);
     }
   }
 
@@ -264,13 +260,12 @@ class NotificationsController {
   static async readAllNotifications(req, res) {
     try {
       const userId = req.user?.id;
-      return sendResponse(res, {
-        success: true,
-        data: {},
-        message: 'All notifications marked as read'
-      });
+      const sequelize = await getPostgresConnection();
+      if (!sequelize) return sendError(res, 503, 'Database unavailable');
+
+      return sendResponse(res, { success: true, data: {}, message: 'All notifications marked as read' });
     } catch (error) {
-      return sendError(res, error.message, 500);
+      return sendError(res, 500, error.message, error.stack);
     }
   }
 }

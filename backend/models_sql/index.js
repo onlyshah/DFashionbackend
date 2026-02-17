@@ -547,11 +547,18 @@ if (Category && Category.hasMany && SubCategory && SubCategory.belongsTo) {
 
 // NOTE: Other associations disabled to avoid naming collisions with existing attributes
 // These can be re-enabled if attribute names are changed to avoid conflicts
-/*
-// User ↔ Role
-User.belongsTo(Role, { foreignKey: 'role_id', as: 'userRole' });
-Role.hasMany(User, { foreignKey: 'role_id', as: 'users' });
-*/
+
+// User ↔ Role (ENABLED - needed for proper role data loading)
+if (User && User.belongsTo && Role && Role.hasMany) {
+  User.belongsTo(Role, { foreignKey: 'role_id', as: 'roleData' });
+  Role.hasMany(User, { foreignKey: 'role_id', as: 'users' });
+}
+
+// Order ↔ User (ENABLED - needed for fetching recent orders with customer names)
+if (Order && Order.belongsTo && User && User.hasMany) {
+  Order.belongsTo(User, { foreignKey: 'user_id', as: 'customer' });
+  User.hasMany(Order, { foreignKey: 'user_id', as: 'orders' });
+}
 
 // Reinitialize models after Sequelize connection (call after DB is connected)
 const reinitializeModels = async () => {

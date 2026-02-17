@@ -32,15 +32,27 @@ async function seedReels() {
     const count = await Reel.count();
     if (count > 0) {
       console.log(`✅ Reel data already exists (${count} records)`);
+      // Update existing reels missing user_id to first creator
+      try {
+        const defaultCreator = creators[0];
+        if (defaultCreator) {
+          const [affected] = await Reel.update({ userId: defaultCreator.id, user_id: defaultCreator.id }, { where: { user_id: null } });
+          console.log(`🔧 Updated ${affected} existing reels to set user_id`);
+        }
+      } catch (err) {
+        console.warn('⚠️  Failed to update existing reels user_id:', err.message);
+      }
       return true;
     }
 
     const reels = creators.map((creator, idx) => ({
       id: uuidv4(),
-      creatorId: creator.id,
+      userId: creator.id,
+      user_id: creator.id,
       title: `Fashion Reel ${idx + 1}`,
       description: 'Short video showcasing latest fashion trends',
       videoUrl: `/videos/reel_${idx + 1}.mp4`,
+      video_url: `/videos/reel_${idx + 1}.mp4`,
       thumbnailUrl: `/images/reel_${idx + 1}.jpg`,
       duration: Math.floor(Math.random() * 60) + 15,
       views: Math.floor(Math.random() * 10000),
