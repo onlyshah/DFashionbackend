@@ -29,6 +29,13 @@ const roleData = [
     isSystemRole: true
   },
   {
+    name: 'marketing_manager',
+    displayName: 'Marketing Manager',
+    description: 'Marketing management access with content and campaign permissions',
+    level: 3,
+    isSystemRole: true
+  },
+  {
     name: 'user',
     displayName: 'User',
     description: 'Standard user with basic permissions',

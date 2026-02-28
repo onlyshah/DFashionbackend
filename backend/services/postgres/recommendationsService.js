@@ -4,7 +4,7 @@
  */
 
 const { Op } = require('sequelize');
-const models = require('../../models');
+const models = require('../../models_sql');
 
 class RecommendationsService {
   // TODO: Implement PostgreSQL methods

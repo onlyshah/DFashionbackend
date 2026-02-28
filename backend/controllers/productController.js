@@ -6,10 +6,12 @@
  * Database: PostgreSQL via Sequelize ORM
  */
 
-const models = require('../models');
+const dbType = (process.env.DB_TYPE || 'postgres').toLowerCase();
+const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 const ApiResponse = require('../utils/ApiResponse');
 const { validatePagination } = require('../utils/validation');
 const { Op } = require('sequelize');
+const { formatPaginatedResponse, formatSingleResponse, buildIncludeClause, validateFK } = require('../utils/fkResponseFormatter');
 
 /**
  * Get all products with filtering, sorting, pagination
@@ -50,8 +52,8 @@ exports.getAllProducts = exports.getProducts = async (req, res) => {
     const { count, rows } = await models.Product.findAndCountAll({
       where,
       include: [
-        { model: models.Category, attributes: ['id', 'name'] },
-        { model: models.Brand, attributes: ['id', 'name'] }
+        { model: models.Category, attributes: ['id', 'name'], required: false },
+        { model: models.Brand, attributes: ['id', 'name'], required: false }
       ],
       order: [[sort_by, sort_order]],
       limit,
@@ -61,6 +63,7 @@ exports.getAllProducts = exports.getProducts = async (req, res) => {
 
     const pagination = { page, limit, total: count, totalPages: Math.ceil(count / limit) };
 
+    // Return raw data - formatter disabled during debugging
     return ApiResponse.paginated(res, rows, pagination, 'Products retrieved successfully');
   } catch (error) {
     console.error('❌ getProducts error:', error);
@@ -76,11 +79,7 @@ exports.getProductById = async (req, res) => {
     const { id } = req.params;
 
     const product = await models.Product.findByPk(id, {
-      include: [
-        { model: models.Category, attributes: ['id', 'name'] },
-        { model: models.Brand, attributes: ['id', 'name'] },
-        { model: models.Review, attributes: ['id', 'rating', 'comment'] }
-      ]
+      include: buildIncludeClause('Product')  // ← Auto-includes Brand, Category, Seller, Reviews
     });
 
     if (!product) {
@@ -95,8 +94,11 @@ exports.getProductById = async (req, res) => {
     // Increment views
     await product.increment('views_count');
 
+    // Format response - removes raw FK IDs, includes nested objects
+    const response = formatSingleResponse(product);
+
     return ApiResponse.success(res, {
-      ...product.toJSON(),
+      ...response,
       avg_rating,
       review_count: product.Reviews?.length || 0
     }, 'Product retrieved successfully');
@@ -168,8 +170,8 @@ exports.filterProducts = async (req, res) => {
     const { count, rows } = await models.Product.findAndCountAll({
       where,
       include: [
-        { model: models.Category, attributes: ['id', 'name'] },
-        { model: models.Brand, attributes: ['id', 'name'] }
+        { model: models.Category, attributes: ['id', 'name'], required: false },
+        { model: models.Brand, attributes: ['id', 'name'], required: false }
       ],
       limit,
       offset,
@@ -290,6 +292,10 @@ exports.getTrendingProducts = async (req, res) => {
         is_approved: true,
         updatedAt: { [Op.gte]: date }
       },
+      include: [
+        { model: models.Category, attributes: ['id', 'name'] },
+        { model: models.Brand, attributes: ['id', 'name'] }
+      ],
       order: [['views_count', 'DESC']],
       limit: parseInt(limit)
     });
@@ -381,6 +387,10 @@ exports.getRecommendations = async (req, res) => {
         is_active: true,
         is_approved: true
       },
+      include: [
+        { model: models.Category, attributes: ['id', 'name'] },
+        { model: models.Brand, attributes: ['id', 'name'] }
+      ],
       limit: parseInt(limit),
       order: [['views_count', 'DESC']]
     });

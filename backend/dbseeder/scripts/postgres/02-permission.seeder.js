@@ -48,7 +48,17 @@ const permissionData = [
   
   // Support
   { name: 'view_tickets', displayName: 'View Tickets', description: 'View support tickets', module: 'support' },
-  { name: 'resolve_tickets', displayName: 'Resolve Tickets', description: 'Resolve support tickets', module: 'support' }
+  { name: 'resolve_tickets', displayName: 'Resolve Tickets', description: 'Resolve support tickets', module: 'support' },
+
+  // 📝 Content Creation Permissions (Behavior-based, not role-based)
+  { name: 'can_create_posts', displayName: 'Create Posts', description: 'Create social media posts', module: 'content' },
+  { name: 'can_create_reels', displayName: 'Create Reels', description: 'Create video reels', module: 'content' },
+  { name: 'can_create_stories', displayName: 'Create Stories', description: 'Create stories/temporary content', module: 'content' },
+  { name: 'can_create_live_streams', displayName: 'Create Live Streams', description: 'Go live and stream content', module: 'content' },
+  { name: 'can_manage_own_content', displayName: 'Manage Own Content', description: 'Edit/delete own posts, reels, stories', module: 'content' },
+  { name: 'can_manage_all_content', displayName: 'Manage All Content', description: 'Moderate/delete any content', module: 'content' },
+  { name: 'can_tag_products', displayName: 'Tag Products', description: 'Tag products in posts/reels', module: 'content' },
+  { name: 'can_monetize_content', displayName: 'Monetize Content', description: 'Earn money from content (affiliate/sponsorship)', module: 'content' }
 ];
 
 async function seedPermissions() {

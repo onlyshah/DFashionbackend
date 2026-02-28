@@ -62,6 +62,7 @@ const auditLogsRoutes = require('./auditLogs');
 const featureFlagsRoutes = require('./featureFlags');
 const dataGovernanceRoutes = require('./dataGovernance');
 const supportRoutes = require('./support');
+const roleManagementRoutes = require('./roleManagement');
 
 // Mount additional routes
 router.use(`/cart`, cartRoutes);
@@ -98,6 +99,7 @@ router.use(`/admin/activity-logs`, usersAdminRoutes);
 router.use(`/admin/audit-logs`, auditLogsRoutes);
 router.use(`/admin/feature-flags`, featureFlagsRoutes);
 router.use(`/admin/data-governance`, dataGovernanceRoutes);
+router.use(`/admin/roles`, roleManagementRoutes);
 
 // Mount admin routes (keep at the end)
 router.use(`/admin`, adminRoutes);

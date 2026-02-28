@@ -6,7 +6,8 @@
  * Database: PostgreSQL via Sequelize ORM
  */
 
-const models = require('../models');
+const dbType = (process.env.DB_TYPE || 'postgres').toLowerCase();
+const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 const ApiResponse = require('../utils/ApiResponse');
 const { validatePagination } = require('../utils/validation');
 const { Op } = require('sequelize');
@@ -162,7 +163,7 @@ exports.deleteStory = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const story = await models.Story.findByPk(id);
+    const story = await models.Story.findByPk(id, { include: [{ model: models.User, as: 'author', attributes: ['id', 'username', 'full_name', 'avatar_url'] }] });
     if (!story) {
       return ApiResponse.notFound(res, 'Story');
     }
@@ -218,7 +219,7 @@ exports.getUserStories = async (req, res) => {
     const { page, limit } = validatePagination(req.query.page, req.query.limit);
     const offset = (page - 1) * limit;
 
-    const user = await models.User.findByPk(userId);
+    const user = await models.User.findByPk(userId, { include: [{ model: models.Role, as: 'roleData' }, { model: models.Department, as: 'department' }] });
     if (!user) {
       return ApiResponse.notFound(res, 'User');
     }

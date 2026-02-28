@@ -7,7 +7,8 @@
  * Consolidated: vendorController.js + sellersController.js + vendorVerificationController.js
  */
 
-const models = require('../models');
+const dbType = (process.env.DB_TYPE || 'postgres').toLowerCase();
+const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 const ApiResponse = require('../utils/ApiResponse');
 const { validatePagination } = require('../utils/validation');
 const { Op } = require('sequelize');
@@ -179,7 +180,7 @@ exports.updateVendor = async (req, res) => {
     const { vendor_id } = req.params;
     const { shop_name, business_email, phone, address, city, state, postal_code, shop_description } = req.body;
 
-    const vendor = await models.Vendor.findByPk(vendor_id);
+    const vendor = await models.Vendor.findByPk(vendor_id, { include: [{ model: models.User, as: 'owner', attributes: ['id', 'username', 'email'] }] });
     if (!vendor) {
       return ApiResponse.notFound(res, 'Vendor');
     }
@@ -215,7 +216,7 @@ exports.getVendorProducts = async (req, res) => {
     const { vendor_id } = req.params;
     const { page = 1, limit = 20 } = req.query;
 
-    const vendor = await models.Vendor.findByPk(vendor_id);
+    const vendor = await models.Vendor.findByPk(vendor_id, { include: [{ model: models.User, as: 'owner', attributes: ['id', 'username', 'email'] }] });
     if (!vendor) {
       return ApiResponse.notFound(res, 'Vendor');
     }
@@ -255,7 +256,7 @@ exports.getVendorStats = async (req, res) => {
   try {
     const { vendor_id } = req.params;
 
-    const vendor = await models.Vendor.findByPk(vendor_id);
+    const vendor = await models.Vendor.findByPk(vendor_id, { include: [{ model: models.User, as: 'owner', attributes: ['id', 'username', 'email'] }] });
     if (!vendor) {
       return ApiResponse.notFound(res, 'Vendor');
     }
@@ -308,7 +309,7 @@ exports.submitVerificationDocuments = async (req, res) => {
     const { vendor_id } = req.params;
     const { business_license_url, tax_id, tax_id_url, owner_identity_url, additional_docs } = req.body;
 
-    const vendor = await models.Vendor.findByPk(vendor_id);
+    const vendor = await models.Vendor.findByPk(vendor_id, { include: [{ model: models.User, as: 'owner', attributes: ['id', 'username', 'email'] }] });
     if (!vendor) {
       return ApiResponse.notFound(res, 'Vendor');
     }
@@ -438,7 +439,7 @@ exports.approveVendor = async (req, res) => {
 
     const { vendor_id } = req.params;
 
-    const vendor = await models.Vendor.findByPk(vendor_id);
+    const vendor = await models.Vendor.findByPk(vendor_id, { include: [{ model: models.User, as: 'owner', attributes: ['id', 'username', 'email'] }] });
     if (!vendor) {
       return ApiResponse.notFound(res, 'Vendor');
     }
@@ -534,7 +535,7 @@ exports.suspendVendor = async (req, res) => {
     const { vendor_id } = req.params;
     const { reason } = req.body;
 
-    const vendor = await models.Vendor.findByPk(vendor_id);
+    const vendor = await models.Vendor.findByPk(vendor_id, { include: [{ model: models.User, as: 'owner', attributes: ['id', 'username', 'email'] }] });
     if (!vendor) {
       return ApiResponse.notFound(res, 'Vendor');
     }
@@ -590,7 +591,7 @@ exports.approvePayout = async (req, res) => {
       return ApiResponse.error(res, 'Invalid payout amount', 422);
     }
 
-    const vendor = await models.Vendor.findByPk(vendor_id);
+    const vendor = await models.Vendor.findByPk(vendor_id, { include: [{ model: models.User, as: 'owner', attributes: ['id', 'username', 'email'] }] });
     if (!vendor) {
       return ApiResponse.notFound(res, 'Vendor');
     }

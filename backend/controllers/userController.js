@@ -952,6 +952,16 @@ const getInfluencers = async (req, res) => {
  */
 const getLikedProducts = async (req, res) => {
   try {
+    // Check if using MongoDB - this function requires MongoDB structure
+    const isPostgres = process.env.DB_TYPE === 'postgres';
+    if (isPostgres) {
+      return res.json({
+        success: true,
+        data: [],
+        message: 'Product likes feature requires full implementation for PostgreSQL'
+      });
+    }
+    
     const Product = require('../models/Product');
 
     const products = await Product.find({
@@ -982,6 +992,16 @@ const getLikedProducts = async (req, res) => {
  */
 const getLikedPosts = async (req, res) => {
   try {
+    // Check if using MongoDB - this function requires MongoDB structure
+    const isPostgres = process.env.DB_TYPE === 'postgres';
+    if (isPostgres) {
+      return res.json({
+        success: true,
+        data: [],
+        message: 'Post likes feature requires full implementation for PostgreSQL'
+      });
+    }
+    
     const Post = require('../models/Post');
 
     const posts = await Post.find({

@@ -7,7 +7,8 @@
  * Access: Admin and super_admin roles only
  */
 
-const models = require('../models');
+const dbType = (process.env.DB_TYPE || 'postgres').toLowerCase();
+const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 const ApiResponse = require('../utils/ApiResponse');
 const { validatePagination } = require('../utils/validation');
 const { Op } = require('sequelize');
@@ -204,7 +205,7 @@ exports.banUser = async (req, res) => {
       return ApiResponse.error(res, 'Ban reason is required', 422);
     }
 
-    const user = await models.User.findByPk(user_id);
+    const user = await models.User.findByPk(user_id, { include: [{ model: models.Role, as: 'roleData' }, { model: models.Department, as: 'department' }] });
     if (!user) {
       return ApiResponse.notFound(res, 'User');
     }
@@ -269,7 +270,7 @@ exports.suspendUser = async (req, res) => {
       return ApiResponse.error(res, 'Suspension reason is required', 422);
     }
 
-    const user = await models.User.findByPk(user_id);
+    const user = await models.User.findByPk(user_id, { include: [{ model: models.Role, as: 'roleData' }, { model: models.Department, as: 'department' }] });
     if (!user) {
       return ApiResponse.notFound(res, 'User');
     }
@@ -359,7 +360,7 @@ exports.unbanUser = async (req, res) => {
 
     const { user_id } = req.params;
 
-    const user = await models.User.findByPk(user_id);
+    const user = await models.User.findByPk(user_id, { include: [{ model: models.Role, as: 'roleData' }, { model: models.Department, as: 'department' }] });
     if (!user) {
       return ApiResponse.notFound(res, 'User');
     }
@@ -952,62 +953,176 @@ exports.getVendors = async (req, res) => {
 };
 
 /**
- * 🎬 Get All Creators (role='creator')
+ * 🎬 Get All Creators (Users with content creation permissions)
+ * 
+ * A Creator is any user who has content creation capabilities based on their ROLE PERMISSIONS,
+ * NOT a separate hardcoded role. This includes:
+ * - Vendors (role: seller) - can create product-linked content
+ * - End Users (role: user) - can create social media posts
+ * - Super Admins (role: super_admin) - can create any content
+ * - Admins (role: admin) - can manage all content
+ * 
+ * Works in two modes:
+ * 1. If permissions are seeded: Query users by roles that have content permissions
+ * 2. If permissions NOT seeded yet: Query by hardcoded creator roles (user, seller, super_admin)
  */
 exports.getCreators = async (req, res) => {
   try {
-    const { page = 1, limit = 20, search, status } = req.query;
+    const { page = 1, limit = 20, search, status, roleFilter } = req.query;
     const { limit: validated_limit, offset } = validatePagination(page, limit);
 
     const User = models.User;
     const Role = models.Role;
-    const sequelize = models.sequelize;
+    const Permission = models.Permission;
+    const RolePermission = models.RolePermission;
+    const sequelize = User.sequelize || Sequelize;
     
-    // Get creator role ID
-    const creatorRole = await Role.findOne({ where: { name: 'creator' }, attributes: ['id'], raw: true });
-    if (!creatorRole) {
-      return ApiResponse.paginated(res, [], { page: parseInt(page), limit: validated_limit, total: 0, totalPages: 0 }, 'Creators retrieved successfully');
-    }
-    
-    const whereClause = { roleId: creatorRole.id };
+    let creatorRoleIds = [];
+    let queryMethod = 'hardcoded'; // Will change to 'permissions' if we can query permissions
 
+    // TRY: Get roles via permission system (if seeded)
+    try {
+      const contentPermNames = ['can_create_posts', 'can_create_reels', 'can_create_stories', 'can_create_live_streams'];
+      
+      const permissions = await Permission.findAll({
+        where: { name: { [Op.in]: contentPermNames } },
+        attributes: ['id'],
+        raw: true
+      });
+      
+      if (permissions.length > 0) {
+        const permissionIds = permissions.map(p => p.id);
+        
+        // Get roles that have these permissions
+        const rolePermissions = await RolePermission.findAll({
+          where: { permissionId: { [Op.in]: permissionIds } },
+          attributes: ['roleId'],
+          raw: true
+        });
+        
+        if (rolePermissions.length > 0) {
+          creatorRoleIds = [...new Set(rolePermissions.map(rp => rp.roleId))];
+          queryMethod = 'permissions';
+          console.log(`[getCreators] Using permission-based query, found ${creatorRoleIds.length} creator roles`);
+        }
+      }
+    } catch (permError) {
+      console.warn(`[getCreators] Permission query failed, falling back to hardcoded roles:`, permError.message);
+    }
+
+    // FALLBACK: Use hardcoded creator roles if permissions not available
+    if (creatorRoleIds.length === 0) {
+      try {
+        const creatorRoles = await Role.findAll({
+          where: { name: { [Op.in]: ['super_admin', 'admin', 'seller', 'user'] } },
+          attributes: ['id'],
+          raw: true
+        });
+        
+        creatorRoleIds = creatorRoles.map(r => r.id);
+        queryMethod = 'hardcoded';
+        console.log(`[getCreators] Using hardcoded roles, found ${creatorRoleIds.length} creator roles`);
+        
+        if (creatorRoleIds.length === 0) {
+          return ApiResponse.paginated(res, [], 
+            { page: parseInt(page), limit: validated_limit, total: 0, totalPages: 0 }, 
+            'No creator roles found'
+          );
+        }
+      } catch (roleError) {
+        console.error(`[getCreators] Failed to get creator roles:`, roleError.message);
+        return ApiResponse.serverError(res, roleError);
+      }
+    }
+
+    // Build where clause for users with these roles
+    let whereClause = { roleId: { [Op.in]: creatorRoleIds } };
+
+    // Optional: Filter by specific role if provided
+    if (roleFilter) {
+      const filterRole = await Role.findOne({ where: { name: roleFilter }, attributes: ['id'], raw: true });
+      if (filterRole && creatorRoleIds.includes(filterRole.id)) {
+        whereClause.roleId = filterRole.id;
+      }
+    }
+
+    // Apply search filter
     if (search) {
       const searchLower = search.toLowerCase();
       whereClause[Op.or] = [
-        sequelize.where(sequelize.fn('LOWER', sequelize.col('username')), Op.like, `%${searchLower}%`),
-        sequelize.where(sequelize.fn('LOWER', sequelize.col('email')), Op.like, `%${searchLower}%`),
-        sequelize.where(sequelize.fn('LOWER', sequelize.col('firstName')), Op.like, `%${searchLower}%`)
+        sequelize.where(sequelize.fn('LOWER', sequelize.col('"User"."username"')), Op.like, `%${searchLower}%`),
+        sequelize.where(sequelize.fn('LOWER', sequelize.col('"User"."email"')), Op.like, `%${searchLower}%`),
+        sequelize.where(sequelize.fn('LOWER', sequelize.col('"User"."first_name"')), Op.like, `%${searchLower}%`)
       ];
     }
 
-    if (status === 'active') whereClause.isActive = true;
-    else if (status === 'inactive') whereClause.isActive = false;
+    // Apply status filter
+    if (status === 'active') whereClause.is_active = true;
+    else if (status === 'inactive') whereClause.is_active = false;
 
+    // Query creators
     const total = await User.count({ where: whereClause });
+    
     const creators = await User.findAll({
       where: whereClause,
-      attributes: ['id', 'username', 'email', 'phone', 'firstName', 'lastName', 'isActive'],
-      order: [[Sequelize.literal('"User"."created_at"'), 'DESC']],
+      attributes: [
+        'id', 'username', 'email', 'phone', 'first_name', 'last_name', 
+        'avatar_url', 'is_active', 'is_verified', 'created_at', 'role_id'
+      ],
+      order: [[sequelize.literal('"User"."created_at"'), 'DESC']],
       offset,
-      limit: validated_limit
+      limit: validated_limit,
+      raw: true,
+      subQuery: false
     });
 
-    const transformedCreators = creators.map(c => ({
-      _id: c.id,
-      username: c.username,
-      email: c.email,
-      phone: c.phone,
-      firstName: c.firstName,
-      lastName: c.lastName,
-      channelName: `${c.firstName} ${c.lastName}`,
-      posts: 0,
-      followers: 0,
-      engagement: 0,
-      isActive: c.isActive,
-      createdAt: c.createdAt
-    }));
+    // Fetch role names for each creator
+    const roleIds = [...new Set(creators.map(c => c.role_id))];
+    const roleMap = {};
+    if (roleIds.length > 0) {
+      const roles = await Role.findAll({
+        where: { id: { [Op.in]: roleIds } },
+        attributes: ['id', 'name', 'display_name'],
+        raw: true
+      });
+      roles.forEach(r => {
+        roleMap[r.id] = r;
+      });
+    }
 
-    return ApiResponse.paginated(res, transformedCreators, { page: parseInt(page), limit: validated_limit, total, totalPages: Math.ceil(total / validated_limit) }, 'Creators retrieved successfully');
+    // Transform response with creator-specific data
+    const transformedCreators = creators.map(c => {
+      const userRole = roleMap[c.role_id] || {};
+      return {
+        _id: c.id,
+        username: c.username,
+        email: c.email,
+        phone: c.phone,
+        firstName: c.first_name,
+        lastName: c.last_name,
+        avatarUrl: c.avatar_url,
+        channelName: `${c.first_name || ''} ${c.last_name || ''}`.trim(),
+        role: userRole.name,
+        roleDisplayName: userRole.display_name,
+        isActive: c.is_active,
+        isVerified: c.is_verified,
+        createdAt: c.created_at,
+        // Engagement metrics (would be populated from CreatorProfile if available)
+        posts: 0,
+        followers: 0,
+        engagement: 0
+      };
+    });
+
+    return ApiResponse.paginated(res, transformedCreators, 
+      { 
+        page: parseInt(page), 
+        limit: validated_limit, 
+        total, 
+        totalPages: Math.ceil(total / validated_limit) 
+      }, 
+      `Creators retrieved successfully (via ${queryMethod} query)`
+    );
   } catch (error) {
     console.error('❌ getCreators error:', error);
     return ApiResponse.serverError(res, error);
@@ -1085,12 +1200,17 @@ exports.getActivityLogs = async (req, res) => {
     const { page = 1, limit = 20, action, userId, startDate, endDate } = req.query;
     const { limit: validated_limit, offset } = validatePagination(page, limit);
 
-    // Check if AdminAuditLog model exists
-    if (!models.AdminAuditLog) {
-      return ApiResponse.success(res, { logs: [], pagination: { page: parseInt(page), limit: validated_limit, total: 0, totalPages: 0 } }, 'Activity logs retrieved');
+    // Check if AuditLog model exists (tries both AuditLog and AdminAuditLog names)
+    const AuditLog = models.AuditLog || models.AdminAuditLog;
+    
+    if (!AuditLog) {
+      console.warn('[getActivityLogs] No AuditLog model found, returning empty results');
+      return ApiResponse.paginated(res, [], 
+        { page: parseInt(page), limit: validated_limit, total: 0, totalPages: 0 }, 
+        'Activity logs model not available'
+      );
     }
 
-    const AuditLog = models.AdminAuditLog;
     const whereClause = {};
 
     if (action) whereClause.action = action;
@@ -1104,10 +1224,11 @@ exports.getActivityLogs = async (req, res) => {
     const total = await AuditLog.count({ where: whereClause });
     const logs = await AuditLog.findAll({
       where: whereClause,
-      attributes: ['id', 'adminId', 'action', 'resourceType', 'resourceId', 'details'],
-      order: [sequelize.literal('"AuditLog"."created_at" DESC')],
+      attributes: ['id', 'adminId', 'action', 'resourceType', 'resourceId', 'details', 'createdAt'],
+      order: [[sequelize.literal('"AuditLog"."created_at"'), 'DESC']],
       offset,
-      limit: validated_limit
+      limit: validated_limit,
+      raw: true
     });
 
     const transformedLogs = logs.map(log => ({
@@ -1121,7 +1242,10 @@ exports.getActivityLogs = async (req, res) => {
       description: `${log.action.toUpperCase()} on ${log.resourceType} (ID: ${log.resourceId})`
     }));
 
-    return ApiResponse.paginated(res, transformedLogs, { page: parseInt(page), limit: validated_limit, total, totalPages: Math.ceil(total / validated_limit) }, 'Activity logs retrieved successfully');
+    return ApiResponse.paginated(res, transformedLogs, 
+      { page: parseInt(page), limit: validated_limit, total, totalPages: Math.ceil(total / validated_limit) }, 
+      'Activity logs retrieved successfully'
+    );
   } catch (error) {
     console.error('❌ getActivityLogs error:', error);
     return ApiResponse.serverError(res, error);

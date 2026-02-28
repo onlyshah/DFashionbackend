@@ -17,7 +17,11 @@ const rolePermissionMappings = {
     'view_analytics', 'export_analytics',
     'manage_settings', 'manage_modules', 'manage_features',
     'view_sellers', 'manage_sellers',
-    'view_tickets', 'resolve_tickets'
+    'view_tickets', 'resolve_tickets',
+    // 📝 Content creation permissions
+    'can_create_posts', 'can_create_reels', 'can_create_stories', 'can_create_live_streams',
+    'can_manage_own_content', 'can_manage_all_content',
+    'can_tag_products', 'can_monetize_content'
   ],
   'admin': [
     'view_dashboard', 'manage_users',
@@ -27,7 +31,9 @@ const rolePermissionMappings = {
     'view_inventory', 'manage_inventory',
     'view_analytics',
     'view_sellers',
-    'view_tickets', 'resolve_tickets'
+    'view_tickets', 'resolve_tickets',
+    // 📝 Content management permissions
+    'can_manage_all_content'
   ],
   'manager': [
     'view_dashboard',
@@ -39,12 +45,20 @@ const rolePermissionMappings = {
   ],
   'user': [
     'view_products',
-    'view_analytics'
+    'view_analytics',
+    // 📝 Content creation permissions (EndUsers can create social content)
+    'can_create_posts', 'can_create_reels', 'can_create_stories',
+    'can_manage_own_content',
+    'can_tag_products'
   ],
   'seller': [
     'view_products', 'create_products', 'edit_products',
     'view_orders', 'view_inventory', 'manage_inventory',
-    'view_analytics'
+    'view_analytics',
+    // 📝 Content creation permissions (Vendors can create product-linked content)
+    'can_create_posts', 'can_create_reels', 'can_create_stories', 'can_create_live_streams',
+    'can_manage_own_content',
+    'can_tag_products', 'can_monetize_content'
   ]
 };
 

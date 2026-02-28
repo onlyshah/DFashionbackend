@@ -5,6 +5,7 @@ const userService = ServiceLoader.getService('user');
 const productService = ServiceLoader.getService('product');
 const orderService = ServiceLoader.getService('order');
 const { Op } = require('sequelize');
+const { formatPaginatedResponse, formatSingleResponse, buildIncludeClause, validateMultipleFK } = require('../utils/fkResponseFormatter');
 
 // Dynamic model loading to ensure Sequelize is connected
 const getUserModel = async () => {
@@ -480,12 +481,12 @@ exports.updateUserRoleBySuperAdmin = async (req, res) => {
   }
 };
 
-// ✅ Get all products
+// ✅ Get all products with related data (Brand, Category, Seller)
 exports.getAllProducts = async (req, res) => {
   try {
     const { page = 1, limit = 20, category, status, vendor } = req.query;
     
-    const ProductModel = await getProductModel();
+    const models = require('../models_sql');
     const where = {};
     if (category && category !== 'all') where.categoryId = category;
     if (status && status !== 'all') {
@@ -495,21 +496,33 @@ exports.getAllProducts = async (req, res) => {
     if (vendor) where.sellerId = vendor;
 
     const offset = (parseInt(page) - 1) * parseInt(limit);
-    const result = await ProductModel.findAndCountAll({
+    
+    // Use raw Sequelize models directly to load associations
+    const Product = models._raw.Product;
+    const Brand = models._raw.Brand;
+    const Category = models._raw.Category;
+    const User = models._raw.User;
+    
+    const { count, rows } = await Product.findAndCountAll({
       where,
+      include: [
+        { model: Brand, as: 'brand', attributes: ['id', 'name'] },
+        { model: Category, as: 'category', attributes: ['id', 'name'] },
+        { model: User, as: 'seller', attributes: ['id', 'username', 'email'] }
+      ],
       limit: parseInt(limit),
       offset,
-      order: [['createdAt', 'DESC']]
+      order: [['created_at', 'DESC']]
     });
 
     return res.json({
       success: true,
       data: {
-        products: result.rows,
-        total: result.count,
+        products: rows,
+        total: count,
         page: parseInt(page),
         limit: parseInt(limit),
-        totalPages: Math.ceil(result.count / parseInt(limit))
+        totalPages: Math.ceil(count / parseInt(limit))
       }
     });
   } catch (error) {
@@ -522,36 +535,42 @@ exports.getAllProducts = async (req, res) => {
   }
 };
 
-// ✅ Get all orders
 // ✅ Get all orders (DATABASE-AGNOSTIC - works with MongoDB, PostgreSQL, MySQL)
 exports.getAllOrders = async (req, res) => {
   try {
     const { page = 1, limit = 20, status } = req.query;
 
-    const OrderModel = await getOrderModel();
+    const models = require('../models_sql');
     const where = {};
     if (status && status !== 'all') {
       where.status = status;
     }
 
     const offset = (parseInt(page) - 1) * parseInt(limit);
-    const result = await OrderModel.findAndCountAll({
+    const { count, rows } = await models.Order.findAndCountAll({
       where,
+      include: buildIncludeClause('Order'),  // ← Include User(customer), Payment, Shipment, Return
       limit: parseInt(limit),
       offset,
-      order: [['createdAt', 'DESC']],
-      raw: true,
-      attributes: ['id', 'orderNumber', 'userId', 'totalAmount', 'status', 'paymentStatus', 'paymentMethod', 'shippingAddress', 'createdAt', 'updatedAt']
+      order: [['created_at', 'DESC']]
+    });
+
+    // Format response - removes raw FK IDs, includes nested user/payment/shipment details
+    const response = formatPaginatedResponse(rows, {
+      page: parseInt(page),
+      limit: parseInt(limit),
+      total: count,
+      totalPages: Math.ceil(count / parseInt(limit))
     });
 
     return res.json({
       success: true,
       data: {
-        orders: result.rows,
-        total: result.count,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        totalPages: Math.ceil(result.count / parseInt(limit))
+        orders: response.data,
+        total: response.pagination.total,
+        page: response.pagination.page,
+        limit: response.pagination.limit,
+        totalPages: response.pagination.totalPages
       }
     });
   } catch (error) {
@@ -894,10 +913,20 @@ exports.getActivityLogs = async (req, res) => {
     });
     await client.connect();
 
-    // Query activity logs (using audit_logs or similar table if exists)
+    // Query activity logs from audit_logs table with correct column names
     const countQuery = `SELECT COUNT(*) as total FROM audit_logs`;
     const logsQuery = `
-      SELECT id, user_id, action, resource_type, description, ip_address, created_at
+      SELECT 
+        id, 
+        actor_user_id as user_id,
+        action, 
+        resource_type, 
+        resource_id,
+        old_values,
+        new_values,
+        ip_address, 
+        user_agent,
+        created_at
       FROM audit_logs
       ORDER BY created_at DESC
       LIMIT $1 OFFSET $2
@@ -926,6 +955,7 @@ exports.getActivityLogs = async (req, res) => {
     } catch (tableError) {
       // Table doesn't exist, return empty results
       await client.end();
+      console.error('[adminController] Query error:', tableError.message);
       return res.json({
         success: true,
         data: {

@@ -25,6 +25,7 @@ exports.getAllCategories = async (req, res) => {
         const where = level === 'parent' ? { parentId: null } : {};
         categories = await Category.findAll({
           where,
+          include: [{ model: Category, as: 'subcategories', attributes: ['id', 'name'] }],
           limit: parseInt(limit),
           order: [['name', 'ASC']],
           raw: true
@@ -70,6 +71,7 @@ exports.getCategoryBySlug = async (req, res) => {
       if (category) {
         subcategories = await Category.findAll({
           where: { parentId: category.id },
+          include: [{ model: Category, as: 'parent', attributes: ['id', 'name'] }],
           raw: true
         });
       }

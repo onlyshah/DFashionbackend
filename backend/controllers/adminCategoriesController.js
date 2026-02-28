@@ -1,5 +1,6 @@
 const { sendResponse, sendError } = require('../utils/response');
 const { getPostgresConnection } = require('../config/postgres');
+const models = require('../models_sql');
 
 module.exports = {
   /**
@@ -10,11 +11,33 @@ module.exports = {
       const sequelize = await getPostgresConnection();
       if (!sequelize) return sendError(res, 503, 'Database unavailable');
 
-      // TODO: implement real query using initialized models
-      // If models or queries fail, let the error bubble to centralized handler
-      return sendResponse(res, { success: true, data: [], pagination: { currentPage: 1, totalPages: 0, total: 0 }, message: 'Categories retrieved', code: 200 });
+      // ✅ Load Category and SubCategory models
+      const Category = models._raw?.Category || models.Category;
+      const SubCategory = models._raw?.SubCategory || models.SubCategory;
+      if (!Category) return sendError(res, 500, 'Category model not available');
+      if (!SubCategory) return sendError(res, 500, 'SubCategory model not available');
+
+      // Get all categories with their subcategories
+      const categories = await Category.findAll({
+        include: [{
+          model: SubCategory,
+          as: 'SubCategories',
+          attributes: ['id', 'name', 'slug']
+        }],
+        attributes: ['id', 'name', 'slug'],
+        order: [['name', 'ASC']],
+        raw: false
+      });
+
+      return sendResponse(res, {
+        success: true,
+        data: categories,
+        message: 'Categories retrieved',
+        code: 200
+      });
     } catch (error) {
-      return sendError(res, 500, error.message, error.stack);
+      console.error('getAllCategories error:', error);
+      return sendError(res, 500, 'Failed to fetch categories', error.message);
     }
   },
 
@@ -89,9 +112,25 @@ module.exports = {
       const sequelize = await getPostgresConnection();
       if (!sequelize) return sendError(res, 503, 'Database unavailable');
 
-      return sendResponse(res, { success: true, data: [], message: 'Subcategories retrieved' });
+      // ✅ Load SubCategory model
+      const SubCategory = models._raw?.SubCategory || models.SubCategory;
+      if (!SubCategory) return sendError(res, 500, 'SubCategory model not available');
+
+      const subCategories = await SubCategory.findAll({
+        where: { categoryId: categoryId },
+        attributes: ['id', 'name', 'slug'],
+        order: [['name', 'ASC']],
+        raw: false
+      });
+
+      return sendResponse(res, {
+        success: true,
+        data: subCategories,
+        message: 'Subcategories retrieved'
+      });
     } catch (error) {
-      return sendError(res, 500, error.message, error.stack);
+      console.error('getSubCategories error:', error);
+      return sendError(res, 500, 'Failed to fetch subcategories', error.message);
     }
   },
 

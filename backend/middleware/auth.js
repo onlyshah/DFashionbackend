@@ -1,6 +1,22 @@
 const jwt = require('jsonwebtoken');
-const { User: UserModel } = require('../models_sql')._raw;
 const crypto = require('crypto');
+
+// ✅ Delay-load User model to ensure Sequelize is connected
+const getUserModel = async () => {
+  const models = require('../models_sql');
+  let User = models._raw && models._raw.User ? models._raw.User : models.User;
+  
+  if (!User || (User && typeof User.findByPk !== 'function')) {
+    console.log('[auth] User model is stub, attempting to reload...');
+    await models.getSequelizeInstance();
+    
+    delete require.cache[require.resolve('../models_sql')];
+    const freshModels = require('../models_sql');
+    User = freshModels._raw && freshModels._raw.User ? freshModels._raw.User : freshModels.User;
+  }
+  
+  return User;
+};
 
 // Track failed login attempts
 const loginAttempts = new Map();
@@ -27,21 +43,21 @@ const auth = async (req, res, next) => {
       });
     }
 
-    if (!process.env.JWT_SECRET) {
-      console.error('❌ JWT_SECRET not found in environment variables');
-      return res.status(500).json({
-        success: false,
-        message: 'Server configuration error'
-      });
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // ✅ Use same JWT secret as login controller (with fallback)
+    const JWT_SECRET = process.env.JWT_SECRET || 'dfashion_secret_key';
+    const decoded = jwt.verify(token, JWT_SECRET);
     console.log('🔐 Auth middleware - Token decoded, userId:', decoded.userId);
 
     try {
+      // ✅ Load User model dynamically to ensure it's initialized
+      const User = await getUserModel();
+      if (!User) {
+        throw new Error('User model not available');
+      }
+
       // Use Sequelize findByPk for Postgres
-      const user = await UserModel.findByPk(decoded.userId, {
-        attributes: { exclude: ['password'] }
+      const user = await User.findByPk(decoded.userId, {
+        attributes: { exclude: ['passwordHash', 'password'] }
       });
       console.log('🔐 Auth middleware - User found:', !!user);
 
@@ -61,9 +77,10 @@ const auth = async (req, res, next) => {
     } catch (dbError) {
       console.error('❌ Auth middleware - Database error:', dbError.message);
       // If user lookup fails, allow request to continue with decoded token data
-      // This prevents blocking when MongoDB is unavailable
+      // This prevents blocking when database is unavailable
       req.user = {
         _id: decoded.userId,
+        id: decoded.userId,
         email: decoded.email || 'unknown',
         role: decoded.role || 'user'
       };
@@ -110,18 +127,20 @@ const optionalAuth = async (req, res, next) => {
       return next();
     }
 
-    if (!process.env.JWT_SECRET) {
-      console.error('❌ JWT_SECRET not found in environment variables');
-      req.user = null;
-      return next();
-    }
-
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // ✅ Use same JWT secret as login controller (with fallback)
+    const JWT_SECRET = process.env.JWT_SECRET || 'dfashion_secret_key';
+    const decoded = jwt.verify(token, JWT_SECRET);
     
     try {
-      // Use Sequelize findByPk for Postgres
-      const user = await UserModel.findByPk(decoded.userId, {
-        attributes: { exclude: ['password'] }
+      // ✅ Load User model dynamically to ensure it's initialized
+      const User = await getUserModel();
+      if (!User) {
+        req.user = null;
+        return next();
+      }
+
+      const user = await User.findByPk(decoded.userId, {
+        attributes: { exclude: ['passwordHash', 'password'] }
       });
       
       if (user) {
@@ -160,30 +179,73 @@ const requireAdmin = (req, res, next) => {
   next();
 };
 
-// Require specific roles
+// Require specific roles - CHECKS DATABASE, not just token
 const requireRole = (roles) => {
-  return (req, res, next) => {
-    const allowedRoles = Array.isArray(roles) ? roles : [roles];
-    console.log('🔐 Role check - User role:', req.user?.role, 'Required roles:', allowedRoles);
+  return async (req, res, next) => {
+    try {
+      const allowedRoles = Array.isArray(roles) ? roles : [roles];
+      console.log('🔐 Role check - Required roles:', allowedRoles);
 
-    if (!req.user) {
-      console.log('🔐 Role check - No user object found');
-      return res.status(401).json({
-        success: false,
-        message: 'Authentication required'
-      });
-    }
+      if (!req.user) {
+        console.log('🔐 Role check - No user object found');
+        return res.status(401).json({
+          success: false,
+          message: 'Authentication required'
+        });
+      }
 
-    if (!allowedRoles.includes(req.user.role)) {
-      console.log('🔐 Role check - Access denied for role:', req.user.role);
+      // Fetch CURRENT user role from database (gets updates immediately)
+      try {
+        const models = require('../models_sql');
+        const User = models._raw?.User || models.User;
+        const Role = models._raw?.Role || models.Role;
+
+        if (User && Role) {
+          const currentUser = await User.findByPk(req.user.id || req.user.userId);
+          const userRole = await Role.findByPk(currentUser.roleId);
+
+          if (!currentUser || !userRole) {
+            return res.status(401).json({
+              success: false,
+              message: 'User or role not found'
+            });
+          }
+
+          console.log('🔐 Role check - Current DB role:', userRole.name, 'Required roles:', allowedRoles);
+
+          // Check if user's role is in allowed roles
+          if (!allowedRoles.includes(userRole.name)) {
+            console.log('🔐 Role check - Access denied for role:', userRole.name);
+            return res.status(403).json({
+              success: false,
+              message: `Access denied. Required roles: ${allowedRoles.join(', ')}`,
+              userRole: userRole.name
+            });
+          }
+
+          // Update req.user with current role from DB
+          req.user.role = userRole.name;
+        }
+      } catch (dbError) {
+        console.warn('⚠️ Role check - DB lookup failed, using token role:', dbError.message);
+        // Fallback to token role if DB fails
+        if (!allowedRoles.includes(req.user.role)) {
+          return res.status(403).json({
+            success: false,
+            message: `Access denied. Required roles: ${allowedRoles.join(', ')}`
+          });
+        }
+      }
+
+      console.log('🔐 Role check - Access granted');
+      next();
+    } catch (error) {
+      console.error('❌ Role check error:', error.message);
       return res.status(403).json({
         success: false,
-        message: `Access denied. Required roles: ${allowedRoles.join(', ')}`
+        message: 'Access denied'
       });
     }
-
-    console.log('🔐 Role check - Access granted');
-    next();
   };
 };
 

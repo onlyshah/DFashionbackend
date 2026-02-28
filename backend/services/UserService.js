@@ -107,23 +107,8 @@ class UserService {
         const role = await this.Role.findByPk(user.role_id);
         userData.role = role?.name;
 
-        // Add profile details if creator or seller
-        if (user.role_id === 'creator') {
-          const creatorProfile = await this.CreatorProfile.findOne({
-            where: { user_id: userId }
-          });
-          if (creatorProfile) {
-            userData.creatorProfile = {
-              displayName: creatorProfile.display_name,
-              category: creatorProfile.category,
-              followerCount: creatorProfile.follower_count,
-              isVerified: creatorProfile.is_verified_creator,
-              totalEarnings: creatorProfile.total_earnings
-            };
-          }
-        }
-
-        if (user.role_id === 'seller') {
+        // Add seller profile if role is 'seller'
+        if (role?.name === 'seller') {
           const sellerProfile = await this.SellerProfile.findOne({
             where: { user_id: userId }
           });
@@ -135,6 +120,22 @@ class UserService {
               averageRating: sellerProfile.average_rating
             };
           }
+        }
+
+        // Add creator profile if user has content creation permissions
+        // Creator profile can exist for any user with 'can_create_posts' permission
+        // (vendor, user, or super_admin)
+        const creatorProfile = await this.CreatorProfile.findOne({
+          where: { user_id: userId }
+        });
+        if (creatorProfile) {
+          userData.creatorProfile = {
+            displayName: creatorProfile.display_name,
+            category: creatorProfile.category,
+            followerCount: creatorProfile.follower_count,
+            isVerified: creatorProfile.is_verified_creator,
+            totalEarnings: creatorProfile.total_earnings
+          };
         }
       }
 

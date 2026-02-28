@@ -7,7 +7,8 @@
  * Authentication: JWT + RBAC middleware
  */
 
-const models = require('../models');
+const dbType = (process.env.DB_TYPE || 'postgres').toLowerCase();
+const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 const ApiResponse = require('../utils/ApiResponse');
 const { validatePostsRequest, validatePagination } = require('../utils/validation');
 const { Op } = require('sequelize');

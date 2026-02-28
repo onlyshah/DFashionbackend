@@ -6,10 +6,12 @@
  * Database: PostgreSQL via Sequelize ORM
  */
 
-const models = require('../models');
+const dbType = (process.env.DB_TYPE || 'postgres').toLowerCase();
+const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 const ApiResponse = require('../utils/ApiResponse');
 const { validatePagination } = require('../utils/validation');
 const { Op } = require('sequelize');
+const { formatSingleResponse, buildIncludeClause, validateMultipleFK } = require('../utils/fkResponseFormatter');
 
 // Constants
 const TAX_RATE = 0.18; // 18% GST
@@ -28,7 +30,7 @@ exports.getCart = async (req, res) => {
         as: 'items',
         include: {
           model: models.Product,
-          attributes: ['id', 'name', 'price', 'images', 'brand', 'stock']
+          include: buildIncludeClause('Product')  // ← Full product with brand, category, seller
         }
       }
     });
@@ -58,11 +60,19 @@ exports.getCart = async (req, res) => {
     const shipping_cost = subtotal > FREE_SHIPPING_THRESHOLD ? 0 : STANDARD_SHIPPING;
     const total_amount = subtotal + tax_amount + shipping_cost;
 
+    // Format response - removes raw FK IDs from products
+    const formattedItems = (cart.items || []).map(item => ({
+      id: item.id,
+      product: formatSingleResponse(item.Product),  // ← Full product object, not ID
+      quantity: item.quantity,
+      subtotal: item.Product.price * item.quantity
+    }));
+
     return ApiResponse.success(res, {
       cart_id: cart.id,
-      items: cart.items || [],
+      items: formattedItems,
       summary: {
-        items_count: (cart.items || []).length,
+        items_count: formattedItems.length,
         subtotal,
         tax_amount,
         shipping_cost,
@@ -84,6 +94,16 @@ exports.addToCart = async (req, res) => {
 
     if (!product_id || quantity < 1) {
       return ApiResponse.error(res, 'Invalid product ID or quantity', 422);
+    }
+
+    // VALIDATE foreign keys exist
+    const validation = await validateMultipleFK([
+      { model: 'User', id: req.user.id },
+      { model: 'Product', id: product_id }
+    ]);
+
+    if (!validation.isValid) {
+      return ApiResponse.error(res, validation.errors.join('; '), 400);
     }
 
     const product = await models.Product.findByPk(product_id);
@@ -135,11 +155,24 @@ exports.addToCart = async (req, res) => {
       include: {
         model: models.CartItem,
         as: 'items',
-        include: { model: models.Product, attributes: ['id', 'name', 'price', 'images'] }
+        include: {
+          model: models.Product,
+          include: buildIncludeClause('Product')  // ← Full product with relationships
+        }
       }
     });
 
-    return ApiResponse.success(res, updated_cart, 'Item added to cart');
+    // Format response
+    const formattedItems = (updated_cart.items || []).map(item => ({
+      id: item.id,
+      product: formatSingleResponse(item.Product),
+      quantity: item.quantity
+    }));
+
+    return ApiResponse.success(res, {
+      cart_id: updated_cart.id,
+      items: formattedItems
+    }, 'Item added to cart');
   } catch (error) {
     console.error('❌ addToCart error:', error);
     return ApiResponse.serverError(res, error);
@@ -319,7 +352,7 @@ exports.bulkRemoveItems = async (req, res) => {
     // Verify all items belong to user
     const items = await models.CartItem.findAll({
       where: { id: item_ids },
-      include: { model: models.Cart, attributes: ['user_id'] }
+      include: [{ model: models.Cart, attributes: ['user_id'] }, { model: models.Product, attributes: ['id', 'name', 'price'] }]
     });
 
     for (const item of items) {

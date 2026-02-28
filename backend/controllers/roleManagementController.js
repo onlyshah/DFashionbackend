@@ -12,18 +12,42 @@ class RoleManagementController {
   static async getAllRoles(req, res) {
     try {
       const { page = 1, limit = 20 } = req.query;
-      const roles = await RoleManagementRepository.findAll({ page, limit });
+
+      const models = require('../models_sql');
+      const Role = models._raw?.Role || models.Role;
+
+      if (!Role) {
+        return sendError(res, 'Database connection error', 500);
+      }
+
+      const offset = (parseInt(page) - 1) * parseInt(limit);
+      const { count, rows } = await Role.findAndCountAll({
+        offset,
+        limit: parseInt(limit),
+        order: [['createdAt', 'DESC']]
+      });
+
       return sendResponse(res, {
         success: true,
-        data: roles,
+        data: rows.map(r => ({
+          id: r.id,
+          name: r.name,
+          displayName: r.displayName,
+          description: r.description,
+          level: r.level,
+          isSystemRole: r.isSystemRole,
+          createdAt: r.createdAt
+        })),
         pagination: {
-          currentPage: page,
-          totalPages: Math.ceil(roles.total / limit),
-          total: roles.total
+          currentPage: parseInt(page),
+          limit: parseInt(limit),
+          total: count,
+          totalPages: Math.ceil(count / parseInt(limit))
         },
         message: 'Roles retrieved successfully'
       });
     } catch (error) {
+      console.error('[RoleManagementController] getAllRoles error:', error);
       return sendError(res, error.message, 500);
     }
   }
@@ -35,14 +59,34 @@ class RoleManagementController {
   static async getRoleById(req, res) {
     try {
       const { roleId } = req.params;
-      const role = await RoleManagementRepository.findById(roleId);
-      if (!role) return sendError(res, 'Role not found', 404);
+
+      const models = require('../models_sql');
+      const Role = models._raw?.Role || models.Role;
+
+      if (!Role) {
+        return sendError(res, 'Database connection error', 500);
+      }
+
+      const role = await Role.findByPk(roleId);
+      if (!role) {
+        return sendError(res, 'Role not found', 404);
+      }
+
       return sendResponse(res, {
         success: true,
-        data: role,
+        data: {
+          id: role.id,
+          name: role.name,
+          displayName: role.displayName,
+          description: role.description,
+          level: role.level,
+          isSystemRole: role.isSystemRole,
+          createdAt: role.createdAt
+        },
         message: 'Role retrieved successfully'
       });
     } catch (error) {
+      console.error('[RoleManagementController] getRoleById error:', error);
       return sendError(res, error.message, 500);
     }
   }
@@ -50,22 +94,53 @@ class RoleManagementController {
   /**
    * Create a new role
    * POST /
+   * Only super_admin can create roles
    */
   static async createRole(req, res) {
     try {
-      const { name, description, permissions } = req.body;
-      const role = await RoleManagementRepository.create({
+      const { name, displayName, description, level, isSystemRole } = req.body;
+
+      // Validate required fields
+      if (!name || !displayName) {
+        return sendError(res, 'Role name and displayName are required', 400);
+      }
+
+      const models = require('../models_sql');
+      const Role = models._raw?.Role || models.Role;
+
+      if (!Role) {
+        return sendError(res, 'Database connection error', 500);
+      }
+
+      // Check if role already exists
+      const existingRole = await Role.findOne({ where: { name } });
+      if (existingRole) {
+        return sendError(res, `Role with name '${name}' already exists`, 409);
+      }
+
+      // Create the role
+      const newRole = await Role.create({
         name,
-        description,
-        permissions,
-        createdAt: new Date()
+        displayName,
+        description: description || '',
+        level: level || 99,
+        isSystemRole: isSystemRole || false
       });
+
       return sendResponse(res, {
         success: true,
-        data: role,
+        data: {
+          id: newRole.id,
+          name: newRole.name,
+          displayName: newRole.displayName,
+          description: newRole.description,
+          level: newRole.level,
+          isSystemRole: newRole.isSystemRole
+        },
         message: 'Role created successfully'
       }, 201);
     } catch (error) {
+      console.error('[RoleManagementController] createRole error:', error);
       return sendError(res, error.message, 500);
     }
   }
@@ -77,19 +152,46 @@ class RoleManagementController {
   static async updateRole(req, res) {
     try {
       const { roleId } = req.params;
-      const { name, description, permissions } = req.body;
-      const role = await RoleManagementRepository.update(roleId, {
-        name,
-        description,
-        permissions
-      });
-      if (!role) return sendError(res, 'Role not found', 404);
+      const { displayName, description, level, isSystemRole } = req.body;
+
+      const models = require('../models_sql');
+      const Role = models._raw?.Role || models.Role;
+
+      if (!Role) {
+        return sendError(res, 'Database connection error', 500);
+      }
+
+      const role = await Role.findByPk(roleId);
+      if (!role) {
+        return sendError(res, 'Role not found', 404);
+      }
+
+      // Prevent modification of system roles
+      if (role.isSystemRole) {
+        return sendError(res, 'Cannot modify system roles', 403);
+      }
+
+      // Update only allowed fields
+      if (displayName) role.displayName = displayName;
+      if (description) role.description = description;
+      if (level !== undefined) role.level = level;
+
+      await role.save();
+
       return sendResponse(res, {
         success: true,
-        data: role,
+        data: {
+          id: role.id,
+          name: role.name,
+          displayName: role.displayName,
+          description: role.description,
+          level: role.level,
+          isSystemRole: role.isSystemRole
+        },
         message: 'Role updated successfully'
       });
     } catch (error) {
+      console.error('[RoleManagementController] updateRole error:', error);
       return sendError(res, error.message, 500);
     }
   }
@@ -101,12 +203,32 @@ class RoleManagementController {
   static async deleteRole(req, res) {
     try {
       const { roleId } = req.params;
-      await RoleManagementRepository.delete(roleId);
+
+      const models = require('../models_sql');
+      const Role = models._raw?.Role || models.Role;
+
+      if (!Role) {
+        return sendError(res, 'Database connection error', 500);
+      }
+
+      const role = await Role.findByPk(roleId);
+      if (!role) {
+        return sendError(res, 'Role not found', 404);
+      }
+
+      // Prevent deletion of system roles
+      if (role.isSystemRole) {
+        return sendError(res, 'Cannot delete system roles', 403);
+      }
+
+      await role.destroy();
+
       return sendResponse(res, {
         success: true,
         message: 'Role deleted successfully'
       });
     } catch (error) {
+      console.error('[RoleManagementController] deleteRole error:', error);
       return sendError(res, error.message, 500);
     }
   }

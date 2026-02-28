@@ -31,6 +31,7 @@ async function seedUsers() {
     const adminRole = await Role.findOne({ where: { name: 'admin' } });
     const userRole = await Role.findOne({ where: { name: 'user' } });
     const sellerRole = await Role.findOne({ where: { name: 'seller' } });
+    const marketingManagerRole = await Role.findOne({ where: { name: 'marketing_manager' } });
 
     if (!superAdminRole || !adminRole || !userRole || !sellerRole) {
       throw new Error('Required roles not found. Ensure Role seeder ran first.');
@@ -115,7 +116,22 @@ async function seedUsers() {
         isEmailVerified: true,
         twoFactorEnabled: false,
         loginAttempts: 0
-      }
+      },
+      ...(marketingManagerRole ? [{
+        username: 'marketing_mgr',
+        email: 'marketing@example.com',
+        passwordHash: bcrypt.hashSync('Marketing@123', 12),
+        firstName: 'Marketing',
+        lastName: 'Manager',
+        roleId: marketingManagerRole.id,
+        departmentId: salesDept?.id || null,
+        phone: '+91-9444444444',
+        isActive: true,
+        isVerified: true,
+        isEmailVerified: true,
+        twoFactorEnabled: false,
+        loginAttempts: 0
+      }] : [])
     ];
 
     let createdCount = 0;

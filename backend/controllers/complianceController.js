@@ -7,7 +7,8 @@
  * Access: super_admin role only
  */
 
-const models = require('../models');
+const dbType = (process.env.DB_TYPE || 'postgres').toLowerCase();
+const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 const ApiResponse = require('../utils/ApiResponse');
 const { validatePagination } = require('../utils/validation');
 const { Op } = require('sequelize');
@@ -328,7 +329,7 @@ exports.resetUserData = async (req, res) => {
       return ApiResponse.error(res, 'Deletion reason is required', 422);
     }
 
-    const user = await models.User.findByPk(user_id);
+    const user = await models.User.findByPk(user_id, { include: [{ model: models.Role, as: 'roleData' }, { model: models.Department, as: 'department' }] });
     if (!user) {
       return ApiResponse.notFound(res, 'User');
     }

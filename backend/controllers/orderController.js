@@ -6,10 +6,12 @@
  * Database: PostgreSQL via Sequelize ORM
  */
 
-const models = require('../models');
+const dbType = (process.env.DB_TYPE || 'postgres').toLowerCase();
+const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 const ApiResponse = require('../utils/ApiResponse');
 const { validatePagination } = require('../utils/validation');
 const { Op } = require('sequelize');
+const { formatPaginatedResponse, formatSingleResponse, buildIncludeClause, validateMultipleFK } = require('../utils/fkResponseFormatter');
 
 /**
  * Create new order from cart
@@ -17,6 +19,17 @@ const { Op } = require('sequelize');
 exports.createOrder = async (req, res) => {
   try {
     const { shipping_address_id, billing_address_id, payment_method, notes } = req.body;
+
+    // Validate FKs exist
+    const validation = await validateMultipleFK([
+      { model: 'User', id: req.user.id },
+      { model: 'Address', id: shipping_address_id },
+      { model: 'Address', id: billing_address_id }
+    ]);
+
+    if (!validation.isValid) {
+      return ApiResponse.error(res, validation.errors.join('; '), 400);
+    }
 
     // Validate addresses
     const shipping_addr = await models.Address.findByPk(shipping_address_id);
@@ -92,13 +105,10 @@ exports.createOrder = async (req, res) => {
       await t.commit();
 
       const created_order = await models.Order.findByPk(order.id, {
-        include: [
-          { model: models.OrderItem, as: 'items' },
-          { model: models.Address, as: 'shipping_address' }
-        ]
+        include: buildIncludeClause('Order')
       });
 
-      return ApiResponse.created(res, created_order, 'Order created successfully');
+      return ApiResponse.created(res, formatSingleResponse(created_order), 'Order created successfully');
     } catch (error) {
       await t.rollback();
       throw error;
@@ -123,10 +133,7 @@ exports.getUserOrders = exports.getOrders = async (req, res) => {
 
     const { count, rows } = await models.Order.findAndCountAll({
       where,
-      include: [
-        { model: models.OrderItem, as: 'items', attributes: ['id', 'quantity', 'unit_price'] },
-        { model: models.Address, as: 'shipping_address', attributes: ['street', 'city', 'state', 'postal_code'] }
-      ],
+      include: buildIncludeClause('Order'),  // ← Auto-includes customer, payments, shipments, returns
       order: [['createdAt', 'DESC']],
       limit,
       offset,
@@ -135,7 +142,10 @@ exports.getUserOrders = exports.getOrders = async (req, res) => {
 
     const pagination = { page, limit, total: count, totalPages: Math.ceil(count / limit) };
 
-    return ApiResponse.paginated(res, rows, pagination, 'Orders retrieved successfully');
+    // Format response - removes raw FK IDs, includes nested objects
+    const response = formatPaginatedResponse(rows, pagination);
+
+    return ApiResponse.paginated(res, response.data, response.pagination, 'Orders retrieved successfully');
   } catch (error) {
     console.error('❌ getOrders error:', error);
     return ApiResponse.serverError(res, error);
@@ -150,11 +160,7 @@ exports.getOrderById = async (req, res) => {
     const { id } = req.params;
 
     const order = await models.Order.findByPk(id, {
-      include: [
-        { model: models.OrderItem, as: 'items', include: { model: models.Product, attributes: ['name', 'images'] } },
-        { model: models.Address, as: 'shipping_address' },
-        { model: models.Address, as: 'billing_address' }
-      ]
+      include: buildIncludeClause('Order')  // ← Auto-includes all relationships
     });
 
     if (!order) {
@@ -166,7 +172,19 @@ exports.getOrderById = async (req, res) => {
       return ApiResponse.forbidden(res, 'You can only view your own orders');
     }
 
-    return ApiResponse.success(res, order, 'Order retrieved successfully');
+    // Format response - removes raw FK IDs, includes nested objects
+    const response = formatSingleResponse(order);
+
+    // Parse JSON fields if present
+    if (response.shipping_address && typeof response.shipping_address === 'string') {
+      try {
+        response.shipping_address = JSON.parse(response.shipping_address);
+      } catch (e) {
+        // Keep as is
+      }
+    }
+
+    return ApiResponse.success(res, response, 'Order retrieved successfully');
   } catch (error) {
     console.error('❌ getOrderById error:', error);
     return ApiResponse.serverError(res, error);
@@ -193,7 +211,12 @@ exports.updateOrderStatus = async (req, res) => {
 
     await order.update({ status });
 
-    return ApiResponse.success(res, order, 'Order status updated successfully');
+    // Return with all relationships
+    const updated = await models.Order.findByPk(id, {
+      include: buildIncludeClause('Order')
+    });
+
+    return ApiResponse.success(res, formatSingleResponse(updated), 'Order status updated successfully');
   } catch (error) {
     console.error('❌ updateOrderStatus error:', error);
     return ApiResponse.serverError(res, error);
@@ -330,10 +353,7 @@ exports.generateInvoice = async (req, res) => {
     const { orderId } = req.params;
 
     const order = await models.Order.findByPk(orderId, {
-      include: [
-        { model: models.OrderItem, as: 'items', include: { model: models.Product } },
-        { model: models.Address, as: 'shipping_address' }
-      ]
+      include: buildIncludeClause('Order')  // ← Full relationships for invoice
     });
 
     if (!order) {
@@ -345,18 +365,22 @@ exports.generateInvoice = async (req, res) => {
       return ApiResponse.forbidden(res, 'You can only view your own invoice');
     }
 
-    // Generate invoice data
+    // Format response
+    const formattedOrder = formatSingleResponse(order);
+
+    // Generate invoice data with nested objects
     const invoice = {
-      invoice_number: `INV-${order.order_number}`,
-      order_id: order.id,
-      order_number: order.order_number,
-      date: order.createdAt,
-      items: order.items,
-      subtotal: order.subtotal,
-      tax: order.tax_amount,
-      shipping: order.shipping_cost,
-      total: order.total_amount,
-      shipping_address: order.shipping_address
+      invoice_number: `INV-${formattedOrder.order_number}`,
+      order_id: formattedOrder.id,
+      order_number: formattedOrder.order_number,
+      date: formattedOrder.createdAt,
+      customer: formattedOrder.customer,  // ← Full customer object, not just ID
+      items: formattedOrder.items,  // ← Full product details in items
+      subtotal: formattedOrder.subtotal,
+      tax: formattedOrder.tax_amount,
+      shipping: formattedOrder.shipping_cost,
+      total: formattedOrder.total_amount,
+      shipping_address: formattedOrder.shipping_address
     };
 
     return ApiResponse.success(res, invoice, 'Invoice generated successfully');

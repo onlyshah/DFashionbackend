@@ -1,6 +1,7 @@
 // Import dependencies - no fallbacks, require database
 const jwt = require('jsonwebtoken');
-const models = require('../models');
+const dbType = (process.env.DB_TYPE || 'postgres').toLowerCase();
+const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 const { Op } = require('sequelize');
 
 let User = models.User;

@@ -7,7 +7,8 @@
  * Access: All users (user), restricted admin features
  */
 
-const models = require('../models');
+const dbType = (process.env.DB_TYPE || 'postgres').toLowerCase();
+const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 const ApiResponse = require('../utils/ApiResponse');
 const { validatePagination } = require('../utils/validation');
 const { Op } = require('sequelize');
@@ -176,7 +177,7 @@ exports.replyToTicket = async (req, res) => {
       return ApiResponse.error(res, 'Message is required', 422);
     }
 
-    const ticket = await models.SupportTicket.findByPk(ticket_id);
+    const ticket = await models.SupportTicket.findByPk(ticket_id, { include: [{ model: models.User, as: 'creator', attributes: ['id', 'username', 'email'] }] });
     if (!ticket) {
       return ApiResponse.notFound(res, 'Support ticket');
     }
@@ -237,7 +238,7 @@ exports.closeTicket = async (req, res) => {
     const { ticket_id } = req.params;
     const { resolution_notes } = req.body;
 
-    const ticket = await models.SupportTicket.findByPk(ticket_id);
+    const ticket = await models.SupportTicket.findByPk(ticket_id, { include: [{ model: models.User, as: 'creator', attributes: ['id', 'username', 'email'] }] });
     if (!ticket) {
       return ApiResponse.notFound(res, 'Support ticket');
     }
@@ -297,12 +298,12 @@ exports.assignTicket = async (req, res) => {
       return ApiResponse.error(res, 'assignee_id is required', 422);
     }
 
-    const ticket = await models.SupportTicket.findByPk(ticket_id);
+    const ticket = await models.SupportTicket.findByPk(ticket_id, { include: [{ model: models.User, as: 'creator', attributes: ['id', 'username', 'email'] }] });
     if (!ticket) {
       return ApiResponse.notFound(res, 'Support ticket');
     }
 
-    const assignee = await models.User.findByPk(assignee_id);
+    const assignee = await models.User.findByPk(assignee_id, { include: [{ model: models.Role, as: 'roleData' }] });
     if (!assignee || (assignee.role !== 'admin' && assignee.role !== 'super_admin')) {
       return ApiResponse.error(res, 'Invalid assignee. Must be an admin user', 422);
     }

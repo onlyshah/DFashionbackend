@@ -7,7 +7,8 @@
  * Access: super_admin role only
  */
 
-const models = require('../models');
+const dbType = (process.env.DB_TYPE || 'postgres').toLowerCase();
+const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 const ApiResponse = require('../utils/ApiResponse');
 const { validatePagination } = require('../utils/validation');
 const { Op } = require('sequelize');
@@ -87,7 +88,7 @@ exports.filterByUser = async (req, res) => {
     const { limit: validated_limit, offset } = validatePagination(page, limit);
 
     // Verify admin exists
-    const admin = await models.User.findByPk(admin_id);
+    const admin = await models.User.findByPk(admin_id, { include: [{ model: models.Role, as: 'roleData' }] });
     if (!admin || (admin.role !== 'admin' && admin.role !== 'super_admin')) {
       return ApiResponse.error(res, 'Invalid admin user ID', 422);
     }

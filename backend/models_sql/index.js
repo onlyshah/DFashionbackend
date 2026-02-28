@@ -538,27 +538,228 @@ const wrappedSubCategory = createMongooseLikeWrapper(SubCategory, defineSubCateg
 // ============================================================================
 // SET UP SEQUELIZE RELATIONSHIPS & ASSOCIATIONS
 // ============================================================================
-// Only set up relationships if models are properly initialized (not null stubs)
-if (Category && Category.hasMany && SubCategory && SubCategory.belongsTo) {
-  // Category ↔ SubCategory (Critical for admin endpoints)
-  Category.hasMany(SubCategory, { foreignKey: 'categoryId', as: 'SubCategories' });
-  SubCategory.belongsTo(Category, { foreignKey: 'categoryId', as: 'Category' });
-}
+// SET UP SEQUELIZE RELATIONSHIPS & ASSOCIATIONS (Comprehensive)
+// ============================================================================
+// Helper function to set up all associations (reusable after model reinitialization)
+const setupAssociations = (models_obj) => {
+  const {
+    Category, SubCategory, User, Role, Department, RolePermission, Permission,
+    Product, Brand, Cart, Wishlist, Order, Payment, Return, Shipment, Courier,
+    ProductComment, Post, Story, Reel, LiveStream, Transaction, AuditLog, Ticket,
+    Notification, SellerCommission, SellerPerformance, KYCDocument, Inventory, Warehouse
+  } = models_obj;
 
-// NOTE: Other associations disabled to avoid naming collisions with existing attributes
-// These can be re-enabled if attribute names are changed to avoid conflicts
+  // 1. Category ↔ SubCategory
+  if (Category && Category.hasMany && SubCategory && SubCategory.belongsTo) {
+    Category.hasMany(SubCategory, { foreignKey: 'categoryId', as: 'SubCategories' });
+    SubCategory.belongsTo(Category, { foreignKey: 'categoryId', as: 'Category' });
+  }
 
-// User ↔ Role (ENABLED - needed for proper role data loading)
-if (User && User.belongsTo && Role && Role.hasMany) {
-  User.belongsTo(Role, { foreignKey: 'role_id', as: 'roleData' });
-  Role.hasMany(User, { foreignKey: 'role_id', as: 'users' });
-}
+  // 2. User ↔ Role
+  if (User && User.belongsTo && Role && Role.hasMany) {
+    User.belongsTo(Role, { foreignKey: 'role_id', as: 'roleData' });
+    Role.hasMany(User, { foreignKey: 'role_id', as: 'users' });
+  }
 
-// Order ↔ User (ENABLED - needed for fetching recent orders with customer names)
-if (Order && Order.belongsTo && User && User.hasMany) {
-  Order.belongsTo(User, { foreignKey: 'user_id', as: 'customer' });
-  User.hasMany(Order, { foreignKey: 'user_id', as: 'orders' });
-}
+  // 3. User ↔ Department
+  if (User && User.belongsTo && Department && Department.hasMany) {
+    User.belongsTo(Department, { foreignKey: 'departmentId', as: 'departmentData' });
+    Department.hasMany(User, { foreignKey: 'departmentId', as: 'employees' });
+  }
+
+  // 4. Role ↔ RolePermission ↔ Permission
+  if (Role && Role.hasMany && RolePermission && RolePermission.belongsTo) {
+    Role.hasMany(RolePermission, { foreignKey: 'roleId', as: 'rolePermissions' });
+    RolePermission.belongsTo(Role, { foreignKey: 'roleId', as: 'role' });
+  }
+
+  if (RolePermission && RolePermission.belongsTo && Permission && Permission.hasMany) {
+    RolePermission.belongsTo(Permission, { foreignKey: 'permissionId', as: 'permission' });
+    Permission.hasMany(RolePermission, { foreignKey: 'permissionId', as: 'rolePermissions' });
+  }
+
+  // 5. Product ↔ Brand
+  if (Product && Product.belongsTo && Brand && Brand.hasMany) {
+    Product.belongsTo(Brand, { foreignKey: 'brandId', as: 'brand' });
+    Brand.hasMany(Product, { foreignKey: 'brandId', as: 'products' });
+  }
+
+  // 6. Product ↔ Category
+  if (Product && Product.belongsTo && Category && Category.hasMany) {
+    Product.belongsTo(Category, { foreignKey: 'categoryId', as: 'category' });
+    Category.hasMany(Product, { foreignKey: 'categoryId', as: 'products' });
+  }
+
+  // 7. Product ↔ User (Seller)
+  if (Product && Product.belongsTo && User && User.hasMany) {
+    Product.belongsTo(User, { foreignKey: 'sellerId', as: 'seller' });
+    User.hasMany(Product, { foreignKey: 'sellerId', as: 'productsForSale' });
+  }
+
+  // 8. Cart ↔ User
+  if (Cart && Cart.belongsTo && User && User.hasMany) {
+    Cart.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+    User.hasMany(Cart, { foreignKey: 'userId', as: 'cartItems' });
+  }
+
+  // 9. Cart ↔ Product
+  if (Cart && Cart.belongsTo && Product && Product.hasMany) {
+    Cart.belongsTo(Product, { foreignKey: 'productId', as: 'product' });
+    Product.hasMany(Cart, { foreignKey: 'productId', as: 'cartItems' });
+  }
+
+  // 10. Wishlist ↔ User
+  if (Wishlist && Wishlist.belongsTo && User && User.hasMany) {
+    Wishlist.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+    User.hasMany(Wishlist, { foreignKey: 'userId', as: 'wishlistItems' });
+  }
+
+  // 11. Wishlist ↔ Product
+  if (Wishlist && Wishlist.belongsTo && Product && Product.hasMany) {
+    Wishlist.belongsTo(Product, { foreignKey: 'productId', as: 'product' });
+    Product.hasMany(Wishlist, { foreignKey: 'productId', as: 'wishlistItems' });
+  }
+
+  // 12. Order ↔ User (Customer)
+  if (Order && Order.belongsTo && User && User.hasMany) {
+    Order.belongsTo(User, { foreignKey: 'customerId', as: 'customer' });
+    User.hasMany(Order, { foreignKey: 'customerId', as: 'orders' });
+  }
+
+  // 13. Payment ↔ Order
+  if (Payment && Payment.belongsTo && Order && Order.hasMany) {
+    Payment.belongsTo(Order, { foreignKey: 'orderId', as: 'order' });
+    Order.hasMany(Payment, { foreignKey: 'orderId', as: 'payments' });
+  }
+
+  // 14. Shipment ↔ Order
+  if (Shipment && Shipment.belongsTo && Order && Order.hasMany) {
+    Shipment.belongsTo(Order, { foreignKey: 'orderId', as: 'order' });
+    Order.hasMany(Shipment, { foreignKey: 'orderId', as: 'shipments' });
+  }
+
+  // 15. Shipment ↔ Courier
+  if (Shipment && Shipment.belongsTo && Courier && Courier.hasMany) {
+    Shipment.belongsTo(Courier, { foreignKey: 'courierId', as: 'courier' });
+    Courier.hasMany(Shipment, { foreignKey: 'courierId', as: 'shipments' });
+  }
+
+  // 16. Return ↔ Order
+  if (Return && Return.belongsTo && Order && Order.hasMany) {
+    Return.belongsTo(Order, { foreignKey: 'orderId', as: 'order' });
+    Order.hasMany(Return, { foreignKey: 'orderId', as: 'returns' });
+  }
+
+  // 17. Return ↔ User
+  if (Return && Return.belongsTo && User && User.hasMany) {
+    Return.belongsTo(User, { foreignKey: 'userId', as: 'customer' });
+    User.hasMany(Return, { foreignKey: 'userId', as: 'returns' });
+  }
+
+  // 18. ProductComment ↔ Product
+  if (ProductComment && ProductComment.belongsTo && Product && Product.hasMany) {
+    ProductComment.belongsTo(Product, { foreignKey: 'productId', as: 'product' });
+    Product.hasMany(ProductComment, { foreignKey: 'productId', as: 'comments' });
+  }
+
+  // 19. ProductComment ↔ User
+  if (ProductComment && ProductComment.belongsTo && User && User.hasMany) {
+    ProductComment.belongsTo(User, { foreignKey: 'userId', as: 'author' });
+    User.hasMany(ProductComment, { foreignKey: 'userId', as: 'productComments' });
+  }
+
+  // 20. Post ↔ User
+  if (Post && Post.belongsTo && User && User.hasMany) {
+    Post.belongsTo(User, { foreignKey: 'userId', as: 'author' });
+    User.hasMany(Post, { foreignKey: 'userId', as: 'posts' });
+  }
+
+  // 21. Story ↔ User
+  if (Story && Story.belongsTo && User && User.hasMany) {
+    Story.belongsTo(User, { foreignKey: 'userId', as: 'author' });
+    User.hasMany(Story, { foreignKey: 'userId', as: 'stories' });
+  }
+
+  // 22. Reel ↔ User
+  if (Reel && Reel.belongsTo && User && User.hasMany) {
+    Reel.belongsTo(User, { foreignKey: 'userId', as: 'author' });
+    User.hasMany(Reel, { foreignKey: 'userId', as: 'reels' });
+  }
+
+  // 23. LiveStream ↔ User
+  if (LiveStream && LiveStream.belongsTo && User && User.hasMany) {
+    LiveStream.belongsTo(User, { foreignKey: 'hostId', as: 'host' });
+    User.hasMany(LiveStream, { foreignKey: 'hostId', as: 'liveStreams' });
+  }
+
+  // 24. Transaction ↔ User
+  if (Transaction && Transaction.belongsTo && User && User.hasMany) {
+    Transaction.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+    User.hasMany(Transaction, { foreignKey: 'userId', as: 'transactions' });
+  }
+
+  // 25. AuditLog ↔ User
+  if (AuditLog && AuditLog.belongsTo && User && User.hasMany) {
+    AuditLog.belongsTo(User, { foreignKey: 'actorUserId', as: 'actor' });
+    User.hasMany(AuditLog, { foreignKey: 'actorUserId', as: 'auditLogs' });
+  }
+
+  // 26. Ticket ↔ User
+  if (Ticket && Ticket.belongsTo && User && User.hasMany) {
+    Ticket.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+    User.hasMany(Ticket, { foreignKey: 'userId', as: 'tickets' });
+  }
+
+  // 27. Notification ↔ User
+  if (Notification && Notification.belongsTo && User && User.hasMany) {
+    Notification.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+    User.hasMany(Notification, { foreignKey: 'userId', as: 'notifications' });
+  }
+
+  // 28. SellerCommission ↔ User (Seller)
+  if (SellerCommission && SellerCommission.belongsTo && User && User.hasMany) {
+    SellerCommission.belongsTo(User, { foreignKey: 'sellerId', as: 'seller' });
+    User.hasMany(SellerCommission, { foreignKey: 'sellerId', as: 'commissions' });
+  }
+
+  // 29. SellerCommission ↔ Order
+  if (SellerCommission && SellerCommission.belongsTo && Order && Order.hasMany) {
+    SellerCommission.belongsTo(Order, { foreignKey: 'orderId', as: 'order' });
+    Order.hasMany(SellerCommission, { foreignKey: 'orderId', as: 'commissions' });
+  }
+
+  // 30. SellerPerformance ↔ User
+  if (SellerPerformance && SellerPerformance.belongsTo && User && User.hasMany) {
+    SellerPerformance.belongsTo(User, { foreignKey: 'sellerId', as: 'seller' });
+    User.hasMany(SellerPerformance, { foreignKey: 'sellerId', as: 'performanceMetrics' });
+  }
+
+  // 31. KYCDocument ↔ User
+  if (KYCDocument && KYCDocument.belongsTo && User && User.hasMany) {
+    KYCDocument.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+    User.hasMany(KYCDocument, { foreignKey: 'userId', as: 'kycDocuments' });
+  }
+
+  // 32. Inventory ↔ Product
+  if (Inventory && Inventory.belongsTo && Product && Product.hasMany) {
+    Inventory.belongsTo(Product, { foreignKey: 'productId', as: 'product' });
+    Product.hasMany(Inventory, { foreignKey: 'productId', as: 'inventory' });
+  }
+
+  // 33. Inventory ↔ Warehouse
+  if (Inventory && Inventory.belongsTo && Warehouse && Warehouse.hasMany) {
+    Inventory.belongsTo(Warehouse, { foreignKey: 'warehouseId', as: 'warehouse' });
+    Warehouse.hasMany(Inventory, { foreignKey: 'warehouseId', as: 'inventory' });
+  }
+};
+
+// Call setupAssociations with initial models
+setupAssociations({
+  Category, SubCategory, User, Role, Department, RolePermission, Permission,
+  Product, Brand, Cart, Wishlist, Order, Payment, Return, Shipment, Courier,
+  ProductComment, Post, Story, Reel, LiveStream, Transaction, AuditLog, Ticket,
+  Notification, SellerCommission, SellerPerformance, KYCDocument, Inventory, Warehouse
+});
 
 // Reinitialize models after Sequelize connection (call after DB is connected)
 const reinitializeModels = async () => {
@@ -687,6 +888,19 @@ const reinitializeModels = async () => {
         SmartCollection: SmartCollection_new,
         Upload: Upload_new
       };
+
+      // RE-APPLY ASSOCIATIONS to the newly reinitialized models
+      setupAssociations({
+        Category: Category_new, SubCategory: SubCategory_new, User: User_new, Role: Role_new,
+        Department: Department_new, RolePermission: RolePermission_new, Permission: Permission_new,
+        Product: Product_new, Brand: Brand_new, Cart: Cart_new, Wishlist: Wishlist_new,
+        Order: Order_new, Payment: Payment_new, Return: Return_new, Shipment: Shipment_new,
+        Courier: Courier_new, ProductComment: ProductComment_new, Post: Post_new, Story: Story_new,
+        Reel: Reel_new, LiveStream: LiveStream_new, Transaction: Transaction_new, AuditLog: AuditLog_new,
+        Ticket: Ticket_new, Notification: Notification_new, SellerCommission: SellerCommission_new,
+        SellerPerformance: SellerPerformance_new, KYCDocument: KYCDocument_new,
+        Inventory: Inventory_new, Warehouse: Warehouse_new
+      });
 
       console.log('[models_sql] ✅ All 57 models reinitialized with active Sequelize connection');
       return true;

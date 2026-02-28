@@ -7,7 +7,8 @@
  * Access: Admin and super_admin roles only
  */
 
-const models = require('../models');
+const dbType = (process.env.DB_TYPE || 'postgres').toLowerCase();
+const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 const ApiResponse = require('../utils/ApiResponse');
 const { validatePagination } = require('../utils/validation');
 const { Op } = require('sequelize');
@@ -673,7 +674,7 @@ exports.getPostById = async (req, res) => {
 exports.updatePost = async (req, res) => {
   try {
     const { postId } = req.params;
-    const post = await models.Post.findByPk(postId);
+    const post = await models.Post.findByPk(postId, { include: [{ model: models.User, as: 'author', attributes: ['id', 'username', 'full_name'] }, { model: models.Product, attributes: ['id', 'name'] }] });
     if (!post) return ApiResponse.notFound(res, 'Post');
 
     // Lightweight update support for admin (caption/visibility)
@@ -693,7 +694,7 @@ exports.updatePost = async (req, res) => {
 exports.deletePost = async (req, res) => {
   try {
     const { postId } = req.params;
-    const post = await models.Post.findByPk(postId);
+    const post = await models.Post.findByPk(postId, { include: [{ model: models.User, as: 'author', attributes: ['id', 'username', 'full_name'] }, { model: models.Product, attributes: ['id', 'name'] }] });
     if (!post) return ApiResponse.notFound(res, 'Post');
 
     post.deleted_at = new Date();
@@ -804,7 +805,7 @@ exports.getReelById = async (req, res) => {
 exports.updateReel = async (req, res) => {
   try {
     const { reelId } = req.params;
-    const reel = await models.Reel.findByPk(reelId);
+    const reel = await models.Reel.findByPk(reelId, { include: [{ model: models.User, as: 'author', attributes: ['id', 'username', 'full_name'] }] });
     if (!reel) return ApiResponse.notFound(res, 'Reel');
 
     const { title } = req.body;

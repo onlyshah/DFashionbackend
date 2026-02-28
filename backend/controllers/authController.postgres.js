@@ -263,6 +263,14 @@ const login = async (req, res) => {
 // @access  Public
 const adminLogin = async (req, res) => {
   try {
+    const User = await getUserModel();
+    if (!User) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection error'
+      });
+    }
+
     const { email, password } = req.body;
 
     // Find admin user
@@ -275,9 +283,15 @@ const adminLogin = async (req, res) => {
     // Get role name if roleId exists
     let userRole = null;
     if (user && user.roleId) {
-      const Role = require('../models_sql').Role;
-      const role = await Role.findByPk(user.roleId);
-      userRole = role ? role.name : null;
+      try {
+        const models = require('../models_sql');
+        const Role = models._raw && models._raw.Role ? models._raw.Role : models.Role;
+        const role = await Role.findByPk(user.roleId);
+        userRole = role ? role.name : null;
+      } catch (roleErr) {
+        console.warn('Failed to fetch role:', roleErr.message);
+        userRole = null;
+      }
     }
 
     // Check if user has admin role
@@ -299,7 +313,7 @@ const adminLogin = async (req, res) => {
     }
 
     // Check password
-    const isPasswordValid = await bcrypt.compare(password, user.password);
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
 
     if (!isPasswordValid) {
       return res.status(401).json({
@@ -328,9 +342,16 @@ const adminLogin = async (req, res) => {
           id: user.id,
           username: user.username,
           email: user.email,
-          fullName: user.fullName,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          fullName: user.firstName + ' ' + user.lastName,
           role: userRole,
-          isActive: user.isActive
+          department: 'Administration',
+          employeeId: user.id,
+          permissions: [],
+          avatar: user.avatar || null,
+          isActive: user.isActive,
+          lastLogin: user.lastLogin
         }
       }
     });

@@ -1,6 +1,6 @@
 const { Server } = require('socket.io');
 const jwt = require('jsonwebtoken');
-const models = require('../../models');
+const models = require('../../models_sql');
 const User = models.User;
 const Notification = models.Notification;
 

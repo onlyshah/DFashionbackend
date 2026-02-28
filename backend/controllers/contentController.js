@@ -2,6 +2,12 @@ const ServiceLoader = require('../services/ServiceLoader');
 const contentService = ServiceLoader.loadService('contentService');
 const DataValidationService = require('../services/utils/dataValidationService');
 const RewardService = ServiceLoader.loadService('rewardService');
+
+// Load models with DB type awareness
+const dbType = (process.env.DB_TYPE || 'postgres').toLowerCase();
+const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
+const { Post, Story, Reel, User } = models;
+
 const multer = require('multer');
 const path = require('path');
 
@@ -146,9 +152,11 @@ const createContent = async (req, res) => {
       productsTagged: productTags.length
     });
     
-    // Populate the response
-    await content.populate('user', 'username fullName profilePicture');
-    await content.populate('products.product', 'name price images');
+    // Populate the response (MongoDB compatible - with PostgreSQL this will be no-op)
+    if (typeof content.populate === 'function') {
+      await content.populate('user', 'username fullName profilePicture');
+      await content.populate('products.product', 'name price images');
+    }
     
     res.status(201).json({
       success: true,
@@ -189,7 +197,6 @@ const getAvailableProducts = async (req, res) => {
     
     const products = await Product.find(query)
       .select('name price images category tags vendor')
-      .populate('vendor', 'businessName')
       .limit(parseInt(limit))
       .sort({ createdAt: -1 });
     
@@ -289,10 +296,8 @@ const getUserContent = async (req, res) => {
     
     if (!type || type === 'post') {
       const posts = await Post.find({ user: targetUserId })
-        .populate('user', 'username fullName profilePicture')
-        .populate('products.product', 'name price images')
         .sort({ createdAt: -1 });
-      content = content.concat(posts.map(p => ({ ...p.toObject(), type: 'post' })));
+      content = content.concat(posts.map(p => ({ ...p.toObject?.() || p, type: 'post' })));
     }
     
     if (!type || type === 'story') {
@@ -300,18 +305,14 @@ const getUserContent = async (req, res) => {
         user: targetUserId,
         expiresAt: { $gt: new Date() }
       })
-        .populate('user', 'username fullName profilePicture')
-        .populate('products.product', 'name price images')
         .sort({ createdAt: -1 });
-      content = content.concat(stories.map(s => ({ ...s.toObject(), type: 'story' })));
+      content = content.concat(stories.map(s => ({ ...s.toObject?.() || s, type: 'story' })));
     }
     
     if (!type || type === 'reel') {
       const reels = await Reel.find({ user: targetUserId })
-        .populate('user', 'username fullName profilePicture')
-        .populate('products.product', 'name price images')
         .sort({ createdAt: -1 });
-      content = content.concat(reels.map(r => ({ ...r.toObject(), type: 'reel' })));
+      content = content.concat(reels.map(r => ({ ...r.toObject?.() || r, type: 'reel' })));
     }
     
     // Sort by creation date
