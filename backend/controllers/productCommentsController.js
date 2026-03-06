@@ -1,8 +1,10 @@
 const ServiceLoader = require('../services/ServiceLoader');
 const productCommentsService = ServiceLoader.loadService('productCommentsService');
 
-
 const { sendResponse, sendError } = require('../utils/response');
+const { validateMultipleFK, buildIncludeClause, formatPaginatedResponse } = require('../utils/fkResponseFormatter');
+const dbType = (process.env.DB_TYPE || 'postgres').toLowerCase();
+const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 
 class ProductCommentsController {
   /**
@@ -13,6 +15,15 @@ class ProductCommentsController {
     try {
       const { productId } = req.params;
       const { page = 1, limit = 20, sort = 'recent' } = req.query;
+
+      // ensure product exists
+      if (dbType === 'postgres') {
+        const prod = await models.Product.findByPk(productId);
+        if (!prod) {
+          return sendError(res, 'Product not found', 404);
+        }
+      }
+
       const comments = await ProductCommentsRepository.findByProductId(productId, { page, limit, sort });
       return sendResponse(res, {
         success: true,
@@ -38,6 +49,16 @@ class ProductCommentsController {
       const { productId } = req.params;
       const { text, rating } = req.body;
       const userId = req.user?.id;
+
+      // validate fks
+      const validation = await validateMultipleFK([
+        { model: 'Product', id: productId },
+        { model: 'User', id: userId }
+      ]);
+      if (!validation.isValid) {
+        return sendError(res, validation.errors.join('; '), 400);
+      }
+
       const comment = await ProductCommentsRepository.create({
         productId,
         userId,

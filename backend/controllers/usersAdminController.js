@@ -1369,6 +1369,16 @@ exports.deleteUser = async (req, res) => {
     const { customerId } = req.params;
     const User = models.User;
 
+    // check FK dependencies: orders, cart, wishlist
+    const [orderCount, cartCount, wishlistCount] = await Promise.all([
+      models.Order ? models.Order.count({ where: { user_id: customerId } }) : 0,
+      models.Cart ? models.Cart.count({ where: { user_id: customerId } }) : 0,
+      models.Wishlist ? models.Wishlist.count({ where: { user_id: customerId } }) : 0
+    ]);
+    if (orderCount || cartCount || wishlistCount) {
+      return ApiResponse.error(res, 'Cannot delete user with related orders/cart/wishlist', 409);
+    }
+
     // Soft delete: set deletedAt timestamp
     const user = await User.findByIdAndUpdate(customerId, { deletedAt: new Date() }, { new: true });
 

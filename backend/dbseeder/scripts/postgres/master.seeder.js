@@ -94,8 +94,11 @@ const seedingPhases = [
       '48-inventoryalert.seeder.js',
       '49-inventoryhistory.seeder.js',
       '50-kycdocument.seeder.js',
+      '50-posts.seeder.js',
       '51-livestream.seeder.js',
+      '51-reels.seeder.js',
       '52-productshare.seeder.js',
+      '52-comments.seeder.js',
       '53-reel.seeder.js',
       '54-sellerperformance.seeder.js',
       '55-ticket.seeder.js'

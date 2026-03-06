@@ -105,45 +105,88 @@ exports.getStats = async (req, res) => {
  */
 exports.getReportedContent = async (req, res) => {
   try {
-    // Verify admin access
-    if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
-      return ApiResponse.forbidden(res, 'Only admins can view reported content');
+    const { page = 1, limit = 20, status = 'pending', search = '' } = req.query;
+    const validated_limit = Math.min(parseInt(limit) || 20, 100);
+    const offset = (Math.max(1, parseInt(page) || 1) - 1) * validated_limit;
+
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
+    });
+    await client.connect();
+
+    let whereClause = 'cr.id IS NOT NULL';
+    if (status && status !== 'all') {
+      whereClause += ` AND cr.status = $1`;
+    }
+    let paramIndex = (status && status !== 'all') ? 2 : 1;
+    if (search) {
+      whereClause += ` AND (cr.reason ILIKE $${paramIndex} OR cr.description ILIKE $${paramIndex})`;
+      paramIndex++;
     }
 
-    const { page = 1, limit = 20, status = 'pending', reason, content_type } = req.query;
-    const { limit: validated_limit, offset } = validatePagination(page, limit);
+    // Get total count
+    const countQuery = `SELECT COUNT(*) as count FROM content_reports cr
+                       LEFT JOIN users u ON cr.reporter_id = u.id
+                       WHERE ${whereClause}`;
+    let countParams = [];
+    if (status && status !== 'all') countParams.push(status);
+    if (search) countParams.push(`%${search}%`);
+    const countRes = await client.query(countQuery, countParams);
+    const total = parseInt(countRes.rows[0]?.count || 0);
 
-    const where = {};
-    if (REPORT_STATUSES.includes(status)) {
-      where.status = status;
-    }
-    if (REPORT_REASONS.includes(reason)) {
-      where.report_reason = reason;
-    }
-    if (CONTENT_TYPES.includes(content_type)) {
-      where.content_type = content_type;
-    }
+    // Get reported content with reporter info
+    const reportsQuery = `
+      SELECT cr.id, cr.content_type, cr.content_id, cr.reason, cr.description,
+             cr.status, cr.created_at, cr.resolved_at,
+             u.id as reporter_id, COALESCE(u.first_name, '') as reporter_firstname,
+             COALESCE(u.last_name, '') as reporter_lastname
+      FROM content_reports cr
+      LEFT JOIN users u ON cr.reporter_id = u.id
+      WHERE ${whereClause}
+      ORDER BY cr.created_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+    let params = [];
+    if (status && status !== 'all') params.push(status);
+    if (search) params.push(`%${search}%`);
+    params.push(validated_limit, offset);
+    const reportsRes = await client.query(reportsQuery, params);
 
-    const { count, rows } = await models.ContentReport.findAndCountAll({
-      where,
-      include: [
-        { model: models.User, as: 'reporter', attributes: ['id', 'name', 'email'] },
-        { model: models.User, as: 'content_owner', attributes: ['id', 'name', 'email'] }
-      ],
-      order: [['createdAt', 'DESC']],
-      limit: validated_limit,
-      offset,
-      distinct: true
+    await client.end();
+
+    const data = reportsRes.rows.map(report => {
+      const reporterName = (report.reporter_firstname || report.reporter_lastname)
+        ? `${report.reporter_firstname} ${report.reporter_lastname}`.trim()
+        : 'Anonymous';
+      return {
+        id: report.id,
+        content_type: report.content_type,
+        content_id: report.content_id,
+        report_reason: report.reason,
+        description: report.description,
+        status: report.status,
+        reporter: {
+          id: report.reporter_id,
+          name: reporterName
+        },
+        createdAt: report.created_at,
+        resolvedAt: report.resolved_at
+      };
     });
 
     const pagination = {
       page: parseInt(page),
       limit: validated_limit,
-      total: count,
-      totalPages: Math.ceil(count / validated_limit)
+      total,
+      totalPages: Math.ceil(total / validated_limit)
     };
 
-    return ApiResponse.paginated(res, rows, pagination, 'Reported content retrieved successfully');
+    return ApiResponse.paginated(res, data, pagination, 'Reported content retrieved successfully');
   } catch (error) {
     console.error('❌ getReportedContent error:', error);
     return ApiResponse.serverError(res, error);
@@ -155,25 +198,56 @@ exports.getReportedContent = async (req, res) => {
  */
 exports.getReportDetails = async (req, res) => {
   try {
-    // Verify admin access
-    if (req.user.role !== 'admin' && req.user.role !== 'super_admin') {
-      return ApiResponse.forbidden(res, 'Only admins can view report details');
-    }
+    const { reportId } = req.params;
 
-    const { report_id } = req.params;
-
-    const report = await models.ContentReport.findByPk(report_id, {
-      include: [
-        { model: models.User, as: 'reporter', attributes: ['id', 'name', 'email', 'account_status'] },
-        { model: models.User, as: 'content_owner', attributes: ['id', 'name', 'email', 'account_status'] }
-      ]
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
     });
+    await client.connect();
 
-    if (!report) {
+    const reportQuery = `
+      SELECT cr.id, cr.content_type, cr.content_id, cr.reason, cr.description,
+             cr.status, cr.created_at, cr.resolved_at,
+             u.id as reporter_id, COALESCE(u.first_name, '') as reporter_firstname,
+             COALESCE(u.last_name, '') as reporter_lastname, u.email as reporter_email
+      FROM content_reports cr
+      LEFT JOIN users u ON cr.reporter_id = u.id
+      WHERE cr.id = $1
+    `;
+    const reportRes = await client.query(reportQuery, [reportId]);
+    await client.end();
+
+    if (reportRes.rows.length === 0) {
       return ApiResponse.notFound(res, 'Report');
     }
 
-    return ApiResponse.success(res, report, 'Report details retrieved successfully');
+    const report = reportRes.rows[0];
+    const reporterName = (report.reporter_firstname || report.reporter_lastname)
+      ? `${report.reporter_firstname} ${report.reporter_lastname}`.trim()
+      : 'Anonymous';
+
+    const data = {
+      id: report.id,
+      content_type: report.content_type,
+      content_id: report.content_id,
+      report_reason: report.reason,
+      description: report.description,
+      status: report.status,
+      reporter: {
+        id: report.reporter_id,
+        name: reporterName,
+        email: report.reporter_email
+      },
+      createdAt: report.created_at,
+      resolvedAt: report.resolved_at
+    };
+
+    return ApiResponse.success(res, data, 'Report details retrieved successfully');
   } catch (error) {
     console.error('❌ getReportDetails error:', error);
     return ApiResponse.serverError(res, error);
@@ -873,6 +947,271 @@ exports.getModerationStats = async (req, res) => {
     }, 'Moderation statistics retrieved successfully');
   } catch (error) {
     console.error('❌ getModerationStats error:', error);
+    return ApiResponse.serverError(res, error);
+  }
+};
+
+/**
+ * Get tagged products (products mentioned in posts/reels)
+ */
+exports.getTaggedProducts = async (req, res) => {
+  try {
+    const { page = 1, limit = 20, search = '' } = req.query;
+    const validated_limit = Math.min(parseInt(limit) || 20, 100);
+    const offset = (Math.max(1, parseInt(page) || 1) - 1) * validated_limit;
+
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
+    });
+    await client.connect();
+
+    let whereClause = 'pr.id IS NOT NULL';
+    if (search) {
+      whereClause += ` AND (pr.name ILIKE $1 OR pr.sku ILIKE $1)`;
+    }
+
+    // Get total count
+    const countQuery = `SELECT COUNT(DISTINCT pr.id) as count FROM post_products pp
+                       LEFT JOIN products pr ON pp.product_id = pr.id
+                       WHERE ${whereClause}`;
+    const countRes = search 
+      ? await client.query(countQuery, [`%${search}%`])
+      : await client.query(countQuery);
+    const total = parseInt(countRes.rows[0]?.count || 0);
+
+    // Get tagged products with mention count
+    const productsQuery = `
+      SELECT DISTINCT pr.id, pr.name, pr.sku, pr.price, COUNT(pp.id) as mention_count,
+             MAX(pp.created_at) as last_mentioned
+      FROM post_products pp
+      LEFT JOIN products pr ON pp.product_id = pr.id
+      WHERE ${whereClause}
+      GROUP BY pr.id, pr.name, pr.sku, pr.price
+      ORDER BY mention_count DESC
+      LIMIT $${search ? 2 : 1} OFFSET $${search ? 3 : 2}
+    `;
+    const params = search ? [`%${search}%`, validated_limit, offset] : [validated_limit, offset];
+    const productsRes = await client.query(productsQuery, params);
+
+    await client.end();
+
+    const data = productsRes.rows.map(product => ({
+      id: product.id,
+      name: product.name,
+      sku: product.sku,
+      price: product.price,
+      mentions: parseInt(product.mention_count) || 0,
+      lastMentioned: product.last_mentioned
+    }));
+
+    const pagination = {
+      page: parseInt(page),
+      limit: validated_limit,
+      total,
+      totalPages: Math.ceil(total / validated_limit)
+    };
+
+    return ApiResponse.paginated(res, data, pagination, 'Tagged products retrieved successfully');
+  } catch (error) {
+    console.error('❌ getTaggedProducts error:', error);
+    return ApiResponse.serverError(res, error);
+  }
+};
+
+/**
+ * Get all hashtags (extracted from posts)
+ */
+exports.getAllHashtags = async (req, res) => {
+  try {
+    const { page = 1, limit = 20, search = '' } = req.query;
+    const validated_limit = Math.min(parseInt(limit) || 20, 100);
+    const offset = (Math.max(1, parseInt(page) || 1) - 1) * validated_limit;
+
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
+    });
+    await client.connect();
+
+    // ensure hashtags column exists before running the expensive query
+    const colCheck = await client.query(
+      "SELECT 1 FROM information_schema.columns WHERE table_name='posts' AND column_name='hashtags'"
+    );
+    if (colCheck.rows.length === 0) {
+      // no hashtags column, return empty paginated response instead of error
+      await client.end();
+      return ApiResponse.paginated(res, [], { page: parseInt(page), limit: validated_limit, total: 0, totalPages: 0 },
+        'Hashtags column not found, no data available');
+    }
+
+    // MAIN DATA QUERY
+    const params = [];
+    let baseWhere = search ? ' WHERE tag_name ILIKE $1' : '';
+    if (search) params.push(`%${search}%`);
+    
+    const hashtagsQuery = `
+      WITH tags AS (
+        SELECT UNNEST(hashtags) as tag_name FROM posts
+        WHERE hashtags IS NOT NULL AND array_length(hashtags, 1) > 0
+      )
+      SELECT tag_name as name, COUNT(*) as usage_count
+      FROM tags${baseWhere}
+      GROUP BY tag_name
+      ORDER BY usage_count DESC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `;
+    params.push(validated_limit, offset);
+
+    const hashtagsRes = await client.query(hashtagsQuery, params);
+
+    // COUNT QUERY
+    const countParams = [];
+    let countWhere = search ? ' WHERE tag_name ILIKE $1' : '';
+    if (search) countParams.push(`%${search}%`);
+    
+    const countQuery = `
+      WITH tags AS (
+        SELECT DISTINCT UNNEST(hashtags) as tag_name FROM posts
+        WHERE hashtags IS NOT NULL AND array_length(hashtags, 1) > 0
+      )
+      SELECT COUNT(*) as count FROM tags${countWhere}
+    `;
+    const countRes = await client.query(countQuery, countParams);
+    const total = parseInt(countRes.rows[0]?.count || 0);
+
+    await client.end();
+
+    const data = hashtagsRes.rows.map((row, idx) => ({
+      id: `hashtag-${idx}-${row.name}`,
+      name: row.name && !row.name.startsWith('#') ? `#${row.name}` : row.name,
+      usageCount: parseInt(row.usage_count) || 0
+    }));
+
+    const pagination = {
+      page: parseInt(page),
+      limit: validated_limit,
+      total,
+      totalPages: Math.ceil(total / validated_limit)
+    };
+
+    return ApiResponse.paginated(res, data, pagination, 'Hashtags retrieved successfully');
+  } catch (error) {
+    console.error('❌ getAllHashtags error:', error);
+    return ApiResponse.serverError(res, error);
+  }
+};
+
+/**
+ * Get all comments for moderation
+ */
+exports.getAllComments = async (req, res) => {
+  try {
+    const { page = 1, limit = 20, status = 'all', search = '' } = req.query;
+    const validated_limit = Math.min(parseInt(limit) || 20, 100);
+    const offset = (Math.max(1, parseInt(page) || 1) - 1) * validated_limit;
+
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
+    });
+    await client.connect();
+
+    // Build WHERE conditions
+    const params = [];
+    let whereConditions = [];
+
+    if (status && status !== 'all') {
+      whereConditions.push(`COALESCE(pc.status, 'pending') = $${params.length + 1}`);
+      params.push(status);
+    }
+
+    if (search) {
+      whereConditions.push(`pc.text ILIKE $${params.length + 1}`);
+      params.push(`%${search}%`);
+    }
+
+    const whereClause = whereConditions.length > 0 
+      ? ' WHERE ' + whereConditions.join(' AND ')
+      : '';
+
+    console.log('💬 [getAllComments] WHERE conditions:', whereConditions);
+    console.log('💬 [getAllComments] Params before pagination:', params);
+
+    // COUNT QUERY
+    const countQuery = `
+      SELECT COUNT(*) as count FROM post_comments pc
+      ${whereClause}
+    `;
+    
+    console.log('💬 [getAllComments] Count Query:', countQuery);
+    const countRes = await client.query(countQuery, params.slice());
+    const total = parseInt(countRes.rows[0]?.count || 0);
+
+    // MAIN QUERY with proper param indices
+    const allParams = [...params, validated_limit, offset];
+    const commentsQuery = `
+      SELECT pc.id, pc.text, COALESCE(pc.status, 'pending') as status, pc.created_at,
+             u.id as author_id, COALESCE(u.first_name, '') as author_firstname,
+             COALESCE(u.last_name, '') as author_lastname,
+             p.id as post_id, COALESCE(p.title || ' ' || p.content, '') as post_preview
+      FROM post_comments pc
+      LEFT JOIN users u ON pc.user_id = u.id
+      LEFT JOIN posts p ON pc.post_id = p.id
+      ${whereClause}
+      ORDER BY pc.created_at DESC
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+    `;
+    
+    console.log('💬 [getAllComments] Main Query:', commentsQuery);
+    console.log('💬 [getAllComments] All Params:', allParams);
+    const commentsRes = await client.query(commentsQuery, allParams);
+
+    await client.end();
+
+    const data = commentsRes.rows.map(comment => {
+      const authorName = (comment.author_firstname || comment.author_lastname)
+        ? `${comment.author_firstname} ${comment.author_lastname}`.trim()
+        : 'Anonymous';
+      return {
+        id: comment.id,
+        text: comment.text,
+        status: comment.status,
+        author: {
+          id: comment.author_id,
+          name: authorName
+        },
+        post: {
+          id: comment.post_id,
+          preview: (comment.post_preview || '').substring(0, 100)
+        },
+        createdAt: comment.created_at
+      };
+    });
+
+    const pagination = {
+      page: parseInt(page),
+      limit: validated_limit,
+      total,
+      totalPages: Math.ceil(total / validated_limit)
+    };
+
+    console.log('✅ [getAllComments] Success:', data.length, 'comments');
+    return ApiResponse.paginated(res, data, pagination, 'Comments retrieved successfully');
+  } catch (error) {
+    console.error('❌ getAllComments error:', error);
     return ApiResponse.serverError(res, error);
   }
 };

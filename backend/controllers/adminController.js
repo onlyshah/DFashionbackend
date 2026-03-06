@@ -981,19 +981,85 @@ exports.getActivityLogs = async (req, res) => {
 
 
 exports.getOrderReturns = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Get order returns feature not implemented' });
+  try {
+    const { page = 1, limit = 20, status } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    
+    // TODO: Implement proper returns query from database
+    // For now, returning empty array with proper structure
+    const returns = [];
+    const total = 0;
+    
+    return res.json({
+      success: true,
+      data: {
+        returns: returns,
+        total: total,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        totalPages: 0
+      },
+      message: 'Returns feature coming soon'
+    });
+  } catch (error) {
+    console.error('Error fetching order returns:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error fetching order returns',
+      error: error.message
+    });
+  }
 };
 
 exports.createOrderReturn = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Create order return feature not implemented' });
+  try {
+    // TODO: Implement proper return creation
+    return res.status(501).json({
+      success: false,
+      message: 'Create order return feature not implemented'
+    });
+  } catch (error) {
+    console.error('Error creating order return:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error creating order return',
+      error: error.message
+    });
+  }
 };
 
 exports.updateOrderReturn = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Update order return feature not implemented' });
+  try {
+    // TODO: Implement proper return update
+    return res.status(501).json({
+      success: false,
+      message: 'Update order return feature not implemented'
+    });
+  } catch (error) {
+    console.error('Error updating order return:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error updating order return',
+      error: error.message
+    });
+  }
 };
 
 exports.deleteOrderReturn = async (req, res) => {
-  res.status(501).json({ success: false, message: 'Delete order return feature not implemented' });
+  try {
+    // TODO: Implement proper return deletion
+    return res.status(501).json({
+      success: false,
+      message: 'Delete order return feature not implemented'
+    });
+  } catch (error) {
+    console.error('Error deleting order return:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Error deleting order return',
+      error: error.message
+    });
+  }
 };
 
 // ✅ Get recent orders for dashboard

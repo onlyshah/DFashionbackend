@@ -7,6 +7,7 @@
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
 const models = dbType === 'postgres' ? require('../models_sql') : require('../models');
 const { Category, Product } = models;
+const { validateFK } = require('../utils/fkResponseFormatter');
 
 // ==================== CATEGORY OPERATIONS ====================
 
@@ -209,6 +210,13 @@ exports.createCategory = async (req, res) => {
         });
       }
 
+      // validate parent FK if provided
+      if (parentId) {
+        const valid = await validateFK('Category', parentId);
+        if (!valid) {
+          return res.status(400).json({ success: false, message: 'Parent category not found' });
+        }
+      }
       category = await Category.create({
         name,
         description,
@@ -262,6 +270,13 @@ exports.updateCategory = async (req, res) => {
 
     if (dbType === 'postgres') {
       // PostgreSQL: Use Sequelize update
+      // validate parent FK if provided
+      if (parentId) {
+        const valid = await validateFK('Category', parentId);
+        if (!valid) {
+          return res.status(400).json({ success: false, message: 'Parent category not found' });
+        }
+      }
       const updated = await Category.update(
         { name, description, slug, parentId },
         { where: { id }, returning: true }
@@ -327,6 +342,15 @@ exports.deleteCategory = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: `Cannot delete category with ${productCount} products`
+      });
+    }
+
+    // check if subcategories exist
+    const childCount = await Category.count({ where: { parentId: id } });
+    if (childCount > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete category with ${childCount} subcategories`
       });
     }
 

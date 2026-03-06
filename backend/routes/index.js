@@ -46,6 +46,7 @@ const categoriesRoutes = require('./categories');
 const brandsRoutes = require('./brands');
 const analyticsRoutes = require('./analytics');
 const recommendationsRoutes = require('./recommendations');
+const marketingRoutes = require('./marketing');
 
 // New enterprise route stubs
 const sellersRoutes = require('./sellers');
@@ -82,6 +83,7 @@ router.use(`/categories`, categoriesRoutes);
 router.use(`/brands`, brandsRoutes);
 router.use(`/analytics`, analyticsRoutes);
 router.use(`/recommendations`, recommendationsRoutes);
+router.use(`/admin/marketing`, marketingRoutes);
 
 // Mount new enterprise routes
 router.use(`/sellers`, sellersRoutes);

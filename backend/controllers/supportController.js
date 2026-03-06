@@ -12,6 +12,7 @@ const models = dbType.includes('postgres') ? require('../models_sql') : require(
 const ApiResponse = require('../utils/ApiResponse');
 const { validatePagination } = require('../utils/validation');
 const { Op } = require('sequelize');
+const { validateFK } = require('../utils/fkResponseFormatter');
 
 // Constants
 const TICKET_CATEGORIES = ['order', 'payment', 'product', 'delivery', 'account', 'technical', 'refund', 'other'];
@@ -28,19 +29,92 @@ const SLA_RESPONSE_TIMES = {
  * Create support ticket (user endpoint)
  */
 exports.addReply = async (req, res) => {
-  return ApiResponse.success(res, {}, 'Reply added');
+  try {
+    const { ticketId } = req.params;
+    const { message } = req.body;
+    if (!ticketId || !message) {
+      return ApiResponse.error(res, 'Ticket ID and message required', 422);
+    }
+
+    // check ticket exists and belongs to user or admin
+    const ticket = await models.SupportTicket.findByPk(ticketId);
+    if (!ticket) {
+      return ApiResponse.notFound(res, 'Support ticket');
+    }
+    if (ticket.user_id !== req.user.id && !['admin','super_admin'].includes(req.user.role)) {
+      return ApiResponse.forbidden(res, 'Cannot reply to others tickets');
+    }
+
+    const reply = await models.SupportReply.create({
+      ticket_id: ticketId,
+      user_id: req.user.id,
+      message
+    });
+
+    return ApiResponse.created(res, reply, 'Reply added');
+  } catch (error) {
+    console.error('❌ addReply error:', error);
+    return ApiResponse.serverError(res, error);
+  }
 };
 
 exports.getTicketById = async (req, res) => {
-  return ApiResponse.success(res, {}, 'Ticket retrieved');
+  try {
+    const { ticketId } = req.params;
+    const ticket = await models.SupportTicket.findByPk(ticketId, {
+      include: [
+        { model: models.User, attributes: ['id','name','email'] },
+        { model: models.SupportReply, as: 'replies' }
+      ]
+    });
+    if (!ticket) {
+      return ApiResponse.notFound(res, 'Support ticket');
+    }
+    if (ticket.user_id !== req.user.id && !['admin','super_admin'].includes(req.user.role)) {
+      return ApiResponse.forbidden(res, 'Cannot view others tickets');
+    }
+    return ApiResponse.success(res, ticket, 'Ticket retrieved');
+  } catch (error) {
+    console.error('❌ getTicketById error:', error);
+    return ApiResponse.serverError(res, error);
+  }
 };
 
 exports.closeTicket = async (req, res) => {
-  return ApiResponse.success(res, {}, 'Ticket closed');
+  try {
+    const { ticketId } = req.params;
+    const ticket = await models.SupportTicket.findByPk(ticketId);
+    if (!ticket) {
+      return ApiResponse.notFound(res, 'Support ticket');
+    }
+    if (ticket.user_id !== req.user.id && !['admin','super_admin'].includes(req.user.role)) {
+      return ApiResponse.forbidden(res, 'Cannot close others tickets');
+    }
+    await ticket.update({ status: 'closed' });
+    return ApiResponse.success(res, ticket, 'Ticket closed');
+  } catch (error) {
+    console.error('❌ closeTicket error:', error);
+    return ApiResponse.serverError(res, error);
+  }
 };
 
 exports.updateTicket = async (req, res) => {
-  return ApiResponse.success(res, {}, 'Ticket updated');
+  try {
+    const { ticketId } = req.params;
+    const updates = req.body;
+    const ticket = await models.SupportTicket.findByPk(ticketId);
+    if (!ticket) {
+      return ApiResponse.notFound(res, 'Support ticket');
+    }
+    if (ticket.user_id !== req.user.id && !['admin','super_admin'].includes(req.user.role)) {
+      return ApiResponse.forbidden(res, 'Cannot update others tickets');
+    }
+    await ticket.update(updates);
+    return ApiResponse.success(res, ticket, 'Ticket updated');
+  } catch (error) {
+    console.error('❌ updateTicket error:', error);
+    return ApiResponse.serverError(res, error);
+  }
 };
 
 exports.createTicket = async (req, res) => {

@@ -372,8 +372,11 @@ function getRolePermissions(role) {
       users: ['view', 'create', 'edit', 'delete', 'ban', 'roles'],
       products: ['view', 'create', 'edit', 'delete', 'approve', 'featured', 'inventory'],
       orders: ['view', 'edit', 'cancel', 'refund', 'shipping', 'reports'],
+      inventory: ['view', 'read', 'edit', 'update', 'create', 'delete', 'manage'],
       finance: ['view', 'transactions', 'payouts', 'reports', 'taxes', 'reconciliation'],
       marketing: ['campaigns', 'promotions', 'content', 'social', 'analytics', 'email'],
+      cms: ['manage', 'create', 'read', 'update', 'delete'],
+      logistics: ['view', 'manage', 'create', 'update', 'delete'],
       support: ['tickets', 'chat', 'knowledge_base', 'announcements'],
       vendors: ['view', 'approve', 'commission', 'performance', 'payouts'],
       settings: ['general', 'security', 'integrations', 'backup', 'logs']
@@ -383,8 +386,11 @@ function getRolePermissions(role) {
       users: ['view', 'create', 'edit', 'ban'],
       products: ['view', 'create', 'edit', 'approve', 'featured'],
       orders: ['view', 'edit', 'cancel', 'refund', 'shipping'],
+      inventory: ['view', 'read', 'edit', 'update', 'create', 'delete'],
       finance: ['view', 'transactions', 'reports'],
       marketing: ['campaigns', 'promotions', 'content'],
+      cms: ['manage', 'create', 'read', 'update', 'delete'],
+      logistics: ['view', 'manage'],
       support: ['tickets', 'chat', 'knowledge_base'],
       vendors: ['view', 'approve', 'performance'],
       settings: ['general']

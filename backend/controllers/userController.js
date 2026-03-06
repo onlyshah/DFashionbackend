@@ -230,6 +230,19 @@ const deleteUser = async (req, res) => {
       });
     }
 
+    // check dependencies: orders, cart, wishlist
+    const [orderCount, cartCount, wishlistCount] = await Promise.all([
+      models.Order ? models.Order.count({ where: { user_id: req.params.id } }) : 0,
+      models.Cart ? models.Cart.count({ where: { user_id: req.params.id } }) : 0,
+      models.Wishlist ? models.Wishlist.count({ where: { user_id: req.params.id } }) : 0
+    ]);
+    if (orderCount || cartCount || wishlistCount) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete user with related orders/cart/wishlist'
+      });
+    }
+
     await User.findByIdAndDelete(req.params.id);
 
     res.json({

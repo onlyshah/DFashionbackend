@@ -103,6 +103,28 @@ function buildIncludeClause(modelName) {
     ],
     'Reel': [
       { model: models.User, as: 'author', attributes: ['id', 'firstName', 'lastName', 'avatar', 'email'] }
+    ],
+    'Return': [
+      { model: models.Order, as: 'order', attributes: ['id', 'orderNumber', 'status'], required: false },
+      { model: models.User, as: 'customer', attributes: ['id', 'firstName', 'lastName', 'email'], required: false }
+    ],
+    'Inventory': [
+      { model: models.Product, as: 'product', attributes: ['id', 'name', 'price'] },
+      { model: models.Warehouse, as: 'warehouse', attributes: ['id', 'name', 'location'], required: false }
+    ],
+    'Ticket': [
+      { model: models.User, as: 'user', attributes: ['id', 'name', 'email'], required: false },
+      { model: models.SupportReply, as: 'replies', attributes: ['id', 'message', 'created_at'], required: false }
+    ],
+    'Notification': [
+      { model: models.User, as: 'user', attributes: ['id', 'name', 'email'], required: false }
+    ],
+    'SellerCommission': [
+      { model: models.User, as: 'seller', attributes: ['id', 'firstName', 'lastName', 'email'], required: false },
+      { model: models.Order, as: 'order', attributes: ['id', 'orderNumber'], required: false }
+    ],
+    'KYC': [
+      { model: models.User, as: 'user', attributes: ['id', 'firstName', 'lastName', 'email'], required: false }
     ]
   };
 

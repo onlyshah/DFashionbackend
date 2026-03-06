@@ -51,10 +51,7 @@ exports.getAllProducts = exports.getProducts = async (req, res) => {
 
     const { count, rows } = await models.Product.findAndCountAll({
       where,
-      include: [
-        { model: models.Category, attributes: ['id', 'name'], required: false },
-        { model: models.Brand, attributes: ['id', 'name'], required: false }
-      ],
+      include: buildIncludeClause('Product'), // ensure brand, category, seller, inventory, reviews
       order: [[sort_by, sort_order]],
       limit,
       offset,
@@ -235,10 +232,7 @@ exports.getFeaturedProducts = async (req, res) => {
         is_active: true,
         is_approved: true
       },
-      include: [
-        { model: models.Category, attributes: ['id', 'name'] },
-        { model: models.Brand, attributes: ['id', 'name'] }
-      ],
+      include: buildIncludeClause('Product'),
       order: [['featured_at', 'DESC']],
       limit: parseInt(limit)
     });
@@ -262,10 +256,7 @@ exports.getTopRatedProducts = async (req, res) => {
         is_active: true,
         is_approved: true
       },
-      include: [
-        { model: models.Category, attributes: ['id', 'name'] },
-        { model: models.Brand, attributes: ['id', 'name'] }
-      ],
+      include: buildIncludeClause('Product'),
       order: [['avg_rating', 'DESC']],
       limit: parseInt(limit)
     });
@@ -292,10 +283,7 @@ exports.getTrendingProducts = async (req, res) => {
         is_approved: true,
         updatedAt: { [Op.gte]: date }
       },
-      include: [
-        { model: models.Category, attributes: ['id', 'name'] },
-        { model: models.Brand, attributes: ['id', 'name'] }
-      ],
+      include: buildIncludeClause('Product'),
       order: [['views_count', 'DESC']],
       limit: parseInt(limit)
     });
@@ -352,15 +340,101 @@ exports.getFilters = async (req, res) => {
 };
 
 exports.createProduct = async (req, res) => {
-  return ApiResponse.success(res, {}, 'Product created');
+  try {
+    const { name, description, price, stock, category_id, brand_id, seller_id, tags = [] } = req.body;
+
+    // validate required fields (simplified)
+    if (!name || !price || !category_id || !brand_id || !seller_id) {
+      return ApiResponse.error(res, 'Missing required fields', 422);
+    }
+
+    // foreign key validation
+    const fkResult = await validateMultipleFK([
+      { model: 'Category', id: category_id },
+      { model: 'Brand', id: brand_id },
+      { model: 'User', id: seller_id }
+    ]);
+    if (!fkResult.isValid) {
+      return ApiResponse.error(res, fkResult.errors.join('; '), 400);
+    }
+
+    const product = await models.Product.create({
+      name,
+      description,
+      price,
+      stock,
+      category_id,
+      brand_id,
+      seller_id,
+      tags
+    });
+
+    const result = await models.Product.findByPk(product.id, { include: buildIncludeClause('Product') });
+    return ApiResponse.created(res, formatSingleResponse(result), 'Product created successfully');
+  } catch (error) {
+    console.error('❌ createProduct error:', error);
+    return ApiResponse.serverError(res, error);
+  }
 };
 
 exports.updateProduct = async (req, res) => {
-  return ApiResponse.success(res, {}, 'Product updated');
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    const product = await models.Product.findByPk(id);
+    if (!product) {
+      return ApiResponse.notFound(res, 'Product');
+    }
+
+    // if FK fields are being modified, validate them
+    const fkChecks = [];
+    if (updates.category_id) fkChecks.push({ model: 'Category', id: updates.category_id });
+    if (updates.brand_id) fkChecks.push({ model: 'Brand', id: updates.brand_id });
+    if (updates.seller_id) fkChecks.push({ model: 'User', id: updates.seller_id });
+    if (fkChecks.length) {
+      const fkResult = await validateMultipleFK(fkChecks);
+      if (!fkResult.isValid) {
+        return ApiResponse.error(res, fkResult.errors.join('; '), 400);
+      }
+    }
+
+    await product.update(updates);
+    const result = await models.Product.findByPk(id, { include: buildIncludeClause('Product') });
+    return ApiResponse.success(res, formatSingleResponse(result), 'Product updated successfully');
+  } catch (error) {
+    console.error('❌ updateProduct error:', error);
+    return ApiResponse.serverError(res, error);
+  }
 };
 
 exports.deleteProduct = async (req, res) => {
-  return ApiResponse.success(res, {}, 'Product deleted');
+  try {
+    const { id } = req.params;
+    const product = await models.Product.findByPk(id);
+    if (!product) {
+      return ApiResponse.notFound(res, 'Product');
+    }
+
+    // check for FK dependencies before deletion
+    const dependentCounts = await Promise.all([
+      models.CartItem.count({ where: { product_id: id } }),
+      models.Wishlist.count({ where: { product_id: id } }),
+      models.OrderItem.count({ where: { product_id: id } }),
+      models.Inventory.count({ where: { product_id: id } }),
+      models.Review.count({ where: { product_id: id } })
+    ]);
+    const [inCart, inWishlist, inOrder, inInventory, inReview] = dependentCounts;
+    if (inCart || inWishlist || inOrder || inInventory || inReview) {
+      return ApiResponse.error(res, 'Product has related records and cannot be deleted', 409);
+    }
+
+    await product.destroy();
+    return ApiResponse.success(res, {}, 'Product deleted successfully');
+  } catch (error) {
+    console.error('❌ deleteProduct error:', error);
+    return ApiResponse.serverError(res, error);
+  }
 };
 
 exports.addReview = async (req, res) => {
@@ -387,10 +461,7 @@ exports.getRecommendations = async (req, res) => {
         is_active: true,
         is_approved: true
       },
-      include: [
-        { model: models.Category, attributes: ['id', 'name'] },
-        { model: models.Brand, attributes: ['id', 'name'] }
-      ],
+      include: buildIncludeClause('Product'),
       limit: parseInt(limit),
       order: [['views_count', 'DESC']]
     });

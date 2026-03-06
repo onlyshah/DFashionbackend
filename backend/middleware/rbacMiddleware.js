@@ -37,24 +37,30 @@ const ROLE_PERMISSIONS = {
     products: ['create', 'read', 'update', 'delete', 'approve', 'reject', 'feature'],
     orders: ['create', 'read', 'update', 'delete', 'cancel', 'refund'],
     payments: ['create', 'read', 'update', 'delete', 'refund'],
+    inventory: ['create', 'read', 'update', 'delete', 'view', 'edit', 'manage'],
     content: ['create', 'read', 'update', 'delete', 'approve', 'reject', 'moderate'],
-    analytics: ['read', 'export'],
+    analytics: ['read', 'export', 'view'],
     reports: ['read', 'create', 'export'],
     settings: ['read', 'update'],
     audit: ['read', 'export'],
-    support: ['read', 'update', 'close']
+    support: ['read', 'update', 'close'],
+    cms: ['manage', 'create', 'read', 'update', 'delete'],
+    logistics: ['view', 'manage', 'create', 'update', 'delete']
   },
   admin: {
     users: ['create', 'read', 'update', 'ban'],
     products: ['read', 'update', 'approve', 'reject', 'feature'],
     orders: ['read', 'update', 'cancel', 'refund'],
     payments: ['read', 'refund'],
+    inventory: ['view', 'read', 'edit', 'update', 'create', 'delete'],
     content: ['read', 'approve', 'reject', 'moderate'],
-    analytics: ['read'],
+    analytics: ['read', 'view'],
     reports: ['read', 'create', 'export'],
     settings: ['read'],
     audit: ['read'],
-    support: ['read', 'update']
+    support: ['read', 'update'],
+    cms: ['manage', 'create', 'read', 'update', 'delete'],
+    logistics: ['view', 'manage']
   },
   moderator: {
     content: ['read', 'update', 'approve', 'reject', 'moderate'],

@@ -220,8 +220,18 @@ app.get('/api/collections', (req, res) => {
 app.post('/api/seed', async (req, res) => {
   try {
     console.log('🌱 Starting database seeding...');
-    const { seedDatabase } = require('./scripts/masterSeed');
-    await seedDatabase();
+    const seedingPath = require('path').join(__dirname, 'dbseeder/scripts/postgres/master.seeder.js');
+    const masterSeeder = require(seedingPath);
+    
+    // Get the seeding function from master.seeder.js
+    const seedFunctionName = Object.keys(masterSeeder)[0];
+    if (!seedFunctionName) {
+      throw new Error('No seeding function found in master.seeder.js');
+    }
+    
+    const seedFunction = masterSeeder[seedFunctionName];
+    await seedFunction();
+    
     res.json({
       success: true,
       message: 'Database seeded successfully',
@@ -299,11 +309,17 @@ safeMount('/api/vendor', './routes/vendor');
 safeMount('/api/notifications', './routes/notifications');
 
 // Admin / role / modules
-safeMount('/api/admin', './routes/admin'); // admin routes
+// IMPORTANT: Mount specific /api/admin/* routes BEFORE the general /api/admin route
+// Otherwise the general /api/admin will catch all requests and return 404
 safeMount('/api/admin/users', './routes/usersAdmin'); // admin users management
 safeMount('/api/admin/social', './routes/socialAdmin'); // admin social management
 safeMount('/api/admin/inventory', './routes/inventory'); // admin inventory management
 safeMount('/api/admin/categories', './routes/admin-categories'); // admin categories & sub-categories management
+safeMount('/api/admin/cms', './routes/cms'); // admin cms management (pages, banners, faqs, media)
+safeMount('/api/admin/content', './routes/admin-content'); // admin content management (blogs, articles)
+safeMount('/api/admin/marketing', './routes/marketing'); // admin marketing management
+
+safeMount('/api/admin', './routes/admin'); // admin routes (dashboard, roles, permissions, etc) - MUST be last!
 safeMount('/api/role-management', './routes/roleManagement');
 safeMount('/api/modules', './routes/moduleManagement');
 safeMount('/api/vendor-verification', './routes/vendorVerification');
@@ -311,7 +327,7 @@ safeMount('/api/vendor-verification', './routes/vendorVerification');
 // Collections & search
 safeMount('/api/product-comments', './routes/productComments');
 safeMount('/api/product-shares', './routes/productShares');
- safeMount('/api/user', './routes/wishlist');
+safeMount('/api/user', './routes/wishlist');
 safeMount('/api/categories', './routes/categories');
 safeMount('/api/brands', './routes/brands');
 safeMount('/api/search', './routes/search');
@@ -329,9 +345,8 @@ safeMount('/api/style-inspiration', './routes/styleInspiration');
 // Smart collections & plugins
 safeMount('/api/smart-collections', './routes/smartCollections');
 
-// Live commerce & marketing
+// Live commerce
 safeMount('/api/live', './routes/live');
-safeMount('/api/marketing', './routes/marketing');
 
 // Creators & influencers
 safeMount('/api/creators', './routes/creators');

@@ -225,10 +225,7 @@ exports.getVendorProducts = async (req, res) => {
 
     const { count, rows } = await models.Product.findAndCountAll({
       where: { vendor_id },
-      include: [
-        { model: models.Category, attributes: ['id', 'name'] },
-        { model: models.Brand, attributes: ['id', 'name'] }
-      ],
+      include: buildIncludeClause('Product'),
       order: [['createdAt', 'DESC']],
       limit: validated_limit,
       offset,

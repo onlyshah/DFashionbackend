@@ -20,27 +20,56 @@ exports.getWishlist = async (req, res) => {
       return res.json({
         success: true,
         data: {
-          wishlist: { items: [] },
+          items: [],
           itemCount: 0
+        },
+        pagination: {
+          page: 1,
+          limit: 12,
+          total: 0,
+          totalPages: 0
         }
       });
     }
 
-    let wishlist = await Wishlist.findOne({ userId: req.user.userId })
-      .populate('items.productId', 'name price images brand category stock rating');
+    const { page = 1, limit = 12 } = req.query;
+    const offset = (page - 1) * limit;
 
-    if (!wishlist) {
-      wishlist = new Wishlist({
-        userId: req.user.userId,
-        items: []
-      });
-    }
+    // Get wishlist items for user with pagination
+    const { count, rows } = await Wishlist.findAndCountAll({
+      where: { userId: req.user.userId },
+      offset,
+      limit: parseInt(limit),
+      order: [['addedAt', 'DESC']],
+      attributes: ['id', 'productId', 'addedAt']
+    });
+
+    // Get product details
+    const productIds = rows.map(item => item.productId);
+    const products = productIds.length > 0 ? await Product.findAll({
+      where: { id: productIds },
+      attributes: ['id', 'name', 'price', 'images', 'brand', 'category', 'stock', 'rating']
+    }) : [];
+
+    // Map wishlist items with product details
+    const items = rows.map(item => {
+      const product = products.find(p => p.id === item.productId);
+      return {
+        id: item.id,
+        productId: item.productId,
+        addedAt: item.addedAt,
+        product: product || null
+      };
+    });
 
     res.json({
       success: true,
-      data: {
-        wishlist,
-        itemCount: wishlist.items.length
+      data: { items, itemCount: count },
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: count,
+        totalPages: Math.ceil(count / limit)
       }
     });
   } catch (error) {
@@ -48,7 +77,7 @@ exports.getWishlist = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch wishlist',
-      error: error.message
+      data: null
     });
   }
 };
@@ -68,7 +97,7 @@ exports.addToWishlist = async (req, res) => {
     }
 
     // Verify product exists
-    const product = await Product.findById(productId);
+    const product = await Product.findByPk(productId);
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -76,19 +105,10 @@ exports.addToWishlist = async (req, res) => {
       });
     }
 
-    // Get or create wishlist
-    let wishlist = await Wishlist.findOne({ userId: req.user.userId });
-    if (!wishlist) {
-      wishlist = new Wishlist({
-        userId: req.user.userId,
-        items: []
-      });
-    }
-
     // Check if product already in wishlist
-    const exists = wishlist.items.find(
-      item => item.productId.toString() === productId
-    );
+    const exists = await Wishlist.findOne({
+      where: { userId: req.user.userId, productId }
+    });
 
     if (exists) {
       return res.status(400).json({
@@ -98,25 +118,27 @@ exports.addToWishlist = async (req, res) => {
     }
 
     // Add product to wishlist
-    wishlist.items.push({
+    const wishlistItem = await Wishlist.create({
+      userId: req.user.userId,
       productId,
-      addedAt: Date.now()
+      addedAt: new Date()
     });
-
-    await wishlist.save();
-    await wishlist.populate('items.productId', 'name price images brand');
 
     res.json({
       success: true,
       message: 'Product added to wishlist',
-      data: { wishlist }
+      data: { 
+        id: wishlistItem.id,
+        productId: wishlistItem.productId,
+        addedAt: wishlistItem.addedAt
+      }
     });
   } catch (error) {
     console.error('Add to wishlist error:', error.message, error.stack);
     res.status(500).json({
       success: false,
       message: 'Failed to add to wishlist',
-      error: error.message
+      data: null
     });
   }
 };
@@ -135,31 +157,34 @@ exports.removeFromWishlist = async (req, res) => {
       });
     }
 
-    const wishlist = await Wishlist.findOne({ userId: req.user.userId });
-    if (!wishlist) {
+    const wishlistItem = await Wishlist.findByPk(itemId);
+    if (!wishlistItem) {
       return res.status(404).json({
         success: false,
-        message: 'Wishlist not found'
+        message: 'Wishlist item not found'
       });
     }
 
-    wishlist.items = wishlist.items.filter(
-      item => item._id.toString() !== itemId
-    );
+    // Verify ownership
+    if (wishlistItem.userId !== req.user.userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized'
+      });
+    }
 
-    await wishlist.save();
+    await wishlistItem.destroy();
 
     res.json({
       success: true,
-      message: 'Product removed from wishlist',
-      data: { wishlist }
+      message: 'Product removed from wishlist'
     });
   } catch (error) {
     console.error('Remove from wishlist error:', error.message, error.stack);
     res.status(500).json({
       success: false,
       message: 'Failed to remove from wishlist',
-      error: error.message
+      data: null
     });
   }
 };
@@ -178,18 +203,7 @@ exports.moveToCart = async (req, res) => {
       });
     }
 
-    const wishlist = await Wishlist.findOne({ userId: req.user.userId });
-    if (!wishlist) {
-      return res.status(404).json({
-        success: false,
-        message: 'Wishlist not found'
-      });
-    }
-
-    const wishlistItem = wishlist.items.find(
-      item => item._id.toString() === itemId
-    );
-
+    const wishlistItem = await Wishlist.findByPk(itemId);
     if (!wishlistItem) {
       return res.status(404).json({
         success: false,
@@ -197,57 +211,53 @@ exports.moveToCart = async (req, res) => {
       });
     }
 
+    // Verify ownership
+    if (wishlistItem.userId !== req.user.userId) {
+      return res.status(403).json({
+        success: false,
+        message: 'Not authorized'
+      });
+    }
+
     // Verify stock
-    const product = await Product.findById(wishlistItem.productId);
-    if (product.stock < quantity) {
+    const product = await Product.findByPk(wishlistItem.productId);
+    if (!product || product.stock < quantity) {
       return res.status(400).json({
         success: false,
-        message: 'Insufficient stock'
+        message: 'Product not found or insufficient stock'
       });
     }
 
-    // Add to cart
-    let cart = await Cart.findOne({ userId: req.user.userId });
-    if (!cart) {
-      cart = new Cart({
-        userId: req.user.userId,
-        items: []
-      });
-    }
+    // Add to cart or update existing cart item
+    const cartItem = await Cart.findOne({
+      where: { userId: req.user.userId, productId: wishlistItem.productId }
+    });
 
-    const existingItem = cart.items.find(
-      item => item.productId.toString() === wishlistItem.productId.toString()
-    );
-
-    if (existingItem) {
-      existingItem.quantity += quantity;
+    if (cartItem) {
+      cartItem.quantity += quantity;
+      await cartItem.save();
     } else {
-      cart.items.push({
+      await Cart.create({
+        userId: req.user.userId,
         productId: wishlistItem.productId,
         quantity,
-        addedAt: Date.now()
+        addedAt: new Date()
       });
     }
 
-    await cart.save();
-
     // Remove from wishlist
-    wishlist.items = wishlist.items.filter(
-      item => item._id.toString() !== itemId
-    );
-    await wishlist.save();
+    await wishlistItem.destroy();
 
     res.json({
       success: true,
-      message: 'Product moved to cart',
-      data: { cart, wishlist }
+      message: 'Product moved to cart'
     });
   } catch (error) {
     console.error('Move to cart error:', error.message, error.stack);
     res.status(500).json({
       success: false,
       message: 'Failed to move to cart',
-      error: error.message
+      data: null
     });
   }
 };
@@ -267,7 +277,7 @@ exports.likeProduct = async (req, res) => {
     }
 
     // Same as addToWishlist
-    const product = await Product.findById(productId);
+    const product = await Product.findByPk(productId);
     if (!product) {
       return res.status(404).json({
         success: false,
@@ -275,17 +285,9 @@ exports.likeProduct = async (req, res) => {
       });
     }
 
-    let wishlist = await Wishlist.findOne({ userId: req.user.userId });
-    if (!wishlist) {
-      wishlist = new Wishlist({
-        userId: req.user.userId,
-        items: []
-      });
-    }
-
-    const exists = wishlist.items.find(
-      item => item.productId.toString() === productId
-    );
+    const exists = await Wishlist.findOne({
+      where: { userId: req.user.userId, productId }
+    });
 
     if (exists) {
       return res.status(400).json({
@@ -294,24 +296,27 @@ exports.likeProduct = async (req, res) => {
       });
     }
 
-    wishlist.items.push({
+    const wishlistItem = await Wishlist.create({
+      userId: req.user.userId,
       productId,
-      addedAt: Date.now()
+      addedAt: new Date()
     });
-
-    await wishlist.save();
 
     res.json({
       success: true,
       message: 'Product liked',
-      data: { wishlist }
+      data: { 
+        id: wishlistItem.id,
+        productId: wishlistItem.productId,
+        addedAt: wishlistItem.addedAt
+      }
     });
   } catch (error) {
     console.error('Like product error:', error.message, error.stack);
     res.status(500).json({
       success: false,
       message: 'Failed to like product',
-      error: error.message
+      data: null
     });
   }
 };

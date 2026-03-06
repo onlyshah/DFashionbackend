@@ -54,6 +54,16 @@ class LogisticsController {
   static async createShipment(req, res) {
     try {
       const { orderId, carrier, shippingAddress } = req.body;
+      // validate foreign keys
+      const models = require('../models_sql');
+      if (orderId) {
+        const order = await models.Order.findByPk(orderId);
+        if (!order) return sendError(res, 'Order not found', 404);
+      }
+      if (carrier) {
+        const courier = await models.Courier.findByPk(carrier);
+        if (!courier) return sendError(res, 'Courier not found', 404);
+      }
       const shipment = await LogisticsRepository.create({
         orderId,
         carrier,
@@ -78,8 +88,14 @@ class LogisticsController {
   static async updateShipment(req, res) {
     try {
       const { shipmentId } = req.params;
-      const { status, tracking } = req.body;
-      const shipment = await LogisticsRepository.update(shipmentId, { status, tracking });
+      const { status, tracking, carrier } = req.body;
+      // validate carrier fk if provided
+      if (carrier) {
+        const models = require('../models_sql');
+        const courier = await models.Courier.findByPk(carrier);
+        if (!courier) return sendError(res, 'Courier not found', 404);
+      }
+      const shipment = await LogisticsRepository.update(shipmentId, { status, tracking, carrier });
       if (!shipment) return sendError(res, 'Shipment not found', 404);
       return sendResponse(res, {
         success: true,

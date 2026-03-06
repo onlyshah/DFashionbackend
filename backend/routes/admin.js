@@ -169,6 +169,33 @@ router.delete('/notifications', requirePermission('dashboard', 'view'), adminCon
 // PRODUCTS
 // =============================================================
 
+// Product Variants endpoint (must come before generic :id routes)
+router.get('/products/variants', requirePermission('products', 'view'), async (req, res) => {
+  try {
+    res.json({ success: true, data: [], message: 'Product variants feature coming soon' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error fetching variants', error: error.message });
+  }
+});
+
+// Product Media endpoint (must come before generic :id routes)
+router.get('/products/media', requirePermission('products', 'view'), async (req, res) => {
+  try {
+    res.json({ success: true, data: [], message: 'Product media management feature coming soon' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error fetching media', error: error.message });
+  }
+});
+
+// Product Tagging endpoint (must come before generic :id routes)
+router.get('/products/tagging', requirePermission('products', 'view'), async (req, res) => {
+  try {
+    res.json({ success: true, data: [], message: 'Product tagging feature coming soon' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Error fetching tags', error: error.message });
+  }
+});
+
 // Authenticated endpoint - Returns actual products
 router.get('/products', requirePermission('products', 'view'), adminController.getAllProducts);
 
@@ -217,9 +244,454 @@ router.get('/orders', requirePermission('orders', 'view'), async (req, res) => {
 router.put('/orders/:id/status', requirePermission('orders', 'edit'), adminController.updateOrderStatus);
 
 // =============================================================
-// ACTIVITY LOGS
+// INVOICES
 // =============================================================
+router.get('/invoices', requirePermission('orders', 'view'), async (req, res) => {
+  try {
+    const { page = 1, limit = 20, status } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
+    });
+    await client.connect();
+
+    const filters = [];
+    const vals = [];
+    let i = 1;
+    if (status && status !== 'all') { filters.push(`status = $${i++}`); vals.push(status); }
+
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const rowsQuery = `
+      SELECT 
+        o.id,
+        o.order_number,
+        o.user_id,
+        o.total_amount,
+        o.status,
+        o.payment_status,
+        o.created_at,
+        o.updated_at,
+        u.email as customer_email,
+        u.username as customer_name
+      FROM orders o
+      LEFT JOIN users u ON o.user_id = u.id
+      ${where}
+      ORDER BY o.created_at DESC
+      LIMIT $${i++} OFFSET $${i++}
+    `;
+    vals.push(parseInt(limit), offset);
+    const countQuery = `SELECT COUNT(*) AS total FROM orders ${where}`;
+
+    const rowsRes = await client.query(rowsQuery, vals);
+    const countRes = await client.query(countQuery, vals.slice(0, vals.length - 2));
+    await client.end();
+
+    const total = parseInt(countRes.rows[0].total || 0);
+    const invoices = rowsRes.rows.map(order => ({
+      id: order.id,
+      invoiceNumber: `INV-${order.order_number}`,
+      orderNumber: order.order_number,
+      customerId: order.user_id,
+      customerEmail: order.customer_email,
+      customerName: order.customer_name,
+      amount: order.total_amount,
+      status: order.status,
+      paymentStatus: order.payment_status,
+      createdAt: order.created_at,
+      updatedAt: order.updated_at
+    }));
+
+    return res.json({ 
+      success: true, 
+      data: { 
+        invoices, 
+        total, 
+        page: parseInt(page), 
+        limit: parseInt(limit), 
+        totalPages: Math.ceil(total / parseInt(limit)) 
+      } 
+    });
+  } catch (error) {
+    console.error('[routes/admin] Raw invoices handler error:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching invoices', error: error.message });
+  }
+});
+
+router.get('/invoices/:id', requirePermission('orders', 'view'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
+    });
+    await client.connect();
+
+    const query = `
+      SELECT 
+        o.id,
+        o.order_number,
+        o.user_id,
+        o.total_amount,
+        o.status,
+        o.payment_status,
+        o.payment_method,
+        o.shipping_address,
+        o.created_at,
+        o.updated_at,
+        u.email,
+        u.username,
+        u.avatar_url
+      FROM orders o
+      LEFT JOIN users u ON o.user_id = u.id
+      WHERE o.id = $1
+    `;
+
+    const result = await client.query(query, [id]);
+    await client.end();
+
+    if (!result.rows || result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Invoice not found' });
+    }
+
+    const order = result.rows[0];
+    const invoice = {
+      id: order.id,
+      invoiceNumber: `INV-${order.order_number}`,
+      orderNumber: order.order_number,
+      customerId: order.user_id,
+      customerEmail: order.email,
+      customerName: order.username,
+      amount: order.total_amount,
+      status: order.status,
+      paymentStatus: order.payment_status,
+      paymentMethod: order.payment_method,
+      shippingAddress: order.shipping_address,
+      createdAt: order.created_at,
+      updatedAt: order.updated_at
+    };
+
+    return res.json({ success: true, data: invoice });
+  } catch (error) {
+    console.error('[routes/admin] Get invoice handler error:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching invoice', error: error.message });
+  }
+});
+
 router.get('/activity-logs', adminController.getActivityLogs);
+
+// =============================================================
+// REVIEWS & RATINGS MANAGEMENT
+// =============================================================
+router.get('/reviews', requirePermission('reviews', 'view'), async (req, res) => {
+  try {
+    const { page = 1, limit = 20, status, productId } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
+    });
+    await client.connect();
+
+    const filters = [];
+    const vals = [];
+    let i = 1;
+    if (status && status !== 'all') { filters.push(`pr.status = $${i++}`); vals.push(status); }
+    if (productId) { filters.push(`pr.product_id = $${i++}`); vals.push(productId); }
+
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const rowsQuery = `
+      SELECT 
+        pr.id,
+        pr.product_id,
+        pr.user_id,
+        pr.rating,
+        pr.status,
+        pr.created_at,
+        p.title as product_title,
+        u.username,
+        u.email
+      FROM product_reviews pr
+      LEFT JOIN products p ON pr.product_id = p.id
+      LEFT JOIN users u ON pr.user_id = u.id
+      ${where}
+      ORDER BY pr.created_at DESC
+      LIMIT $${i++} OFFSET $${i++}
+    `;
+    vals.push(parseInt(limit), offset);
+    const countQuery = `SELECT COUNT(*) AS total FROM product_reviews ${where}`;
+
+    const rowsRes = await client.query(rowsQuery, vals);
+    const countRes = await client.query(countQuery, vals.slice(0, vals.length - 2));
+    await client.end();
+
+    const total = parseInt(countRes.rows[0].total || 0);
+
+    return res.json({ 
+      success: true, 
+      data: { 
+        reviews: rowsRes.rows, 
+        total, 
+        page: parseInt(page), 
+        limit: parseInt(limit), 
+        totalPages: Math.ceil(total / parseInt(limit)) 
+      } 
+    });
+  } catch (error) {
+    console.error('[routes/admin] Raw reviews handler error:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching reviews', error: error.message });
+  }
+});
+
+router.get('/reviews/:id', requirePermission('reviews', 'view'), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
+    });
+    await client.connect();
+
+    const query = `
+      SELECT 
+        pr.id,
+        pr.product_id,
+        pr.user_id,
+        pr.rating,
+        pr.status,
+        pr.created_at,
+        p.title as product_title,
+        u.username,
+        u.email,
+        u.avatar_url
+      FROM product_reviews pr
+      LEFT JOIN products p ON pr.product_id = p.id
+      LEFT JOIN users u ON pr.user_id = u.id
+      WHERE pr.id = $1
+    `;
+
+    const result = await client.query(query, [id]);
+    await client.end();
+
+    if (!result.rows || result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Review not found' });
+    }
+
+    return res.json({ success: true, data: result.rows[0] });
+  } catch (error) {
+    console.error('[routes/admin] Get review handler error:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching review', error: error.message });
+  }
+});
+
+router.get('/creator-ratings', requirePermission('reviews', 'view'), async (req, res) => {
+  try {
+    const { page = 1, limit = 20, creatorId } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
+    });
+    await client.connect();
+
+    const filters = [];
+    const vals = [];
+    let i = 1;
+    if (creatorId) { filters.push(`cr.creator_id = $${i++}`); vals.push(creatorId); }
+
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const rowsQuery = `
+      SELECT 
+        cr.id,
+        cr.creator_id,
+        cr.overall_rating,
+        cr.content_quality,
+        cr.engagement,
+        cr.professionalism,
+        cr.comment,
+        cr.verified,
+        cr.created_at,
+        u.username as creator_name
+      FROM creator_ratings cr
+      LEFT JOIN users u ON cr.creator_id = u.id
+      ${where}
+      ORDER BY cr.created_at DESC
+      LIMIT $${i++} OFFSET $${i++}
+    `;
+    vals.push(parseInt(limit), offset);
+    const countQuery = `SELECT COUNT(*) AS total FROM creator_ratings ${where}`;
+
+    const rowsRes = await client.query(rowsQuery, vals);
+    const countRes = await client.query(countQuery, vals.slice(0, vals.length - 2));
+    await client.end();
+
+    const total = parseInt(countRes.rows[0].total || 0);
+
+    return res.json({ 
+      success: true, 
+      data: { 
+        ratings: rowsRes.rows, 
+        total, 
+        page: parseInt(page), 
+        limit: parseInt(limit), 
+        totalPages: Math.ceil(total / parseInt(limit)) 
+      } 
+    });
+  } catch (error) {
+    console.error('[routes/admin] Raw creator-ratings handler error:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching creator ratings', error: error.message });
+  }
+});
+
+router.get('/review-disputes', requirePermission('reviews', 'view'), async (req, res) => {
+  try {
+    const { page = 1, limit = 20, status } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
+    });
+    await client.connect();
+
+    const filters = [];
+    const vals = [];
+    let i = 1;
+    if (status && status !== 'all') { filters.push(`rd.status = $${i++}`); vals.push(status); }
+
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const rowsQuery = `
+      SELECT 
+        rd.id,
+        rd.review_id,
+        rd.dispute_reason,
+        rd.status,
+        rd.description,
+        rd.created_at,
+        rd.updated_at,
+        pr.rating,
+        p.title as product_title,
+        u.username
+      FROM review_disputes rd
+      LEFT JOIN product_reviews pr ON rd.review_id = pr.id
+      LEFT JOIN products p ON pr.product_id = p.id
+      LEFT JOIN users u ON pr.user_id = u.id
+      ${where}
+      ORDER BY rd.created_at DESC
+      LIMIT $${i++} OFFSET $${i++}
+    `;
+    vals.push(parseInt(limit), offset);
+    const countQuery = `SELECT COUNT(*) AS total FROM review_disputes ${where}`;
+
+    const rowsRes = await client.query(rowsQuery, vals);
+    const countRes = await client.query(countQuery, vals.slice(0, vals.length - 2));
+    await client.end();
+
+    const total = parseInt(countRes.rows[0].total || 0);
+
+    return res.json({ 
+      success: true, 
+      data: { 
+        disputes: rowsRes.rows, 
+        total, 
+        page: parseInt(page), 
+        limit: parseInt(limit), 
+        totalPages: Math.ceil(total / parseInt(limit)) 
+      } 
+    });
+  } catch (error) {
+    console.error('[routes/admin] Raw review-disputes handler error:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching disputes', error: error.message });
+  }
+});
+
+router.get('/reported-reviews', requirePermission('reviews', 'view'), async (req, res) => {
+  try {
+    const { page = 1, limit = 20, status } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const { Client } = require('pg');
+    const client = new Client({
+      host: process.env.DB_HOST || 'localhost',
+      port: parseInt(process.env.DB_PORT) || 5432,
+      user: process.env.DB_USER || 'postgres',
+      password: process.env.DB_PASSWORD || '1234',
+      database: process.env.DB_NAME || 'dfashion'
+    });
+    await client.connect();
+
+    const filters = [];
+    const vals = [];
+    let i = 1;
+    if (status && status !== 'all') { filters.push(`rr.status = $${i++}`); vals.push(status); }
+
+    const where = filters.length ? `WHERE ${filters.join(' AND ')}` : '';
+    const rowsQuery = `
+      SELECT 
+        rr.id,
+        rr.review_id,
+        rr.report_reason,
+        rr.status,
+        rr.description,
+        rr.created_at,
+        rr.updated_at,
+        pr.rating,
+        p.title as product_title,
+        u.username
+      FROM reported_reviews rr
+      LEFT JOIN product_reviews pr ON rr.review_id = pr.id
+      LEFT JOIN products p ON pr.product_id = p.id
+      LEFT JOIN users u ON pr.user_id = u.id
+      ${where}
+      ORDER BY rr.created_at DESC
+      LIMIT $${i++} OFFSET $${i++}
+    `;
+    vals.push(parseInt(limit), offset);
+    const countQuery = `SELECT COUNT(*) AS total FROM reported_reviews ${where}`;
+
+    const rowsRes = await client.query(rowsQuery, vals);
+    const countRes = await client.query(countQuery, vals.slice(0, vals.length - 2));
+    await client.end();
+
+    const total = parseInt(countRes.rows[0].total || 0);
+
+    return res.json({ 
+      success: true, 
+      data: { 
+        reports: rowsRes.rows, 
+        total, 
+        page: parseInt(page), 
+        limit: parseInt(limit), 
+        totalPages: Math.ceil(total / parseInt(limit)) 
+      } 
+    });
+  } catch (error) {
+    console.error('[routes/admin] Raw reported-reviews handler error:', error);
+    return res.status(500).json({ success: false, message: 'Error fetching reported reviews', error: error.message });
+  }
+});
 
 // =============================================================
 // RETURNS MANAGEMENT (Admin)
