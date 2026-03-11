@@ -22,11 +22,12 @@ const roleRedirectMap = {
   'verified_seller': '/seller/dashboard',
 
   // Customer roles
-  'customer': '/store/home',
-  'prime customer': '/store/home',
-  'prime_customer': '/store/home',
-  'end_user': '/store/home',
-  'end-user': '/store/home',
+  'user': '/home',
+  'customer': '/home',
+  'prime customer': '/home',
+  'prime_customer': '/home',
+  'end_user': '/home',
+  'end-user': '/home',
 
   // Creator/Influencer roles
   'creator': '/creator/studio',

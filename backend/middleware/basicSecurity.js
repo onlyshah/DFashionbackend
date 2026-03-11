@@ -37,14 +37,16 @@ class BasicSecurity {
 
   // Basic security headers
   static securityHeaders = (req, res, next) => {
-    // Basic security headers
+    // Basic security headers (minimal to avoid breaking CORS in development)
     res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('X-XSS-Protection', '1; mode=block');
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-    res.setHeader('Pragma', 'no-cache');
-    res.setHeader('Expires', '0');
+    res.setHeader('Referrer-Policy', 'no-referrer-when-downgrade');
+    
+    // CORS-friendly cache headers for APIs
+    res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
+    
+    // Allow cross-origin for APIs (CORB-friendly)
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     
     // Add request ID for tracking
     req.requestId = Date.now().toString(36) + Math.random().toString(36).substr(2);
@@ -225,12 +227,14 @@ class BasicSecurity {
         defaultSrc: ["'self'"],
         styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
         fontSrc: ["'self'", "https://fonts.gstatic.com"],
-        imgSrc: ["'self'", "data:", "https:", "http:"],
+        imgSrc: ["'self'", "data:", "https:", "http:", "blob:"],
         scriptSrc: ["'self'"],
-        connectSrc: ["'self'", "ws:", "wss:"]
+        connectSrc: ["'self'", "http://localhost:9000", "http://localhost:4200", "ws:", "wss:"]
       }
     },
-    crossOriginEmbedderPolicy: false
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" }
   });
 }
 
