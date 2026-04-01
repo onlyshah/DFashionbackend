@@ -1,17 +1,15 @@
 /**
  * ============================================================================
- * ORDER CONTROLLER - PostgreSQL/Sequelize
+ * ORDER CONTROLLER - Unified Database Support
  * ============================================================================
  * Purpose: Order management, tracking, status updates, refunds
- * Database: PostgreSQL via Sequelize ORM
+ * Database: PostgreSQL/MongoDB via unified models
  */
 
-const dbType = (process.env.DB_TYPE || 'postgres').toLowerCase();
-const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
+const models = require('../models');
 const ApiResponse = require('../utils/ApiResponse');
 const { validatePagination } = require('../utils/validation');
-const { Op } = require('sequelize');
-const { formatPaginatedResponse, formatSingleResponse, buildIncludeClause, validateMultipleFK } = require('../utils/fkResponseFormatter');
+const { formatPaginatedResponse, formatSingleResponse, validateMultipleFK } = require('../utils/fkResponseFormatter');
 
 /**
  * Create new order from cart
@@ -32,25 +30,41 @@ exports.createOrder = async (req, res) => {
     }
 
     // Validate addresses
-    const shipping_addr = await models.Address.findByPk(shipping_address_id);
-    if (!shipping_addr || shipping_addr.user_id !== req.user.id) {
+    let shipping_addr, billing_addr;
+    if (models.isPostgres) {
+      shipping_addr = await models.Address.findByPk(shipping_address_id);
+      billing_addr = await models.Address.findByPk(billing_address_id);
+    } else {
+      shipping_addr = await models.Address.findById(shipping_address_id);
+      billing_addr = await models.Address.findById(billing_address_id);
+    }
+
+    if (!shipping_addr || shipping_addr.userId !== req.user.id) {
       return ApiResponse.notFound(res, 'Shipping address');
     }
 
-    const billing_addr = await models.Address.findByPk(billing_address_id);
-    if (!billing_addr || billing_addr.user_id !== req.user.id) {
+    if (!billing_addr || billing_addr.userId !== req.user.id) {
       return ApiResponse.notFound(res, 'Billing address');
     }
 
     // Get cart
-    const cart = await models.Cart.findOne({
-      where: { user_id: req.user.id },
-      include: {
-        model: models.CartItem,
-        as: 'items',
-        include: { model: models.Product, attributes: ['id', 'name', 'price', 'stock'] }
-      }
-    });
+    let cart;
+    if (models.isPostgres) {
+      cart = await models.Cart.findOne({
+        where: { userId: req.user.id },
+        include: {
+          model: models.CartItem._model,
+          as: 'items',
+          include: { model: models.Product._model, attributes: ['id', 'name', 'price', 'stock'] }
+        }
+      });
+    } else {
+      cart = await models.Cart.findOne({ userId: req.user.id })
+        .populate({
+          path: 'items',
+          populate: { path: 'product', select: 'id name price stock' }
+        });
+    }
 
     if (!cart || !cart.items || cart.items.length === 0) {
       return ApiResponse.error(res, 'Cart is empty', 422);
@@ -59,10 +73,11 @@ exports.createOrder = async (req, res) => {
     // Verify stock and calculate total
     let subtotal = 0;
     for (const item of cart.items) {
-      if (item.Product.stock < item.quantity) {
-        return ApiResponse.error(res, `Insufficient stock for ${item.Product.name}`, 409);
+      const product = item.product || item.Product;
+      if (product.stock < item.quantity) {
+        return ApiResponse.error(res, `Insufficient stock for ${product.name}`, 409);
       }
-      subtotal += item.Product.price * item.quantity;
+      subtotal += product.price * item.quantity;
     }
 
     const TAX_RATE = 0.18;
@@ -70,49 +85,97 @@ exports.createOrder = async (req, res) => {
     const shipping_cost = subtotal > 500 ? 0 : 100;
     const total_amount = subtotal + tax_amount + shipping_cost;
 
-    // Create order (transaction for consistency)
-    const t = await models.sequelize.transaction();
-    try {
-      const order = await models.Order.create({
-        user_id: req.user.id,
-        order_number: `ORD-${Date.now()}`,
+    // Create order (handle transactions differently for each DB)
+    let order;
+    if (models.isPostgres) {
+      const t = await models.sequelize.transaction();
+      try {
+        order = await models.Order.create({
+          userId: req.user.id,
+          orderNumber: `ORD-${Date.now()}`,
+          status: 'pending',
+          subtotal,
+          taxAmount: tax_amount,
+          shippingCost: shipping_cost,
+          totalAmount: total_amount,
+          shippingAddressId: shipping_address_id,
+          billingAddressId: billing_address_id,
+          paymentMethod: payment_method,
+          notes
+        }, { transaction: t });
+
+        // Create order items and reduce stock
+        for (const cart_item of cart.items) {
+          const product = cart_item.Product;
+          await models.OrderItem.create({
+            orderId: order.id,
+            productId: cart_item.productId,
+            quantity: cart_item.quantity,
+            unitPrice: product.price
+          }, { transaction: t });
+
+          await product.decrement('stock', { by: cart_item.quantity, transaction: t });
+        }
+
+        // Clear cart
+        await models.CartItem.destroy({ where: { cartId: cart.id }, transaction: t });
+        await cart.destroy({ transaction: t });
+
+        await t.commit();
+      } catch (error) {
+        await t.rollback();
+        throw error;
+      }
+    } else {
+      // MongoDB - no transactions, handle sequentially
+      order = await models.Order.create({
+        userId: req.user.id,
+        orderNumber: `ORD-${Date.now()}`,
         status: 'pending',
         subtotal,
-        tax_amount,
-        shipping_cost,
-        total_amount,
-        shipping_address_id,
-        billing_address_id,
-        payment_method,
+        taxAmount: tax_amount,
+        shippingCost: shipping_cost,
+        totalAmount: total_amount,
+        shippingAddressId: shipping_address_id,
+        billingAddressId: billing_address_id,
+        paymentMethod: payment_method,
         notes
-      }, { transaction: t });
+      });
 
       // Create order items and reduce stock
       for (const cart_item of cart.items) {
+        const product = cart_item.product;
         await models.OrderItem.create({
-          order_id: order.id,
-          product_id: cart_item.product_id,
+          orderId: order._id,
+          productId: cart_item.productId,
           quantity: cart_item.quantity,
-          unit_price: cart_item.Product.price
-        }, { transaction: t });
+          unitPrice: product.price
+        });
 
-        await cart_item.Product.decrement('stock', { by: cart_item.quantity, transaction: t });
+        await models.Product.updateOne(
+          { _id: cart_item.productId },
+          { $inc: { stock: -cart_item.quantity } }
+        );
       }
 
       // Clear cart
-      await models.CartItem.destroy({ where: { cart_id: cart.id }, transaction: t });
-
-      await t.commit();
-
-      const created_order = await models.Order.findByPk(order.id, {
-        include: buildIncludeClause('Order')
-      });
-
-      return ApiResponse.created(res, formatSingleResponse(created_order), 'Order created successfully');
-    } catch (error) {
-      await t.rollback();
-      throw error;
+      await models.CartItem.deleteMany({ cartId: cart._id });
+      await models.Cart.deleteOne({ _id: cart._id });
     }
+
+    // Get complete order with includes
+    let completeOrder;
+    if (models.isPostgres) {
+      completeOrder = await models.Order.findByPk(order.id, { include: buildIncludeClause('Order') });
+    } else {
+      completeOrder = await models.Order.findById(order._id)
+        .populate('customer', 'id email firstName lastName phone')
+        .populate('payments', 'id status amount paymentMethod')
+        .populate('shipments', 'id status trackingNumber')
+        .populate('returns', 'id status reason');
+    }
+
+    return ApiResponse.created(res, formatSingleResponse(completeOrder), 'Order created successfully');
   } catch (error) {
     console.error('❌ createOrder error:', error);
     return ApiResponse.serverError(res, error);
@@ -128,22 +191,39 @@ exports.getUserOrders = exports.getOrders = async (req, res) => {
     const { status } = req.query;
     const offset = (page - 1) * limit;
 
-    const where = { user_id: req.user.id };
+    const where = { userId: req.user.id };
     if (status) where.status = status;
 
-    const { count, rows } = await models.Order.findAndCountAll({
-      where,
-      include: buildIncludeClause('Order'),  // ← Auto-includes customer, payments, shipments, returns
-      order: [['createdAt', 'DESC']],
-      limit,
-      offset,
-      distinct: true
-    });
+    let result;
+    if (models.isPostgres) {
+      result = await models.Order.findAndCountAll({
+        where,
+        include: buildIncludeClause('Order'),  // ← Auto-includes customer, payments, shipments, returns
+        order: [['createdAt', 'DESC']],
+        limit,
+        offset,
+        distinct: true
+      });
+    } else {
+      const sortOptions = { createdAt: -1 };
+      result = await models.Order.findAndCountAll({
+        where,
+        populate: [
+          { path: 'customer', select: 'id email firstName lastName phone' },
+          { path: 'payments', select: 'id status amount paymentMethod' },
+          { path: 'shipments', select: 'id status trackingNumber' },
+          { path: 'returns', select: 'id status reason' }
+        ],
+        sort: sortOptions,
+        limit,
+        offset
+      });
+    }
 
-    const pagination = { page, limit, total: count, totalPages: Math.ceil(count / limit) };
+    const pagination = { page, limit, total: result.count, totalPages: Math.ceil(result.count / limit) };
 
     // Format response - removes raw FK IDs, includes nested objects
-    const response = formatPaginatedResponse(rows, pagination);
+    const response = formatPaginatedResponse(result.rows, pagination);
 
     return ApiResponse.paginated(res, response.data, response.pagination, 'Orders retrieved successfully');
   } catch (error) {
@@ -159,16 +239,25 @@ exports.getOrderById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const order = await models.Order.findByPk(id, {
-      include: buildIncludeClause('Order')  // ← Auto-includes all relationships
-    });
+    let order;
+    if (models.isPostgres) {
+      order = await models.Order.findByPk(id, {
+        include: buildIncludeClause('Order')  // ← Auto-includes all relationships
+      });
+    } else {
+      order = await models.Order.findById(id)
+        .populate('customer', 'id email firstName lastName phone')
+        .populate('payments', 'id status amount paymentMethod')
+        .populate('shipments', 'id status trackingNumber')
+        .populate('returns', 'id status reason');
+    }
 
     if (!order) {
       return ApiResponse.notFound(res, 'Order');
     }
 
     // Verify ownership or admin
-    if (order.user_id !== req.user.id && req.user.role !== 'admin' && req.user.role !== 'super_admin') {
+    if (order.userId !== req.user.id && req.user.role !== 'admin' && req.user.role !== 'super_admin') {
       return ApiResponse.forbidden(res, 'You can only view your own orders');
     }
 
@@ -204,17 +293,36 @@ exports.updateOrderStatus = async (req, res) => {
       return ApiResponse.error(res, 'Invalid status', 422);
     }
 
-    const order = await models.Order.findByPk(id);
+    let order;
+    if (models.isPostgres) {
+      order = await models.Order.findByPk(id);
+    } else {
+      order = await models.Order.findById(id);
+    }
+
     if (!order) {
       return ApiResponse.notFound(res, 'Order');
     }
 
-    await order.update({ status });
+    if (models.isPostgres) {
+      await order.update({ status });
+    } else {
+      await models.Order.updateOne({ _id: id }, { status });
+    }
 
     // Return with all relationships
-    const updated = await models.Order.findByPk(id, {
-      include: buildIncludeClause('Order')
-    });
+    let updated;
+    if (models.isPostgres) {
+      updated = await models.Order.findByPk(id, {
+        include: buildIncludeClause('Order')
+      });
+    } else {
+      updated = await models.Order.findById(id)
+        .populate('customer', 'id email firstName lastName phone')
+        .populate('payments', 'id status amount paymentMethod')
+        .populate('shipments', 'id status trackingNumber')
+        .populate('returns', 'id status reason');
+    }
 
     return ApiResponse.success(res, formatSingleResponse(updated), 'Order status updated successfully');
   } catch (error) {
@@ -231,13 +339,19 @@ exports.cancelOrder = async (req, res) => {
     const { id } = req.params;
     const { reason } = req.body;
 
-    const order = await models.Order.findByPk(id);
+    let order;
+    if (models.isPostgres) {
+      order = await models.Order.findByPk(id);
+    } else {
+      order = await models.Order.findById(id);
+    }
+
     if (!order) {
       return ApiResponse.notFound(res, 'Order');
     }
 
     // Verify ownership
-    if (order.user_id !== req.user.id && req.user.role !== 'admin') {
+    if (order.userId !== req.user.id && req.user.role !== 'admin') {
       return ApiResponse.forbidden(res, 'You can only cancel your own orders');
     }
 
@@ -246,24 +360,53 @@ exports.cancelOrder = async (req, res) => {
       return ApiResponse.error(res, 'Order cannot be cancelled at current status', 409);
     }
 
-    const t = await models.sequelize.transaction();
-    try {
+    if (models.isPostgres) {
+      const t = await models.sequelize.transaction();
+      try {
+        // Restore stock
+        const items = await models.OrderItem.findAll({ where: { orderId: id }, transaction: t });
+        for (const item of items) {
+          await models.Product.increment('stock', { by: item.quantity, where: { id: item.productId }, transaction: t });
+        }
+
+        // Update order status
+        await order.update({ status: 'cancelled', cancellationReason: reason }, { transaction: t });
+
+        await t.commit();
+      } catch (error) {
+        await t.rollback();
+        throw error;
+      }
+    } else {
+      // MongoDB - no transactions, handle sequentially
       // Restore stock
-      const items = await models.OrderItem.findAll({ where: { order_id: id }, transaction: t });
+      const items = await models.OrderItem.find({ orderId: id });
       for (const item of items) {
-        await models.Product.increment('stock', { by: item.quantity, where: { id: item.product_id }, transaction: t });
+        await models.Product.updateOne(
+          { _id: item.productId },
+          { $inc: { stock: item.quantity } }
+        );
       }
 
       // Update order status
-      await order.update({ status: 'cancelled', cancellation_reason: reason }, { transaction: t });
-
-      await t.commit();
-
-      return ApiResponse.success(res, order, 'Order cancelled successfully');
-    } catch (error) {
-      await t.rollback();
-      throw error;
+      await models.Order.updateOne({ _id: id }, { status: 'cancelled', cancellationReason: reason });
     }
+
+    // Return updated order
+    let updated;
+    if (models.isPostgres) {
+      updated = await models.Order.findByPk(id, {
+        include: buildIncludeClause('Order')
+      });
+    } else {
+      updated = await models.Order.findById(id)
+        .populate('customer', 'id email firstName lastName phone')
+        .populate('payments', 'id status amount paymentMethod')
+        .populate('shipments', 'id status trackingNumber')
+        .populate('returns', 'id status reason');
+    }
+
+    return ApiResponse.success(res, formatSingleResponse(updated), 'Order cancelled successfully');
   } catch (error) {
     console.error('❌ cancelOrder error:', error);
     return ApiResponse.serverError(res, error);
@@ -277,21 +420,28 @@ exports.trackOrder = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const order = await models.Order.findByPk(id, {
-      attributes: ['id', 'order_number', 'status', 'createdAt', 'updatedAt', 'shipping_cost'],
-      include: {
-        model: models.Address,
-        as: 'shipping_address',
-        attributes: ['street', 'city', 'state', 'postal_code', 'country']
-      }
-    });
+    let order;
+    if (models.isPostgres) {
+      order = await models.Order.findByPk(id, {
+        attributes: ['id', 'orderNumber', 'status', 'createdAt', 'updatedAt', 'shippingCost'],
+        include: {
+          model: models.Address._model,
+          as: 'shippingAddress',
+          attributes: ['street', 'city', 'state', 'postalCode', 'country']
+        }
+      });
+    } else {
+      order = await models.Order.findById(id)
+        .select('id orderNumber status createdAt updatedAt shippingCost')
+        .populate('shippingAddress', 'street city state postalCode country');
+    }
 
     if (!order) {
       return ApiResponse.notFound(res, 'Order');
     }
 
     // Verify ownership
-    if (order.user_id !== req.user.id && req.user.role !== 'admin') {
+    if (order.userId !== req.user.id && req.user.role !== 'admin') {
       return ApiResponse.forbidden(res, 'You can only track your own orders');
     }
 

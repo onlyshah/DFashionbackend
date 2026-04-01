@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const ServiceLoader = require('../services/ServiceLoader');
 const userService = ServiceLoader.loadService('userService');
+const models = require('../models');
 
 // @desc    Get all users (Admin only)
 // @route   GET /api/users
@@ -179,7 +180,7 @@ const updateUser = async (req, res) => {
     }
 
     // Check permissions (users can only update themselves unless admin)
-    if (req.user.userId !== id && !['admin', 'sales', 'marketing'].includes(req.user.role)) {
+    if (req.user.id !== id && !['admin', 'sales', 'marketing'].includes(req.user.role)) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized to update this user'
@@ -855,41 +856,34 @@ const getSuggestedUsers = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 6;
-    const skip = (page - 1) * limit;
+    const offset = (page - 1) * limit;
 
-    const suggestedUsers = await User.find({
-      isActive: true,
-      isVerified: true,
-      role: 'customer'
-    })
-      .select('username fullName avatar bio socialStats')
-      .sort({ 'socialStats.followersCount': -1, createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
+    const User = models._raw?.User || models.User;
+    const { count, rows } = await User.findAndCountAll({
+      where: { isActive: true, isVerified: true },
+      attributes: ['id', 'username', 'full_name', 'avatar_url', 'bio'],
+      order: [['id', 'DESC']],
+      offset,
+      limit
+    });
 
-    const transformedUsers = suggestedUsers.map(user => ({
-      id: user._id,
+    const transformedUsers = rows.map(user => ({
+      id: user.id,
       username: user.username,
-      fullName: user.fullName,
-      image: user.image || user.avatar || '/uploads/default-avatar.svg',
+      fullName: user.full_name,
+      image: user.avatar_url || '/uploads/default-avatar.svg',
       followedBy: `Followed by ${Math.floor(Math.random() * 50) + 10} others`,
       isFollowing: false
     }));
-
-    const total = await User.countDocuments({
-      isActive: true,
-      isVerified: true,
-      role: 'customer'
-    });
 
     res.json({
       success: true,
       data: transformedUsers,
       pagination: {
         current: page,
-        pages: Math.ceil(total / limit),
-        total,
-        hasNext: page < Math.ceil(total / limit),
+        pages: Math.ceil(count / limit),
+        total: count,
+        hasNext: page < Math.ceil(count / limit),
         hasPrev: page > 1
       }
     });
@@ -1063,3 +1057,4 @@ module.exports = {
   getLikedProducts,
   getLikedPosts
 };
+

@@ -666,11 +666,13 @@ exports.blockCustomer = async (req, res) => {
     const { reason } = req.body;
 
     const User = models.User;
-    const user = await User.findByIdAndUpdate(customerId, { isActive: false, blockedReason: reason }, { new: true });
-
+    const user = await User.findByPk(customerId);
+    
     if (!user) {
       return ApiResponse.notFound(res, 'Customer');
     }
+
+    await user.update({ isActive: false, blockedReason: reason });
 
     // Log action
     if (models.AdminAuditLog) {
@@ -701,11 +703,13 @@ exports.unblockCustomer = async (req, res) => {
 
     const { customerId } = req.params;
     const User = models.User;
-    const user = await User.findByIdAndUpdate(customerId, { isActive: true, blockedReason: null }, { new: true });
-
+    const user = await User.findByPk(customerId);
+    
     if (!user) {
       return ApiResponse.notFound(res, 'Customer');
     }
+
+    await user.update({ isActive: true, blockedReason: null });
 
     if (models.AdminAuditLog) {
       await models.AdminAuditLog.create({
@@ -743,11 +747,13 @@ exports.resetCustomerPassword = async (req, res) => {
     const bcrypt = require('bcryptjs');
     const User = models.User;
     const hashedPassword = await bcrypt.hash(newPassword, 12);
-    const user = await User.findByIdAndUpdate(customerId, { passwordHash: hashedPassword }, { new: true });
-
+    const user = await User.findByPk(customerId);
+    
     if (!user) {
       return ApiResponse.notFound(res, 'Customer');
     }
+
+    await user.update({ passwordHash: hashedPassword });
 
     if (models.AdminAuditLog) {
       await models.AdminAuditLog.create({

@@ -6,8 +6,7 @@
  * Database: PostgreSQL via Sequelize ORM
  */
 
-const dbType = (process.env.DB_TYPE || 'postgres').toLowerCase();
-const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
+const models = require('../models');
 const ApiResponse = require('../utils/ApiResponse');
 const { validatePagination } = require('../utils/validation');
 const { Op } = require('sequelize');
@@ -23,29 +22,58 @@ const STANDARD_SHIPPING = 100;
  */
 exports.getCart = async (req, res) => {
   try {
-    let cart = await models.Cart.findOne({
-      where: { user_id: req.user.id },
-      include: {
-        model: models.CartItem,
-        as: 'items',
+    let cart;
+    if (models.isPostgres) {
+      cart = await models.Cart.findOne({
+        where: { user_id: req.user.id },
         include: {
-          model: models.Product,
-          include: buildIncludeClause('Product')  // ← Full product with brand, category, seller
+          model: models.CartItem._model,
+          as: 'items',
+          include: {
+            model: models.Product._model,
+            include: [
+              { model: models.Brand._model, as: 'brand' },
+              { model: models.Category._model, as: 'category' },
+              { model: models.User._model, as: 'seller' }
+            ]
+          }
         }
-      }
-    });
+      });
+    } else {
+      // MongoDB implementation
+      cart = await models.Cart.findOne({ userId: req.user.id })
+        .populate({
+          path: 'items',
+          populate: {
+            path: 'product',
+            populate: ['brand', 'category', 'seller']
+          }
+        });
+    }
 
     // If no cart exists, create empty one
     if (!cart) {
-      cart = await models.Cart.create({
-        user_id: req.user.id,
-        items_count: 0,
-        subtotal: 0,
-        tax_amount: 0,
-        shipping_cost: 0,
-        total_amount: 0
-      });
-      cart.items = [];
+      if (models.isPostgres) {
+        cart = await models.Cart.create({
+          user_id: req.user.id,
+          items_count: 0,
+          subtotal: 0,
+          tax_amount: 0,
+          shipping_cost: 0,
+          total_amount: 0
+        });
+        cart.items = [];
+      } else {
+        cart = await models.Cart.create({
+          userId: req.user.id,
+          items: [],
+          itemsCount: 0,
+          subtotal: 0,
+          taxAmount: 0,
+          shippingCost: 0,
+          totalAmount: 0
+        });
+      }
     }
 
     // Calculate totals

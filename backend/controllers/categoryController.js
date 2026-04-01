@@ -4,8 +4,7 @@
  * Model → Controller → Routes pattern
  */
 
-const dbType = (process.env.DB_TYPE || '').toLowerCase();
-const models = dbType === 'postgres' ? require('../models_sql') : require('../models');
+const models = require('../models');
 const { Category, Product } = models;
 const { validateFK } = require('../utils/fkResponseFormatter');
 
@@ -19,22 +18,24 @@ exports.getAllCategories = async (req, res) => {
     const { limit = 50, level = 'parent' } = req.query;
 
     let categories = [];
-    
-    if (dbType === 'postgres' && Category) {
-      try {
-        // PostgreSQL: Use Sequelize findAll
-        const where = level === 'parent' ? { parentId: null } : {};
-        categories = await Category.findAll({
-          where,
-          include: [{ model: Category, as: 'subcategories', attributes: ['id', 'name'] }],
-          limit: parseInt(limit),
-          order: [['name', 'ASC']],
-          raw: true
-        });
-      } catch (postgresError) {
-        console.warn('[categoryController] PostgreSQL query failed:', postgresError.message);
-        categories = [];
-      }
+
+    if (models.isPostgres) {
+      // PostgreSQL implementation
+      const where = level === 'parent' ? { parentId: null } : {};
+      categories = await models.Category.findAll({
+        where,
+        include: [{ model: models.SubCategory._model, as: 'SubCategories', attributes: ['id', 'name'] }],
+        limit: parseInt(limit),
+        order: [['name', 'ASC']],
+        raw: true
+      });
+    } else {
+      // MongoDB implementation
+      const query = level === 'parent' ? { parentId: null } : {};
+      categories = await models.Category.find(query)
+        .populate('subcategories', 'id name')
+        .limit(parseInt(limit))
+        .sort({ name: 1 });
     }
 
     // If no data from database, return empty array
@@ -50,8 +51,7 @@ exports.getAllCategories = async (req, res) => {
     console.error('Get categories error:', error.message);
     res.status(500).json({
       success: false,
-      message: 'Failed to fetch categories',
-      data: []
+      error: error.message
     });
   }
 };
@@ -65,22 +65,22 @@ exports.getCategoryBySlug = async (req, res) => {
 
     let category;
     let subcategories;
-    
-    if (dbType === 'postgres') {
+
+    if (models.isPostgres) {
       // PostgreSQL: Use Sequelize findOne
-      category = await Category.findOne({ where: { slug } });
+      category = await models.Category.findOne({ where: { slug } });
       if (category) {
-        subcategories = await Category.findAll({
-          where: { parentId: category.id },
-          include: [{ model: Category, as: 'parent', attributes: ['id', 'name'] }],
+        subcategories = await models.SubCategory.findAll({
+          where: { categoryId: category.id },
+          include: [{ model: models.Category._model, as: 'Category', attributes: ['id', 'name'] }],
           raw: true
         });
       }
     } else {
       // MongoDB: Use Mongoose findOne
-      category = await Category.findOne({ slug });
+      category = await models.Category.findOne({ slug });
       if (category) {
-        subcategories = await Category.find({ parentId: category._id });
+        subcategories = await models.SubCategory.find({ categoryId: category._id });
       }
     }
 
@@ -121,9 +121,9 @@ exports.getCategoryProducts = async (req, res) => {
     let products;
     let total;
 
-    if (dbType === 'postgres') {
+    if (models.isPostgres) {
       // PostgreSQL: Use Sequelize
-      category = await Category.findOne({ where: { slug } });
+      category = await models.Category.findOne({ where: { slug } });
       if (!category) {
         return res.status(404).json({
           success: false,
@@ -135,7 +135,7 @@ exports.getCategoryProducts = async (req, res) => {
       const sortOrder = sort.startsWith('-') ? 'DESC' : 'ASC';
       const sortField = sort.replace('-', '');
 
-      const { count, rows } = await Product.findAndCountAll({
+      const { count, rows } = await models.Product.findAndCountAll({
         where: { categoryId: category.id },
         order: [[sortField, sortOrder]],
         offset: skip,
@@ -147,7 +147,7 @@ exports.getCategoryProducts = async (req, res) => {
       total = count;
     } else {
       // MongoDB: Use Mongoose
-      category = await Category.findOne({ slug });
+      category = await models.Category.findOne({ slug });
       if (!category) {
         return res.status(404).json({
           success: false,
@@ -155,12 +155,19 @@ exports.getCategoryProducts = async (req, res) => {
         });
       }
 
-      products = await Product.find({ category: category._id })
-        .sort(sort)
-        .skip(skip)
-        .limit(parseInt(limit));
+      // Parse sort parameter for MongoDB
+      const sortObj = {};
+      sortObj[sort.replace('-', '')] = sort.startsWith('-') ? -1 : 1;
 
-      total = await Product.countDocuments({ category: category._id });
+      const result = await models.Product.findAndCountAll({
+        categoryId: category._id,
+        sort: sortObj,
+        skip: skip,
+        limit: parseInt(limit)
+      });
+
+      products = result.rows;
+      total = result.count;
     }
 
     res.json({
@@ -200,7 +207,7 @@ exports.createCategory = async (req, res) => {
     let existing;
     let category;
 
-    if (dbType === 'postgres') {
+    if (models.isPostgres) {
       // PostgreSQL: Check with Sequelize
       existing = await Category.findOne({ where: { slug } });
       if (existing) {

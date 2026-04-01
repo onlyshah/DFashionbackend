@@ -29,7 +29,7 @@ class PostsController {
    */
   async createPost(req, res) {
     try {
-      const userId = req.user.userId;
+      const userId = req.user.id;
       const { caption, imageUrls, videoUrl, visibility = 'public', hashtags = [], mentions = [] } = req.body;
 
       // Validation
@@ -155,7 +155,7 @@ class PostsController {
   async updatePost(req, res) {
     try {
       const { postId } = req.params;
-      const userId = req.user.userId;
+      const userId = req.user.id;
       const { caption, visibility } = req.body;
 
       const post = await this.Post.findByPk(postId);
@@ -205,7 +205,7 @@ class PostsController {
   async deletePost(req, res) {
     try {
       const { postId } = req.params;
-      const userId = req.user.userId;
+      const userId = req.user.id;
 
       const post = await this.Post.findByPk(postId);
 
@@ -322,7 +322,7 @@ class PostsController {
   async likePost(req, res) {
     try {
       const { postId } = req.params;
-      const userId = req.user.userId;
+      const userId = req.user.id;
 
       const post = await this.Post.findByPk(postId);
 
@@ -380,7 +380,7 @@ class PostsController {
   async unlikePost(req, res) {
     try {
       const { postId } = req.params;
-      const userId = req.user.userId;
+      const userId = req.user.id;
 
       const like = await this.PostLike.findOne({
         where: { post_id: postId, user_id: userId }
@@ -462,3 +462,4 @@ class PostsController {
 }
 
 module.exports = PostsController;
+

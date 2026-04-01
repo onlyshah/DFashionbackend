@@ -1,31 +1,55 @@
 /**
  * Service Loader Utility
  * Dynamically loads orchestrator services
- * Orchestrators route to database-specific implementations
+ * Routes to database-specific implementations based on DB_TYPE
  */
 
-const dbType = (process.env.DB_TYPE || 'mongodb').toLowerCase();
+const dbType = (process.env.DB_TYPE || 'postgres').toLowerCase();
 const path = require('path');
 const fs = require('fs');
 
 class ServiceLoader {
   static getService(serviceName) {
     try {
-      // Load orchestrator service from /services directory
-      const servicePath = path.join(__dirname, '../services/', `${serviceName}Service.js`);
+      // First, try to load database-specific service
+      let servicePath;
+      if (dbType === 'postgres' || dbType === 'postgresql' || dbType === 'mysql') {
+        servicePath = path.join(__dirname, '../services/postgres/', `${this.toPascalCase(serviceName)}.js`);
+      } else {
+        servicePath = path.join(__dirname, '../services/mongodb/', `${this.toPascalCase(serviceName)}.js`);
+      }
       
       if (fs.existsSync(servicePath)) {
+        console.log(`[ServiceLoader] Loaded ${dbType} service: ${serviceName}`);
         return require(servicePath);
       }
 
-      // Fallback: return stub service
-      console.warn(`[ServiceLoader] Service '${serviceName}' not found, returning stub`);
+      // Fallback: try to load from main services directory
+      const mainServicePath = path.join(__dirname, '../services/', `${this.toPascalCase(serviceName)}.js`);
+      if (fs.existsSync(mainServicePath)) {
+        console.log(`[ServiceLoader] Loaded main service: ${serviceName}`);
+        return require(mainServicePath);
+      }
+
+      // If still not found, return a safe stub
+      console.warn(`[ServiceLoader] Service '${serviceName}' not found in ${dbType} services, returning stub`);
       return this.createStubService(serviceName);
       
     } catch (error) {
       console.error(`[ServiceLoader] Error loading ${serviceName}:`, error.message);
       return this.createStubService(serviceName);
     }
+  }
+
+  static toPascalCase(str) {
+    return str
+      .split(/[_-]/)
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join('');
+  }
+
+  static loadService(serviceName) {
+    return this.getService(serviceName);
   }
 
   static createStubService(serviceName) {
@@ -43,7 +67,7 @@ class ServiceLoader {
   }
 
   static isPostgres() {
-    return dbType === 'postgres';
+    return dbType === 'postgres' || dbType === 'postgresql';
   }
 
   static isMongoDB() {

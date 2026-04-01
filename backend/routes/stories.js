@@ -4,6 +4,7 @@ const storiesController = require('../controllers/storiesController');
 const { auth, optionalAuth } = require('../middleware/auth');
 
 router.get('/', optionalAuth, storiesController.getAllStories);
+router.get('/preview', optionalAuth, storiesController.getStoriesPreview);
 router.post('/', auth, storiesController.createStory);
 router.get('/:storyId', optionalAuth, storiesController.getStoryById);
 router.put('/:storyId', auth, storiesController.updateStory);

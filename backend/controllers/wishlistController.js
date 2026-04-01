@@ -4,9 +4,7 @@
  * Model → Controller → Routes pattern
  */
 
-const dbType = (process.env.DB_TYPE || '').toLowerCase();
-const models = dbType === 'postgres' ? require('../models_sql') : require('../models');
-const { Wishlist, Product, Cart } = models;
+const models = require('../models');
 
 // ==================== WISHLIST OPERATIONS ====================
 
@@ -19,8 +17,14 @@ exports.getWishlist = async (req, res) => {
     if (!req.user) {
       return res.json({
         success: true,
-        data: {
+        wishlist: {
           items: [],
+          itemCount: 0
+        },
+        summary: {
+          totalItems: 0,
+          totalValue: 0,
+          totalSavings: 0,
           itemCount: 0
         },
         pagination: {
@@ -32,39 +36,101 @@ exports.getWishlist = async (req, res) => {
       });
     }
 
+    // Get lazy-loaded models
+    const Wishlist = models.Wishlist;
+    const Product = models.Product;
+
+    if (!Wishlist) {
+      console.error('[wishlistController] Wishlist model not available');
+      return res.status(500).json({
+        success: false,
+        message: 'Models not initialized - Wishlist unavailable',
+        data: null
+      });
+    }
+
+    if (!Product) {
+      console.error('[wishlistController] Product model not available');
+      return res.status(500).json({
+        success: false,
+        message: 'Models not initialized - Product unavailable',
+        data: null
+      });
+    }
+
     const { page = 1, limit = 12 } = req.query;
     const offset = (page - 1) * limit;
 
-    // Get wishlist items for user with pagination
-    const { count, rows } = await Wishlist.findAndCountAll({
-      where: { userId: req.user.userId },
-      offset,
-      limit: parseInt(limit),
-      order: [['addedAt', 'DESC']],
-      attributes: ['id', 'productId', 'addedAt']
-    });
+    let wishlistItems;
+    let total;
+
+    if (models.isPostgres) {
+      // PostgreSQL implementation
+      const result = await Wishlist.findAndCountAll({
+        where: { userId: req.user.id },
+        offset,
+        limit: parseInt(limit),
+        order: [['addedAt', 'DESC']],
+        attributes: ['id', 'productId', 'addedAt']
+      });
+
+      wishlistItems = result.rows;
+      total = result.count;
+    } else {
+      // MongoDB implementation
+      const result = await Wishlist.findAndCountAll({
+        userId: req.user.id,
+        skip: offset,
+        limit: parseInt(limit),
+        sort: { addedAt: -1 }
+      });
+
+      wishlistItems = result.rows;
+      total = result.count;
+    }
 
     // Get product details
-    const productIds = rows.map(item => item.productId);
-    const products = productIds.length > 0 ? await Product.findAll({
-      where: { id: productIds },
-      attributes: ['id', 'name', 'price', 'images', 'brand', 'category', 'stock', 'rating']
-    }) : [];
+    const productIds = wishlistItems.map(item => item.productId || item.product_id);
+    let products = [];
+
+    if (productIds.length > 0) {
+      if (models.isPostgres) {
+        products = await Product.findAll({
+          where: { id: productIds },
+          attributes: ['id', 'name', 'price', 'images', 'brand', 'category', 'stock', 'rating']
+        });
+      } else {
+        products = await Product.findAll({
+          _id: { $in: productIds }
+        });
+      }
+    }
 
     // Map wishlist items with product details
-    const items = rows.map(item => {
-      const product = products.find(p => p.id === item.productId);
+    const items = wishlistItems.map(item => {
+      const productId = item.productId || item.product_id;
+      const product = products.find(p => (p.id || p._id) === productId);
       return {
-        id: item.id,
-        productId: item.productId,
-        addedAt: item.addedAt,
+        id: item.id || item._id,
+        productId: productId,
+        addedAt: item.addedAt || item.added_at,
         product: product || null
       };
     });
 
+    // Calculate summary
+    const totalValue = items.reduce((sum, item) => sum + (item.product?.price || 0), 0);
+    const summary = {
+      totalItems: total,
+      totalValue: totalValue,
+      totalSavings: 0, // Calculate if original prices available
+      itemCount: total
+    };
+
     res.json({
       success: true,
-      data: { items, itemCount: count },
+      wishlist: { items, itemCount: count },
+      summary: summary,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
@@ -87,6 +153,18 @@ exports.getWishlist = async (req, res) => {
  */
 exports.addToWishlist = async (req, res) => {
   try {
+    // Get lazy-loaded models
+    const Wishlist = models.Wishlist;
+    const Product = models.Product;
+
+    if (!Wishlist || !Product) {
+      return res.status(500).json({
+        success: false,
+        message: 'Models not initialized',
+        data: null
+      });
+    }
+
     const { productId } = req.body;
 
     if (!productId) {
@@ -107,7 +185,7 @@ exports.addToWishlist = async (req, res) => {
 
     // Check if product already in wishlist
     const exists = await Wishlist.findOne({
-      where: { userId: req.user.userId, productId }
+      where: { userId: req.user.id, productId }
     });
 
     if (exists) {
@@ -119,7 +197,7 @@ exports.addToWishlist = async (req, res) => {
 
     // Add product to wishlist
     const wishlistItem = await Wishlist.create({
-      userId: req.user.userId,
+      userId: req.user.id,
       productId,
       addedAt: new Date()
     });
@@ -148,6 +226,17 @@ exports.addToWishlist = async (req, res) => {
  */
 exports.removeFromWishlist = async (req, res) => {
   try {
+    // Get lazy-loaded models
+    const Wishlist = models.Wishlist;
+
+    if (!Wishlist) {
+      return res.status(500).json({
+        success: false,
+        message: 'Models not initialized',
+        data: null
+      });
+    }
+
     const { itemId } = req.params;
 
     if (!itemId) {
@@ -166,7 +255,7 @@ exports.removeFromWishlist = async (req, res) => {
     }
 
     // Verify ownership
-    if (wishlistItem.userId !== req.user.userId) {
+    if (wishlistItem.userId !== req.user.id) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized'
@@ -194,6 +283,19 @@ exports.removeFromWishlist = async (req, res) => {
  */
 exports.moveToCart = async (req, res) => {
   try {
+    // Get lazy-loaded models
+    const Wishlist = models.Wishlist;
+    const Product = models.Product;
+    const Cart = models.Cart;
+
+    if (!Wishlist || !Product || !Cart) {
+      return res.status(500).json({
+        success: false,
+        message: 'Models not initialized',
+        data: null
+      });
+    }
+
     const { itemId, quantity = 1 } = req.body;
 
     if (!itemId) {
@@ -212,7 +314,7 @@ exports.moveToCart = async (req, res) => {
     }
 
     // Verify ownership
-    if (wishlistItem.userId !== req.user.userId) {
+    if (wishlistItem.userId !== req.user.id) {
       return res.status(403).json({
         success: false,
         message: 'Not authorized'
@@ -230,7 +332,7 @@ exports.moveToCart = async (req, res) => {
 
     // Add to cart or update existing cart item
     const cartItem = await Cart.findOne({
-      where: { userId: req.user.userId, productId: wishlistItem.productId }
+      where: { userId: req.user.id, productId: wishlistItem.productId }
     });
 
     if (cartItem) {
@@ -238,7 +340,7 @@ exports.moveToCart = async (req, res) => {
       await cartItem.save();
     } else {
       await Cart.create({
-        userId: req.user.userId,
+        userId: req.user.id,
         productId: wishlistItem.productId,
         quantity,
         addedAt: new Date()
@@ -267,6 +369,18 @@ exports.moveToCart = async (req, res) => {
  */
 exports.likeProduct = async (req, res) => {
   try {
+    // Get lazy-loaded models
+    const Wishlist = models.Wishlist;
+    const Product = models.Product;
+
+    if (!Wishlist || !Product) {
+      return res.status(500).json({
+        success: false,
+        message: 'Models not initialized',
+        data: null
+      });
+    }
+
     const { productId } = req.body;
 
     if (!productId) {
@@ -286,7 +400,7 @@ exports.likeProduct = async (req, res) => {
     }
 
     const exists = await Wishlist.findOne({
-      where: { userId: req.user.userId, productId }
+      where: { userId: req.user.id, productId }
     });
 
     if (exists) {
@@ -297,7 +411,7 @@ exports.likeProduct = async (req, res) => {
     }
 
     const wishlistItem = await Wishlist.create({
-      userId: req.user.userId,
+      userId: req.user.id,
       productId,
       addedAt: new Date()
     });
@@ -320,3 +434,4 @@ exports.likeProduct = async (req, res) => {
     });
   }
 };
+

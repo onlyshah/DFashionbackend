@@ -23,11 +23,12 @@ async function seedShipments() {
     if (!Shipment || !Shipment.create) throw new Error('Shipment model not available');
     if (!Order || !Order.findAll) throw new Error('Order model not available');
 
-    const orders = await Order.findAll({ where: { status: 'shipped' } });
+    // Find ANY orders (not just shipped ones) - shipment seeder can pick from any
+    const orders = await Order.findAll({ limit: 4 });
     const courier = Courier && await Courier.findOne();
 
     if (orders.length === 0) {
-      console.log(`⚠️ No shipped orders found. Skipping shipment seeding.`);
+      console.log(`⚠️ No orders found. Skipping shipment seeding.`);
       return true;
     }
 

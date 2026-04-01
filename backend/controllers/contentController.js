@@ -4,8 +4,7 @@ const DataValidationService = require('../services/utils/dataValidationService')
 const RewardService = ServiceLoader.loadService('rewardService');
 
 // Load models with DB type awareness
-const dbType = (process.env.DB_TYPE || 'postgres').toLowerCase();
-const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
+const models = require('../models');
 const { Post, Story, Reel, User } = models;
 
 const multer = require('multer');

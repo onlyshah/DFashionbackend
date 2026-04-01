@@ -145,6 +145,7 @@ const optionalAuth = async (req, res, next) => {
       
       if (user) {
         req.user = {
+          id: user.id,
           userId: user.id,
           _id: user.id,
           email: user.email,
@@ -201,7 +202,7 @@ const requireRole = (roles) => {
         const Role = models._raw?.Role || models.Role;
 
         if (User && Role) {
-          const currentUser = await User.findByPk(req.user.id || req.user.userId);
+          const currentUser = await User.findByPk(req.user.id);
           const userRole = await Role.findByPk(currentUser.roleId);
 
           if (!currentUser || !userRole) {
@@ -253,7 +254,7 @@ const requireRole = (roles) => {
 const isApprovedVendor = async (req, res, next) => {
   try {
     if (req.user.role === 'vendor') {
-      const vendor = await User.findById(req.user.userId);
+      const vendor = await User.findByPk(req.user.id);
 
       if (!vendor || vendor.vendorVerification.status !== 'approved') {
         return res.status(403).json({
@@ -368,7 +369,7 @@ const allowResourceOwnerOrRoles = (modelName, idParam, ownerField, roles) => {
 
       const ownerId = resource[ownerField] ? resource[ownerField].toString() : null;
 
-      if (ownerId && ownerId === (req.user._id || req.user.userId).toString()) {
+      if (ownerId && ownerId === (req.user.id && req.user.id.toString())) {
         return next();
       }
 

@@ -69,6 +69,7 @@ const defineModule = require('./Module');
 const defineRolePermission = require('./RolePermission');
 const defineSession = require('./Session');
 const defineCart = require('./Cart');
+const defineCartItem = require('./CartItem');
 const defineWishlist = require('./Wishlist');
 const defineOrder = require('./Order');
 const definePayment = require('./Payment');
@@ -118,7 +119,8 @@ const createNullStub = (name) => {
     update: async () => null,
     destroy: async () => null,
     findOne: async () => null,
-    count: async () => 0
+    count: async () => 0,
+    findAndCountAll: async () => ({ rows: [], count: 0 })
   };
 };
 
@@ -140,6 +142,7 @@ const Module = defineModelSafely(defineModule, 'Module') || createNullStub('Modu
 const RolePermission = defineModelSafely(defineRolePermission, 'RolePermission') || createNullStub('RolePermission');
 const Session = defineModelSafely(defineSession, 'Session') || createNullStub('Session');
 const Cart = defineModelSafely(defineCart, 'Cart') || createNullStub('Cart');
+const CartItem = defineModelSafely(defineCartItem, 'CartItem') || createNullStub('CartItem');
 const Wishlist = defineModelSafely(defineWishlist, 'Wishlist') || createNullStub('Wishlist');
 const Order = defineModelSafely(defineOrder, 'Order') || createNullStub('Order');
 const Payment = defineModelSafely(definePayment, 'Payment') || createNullStub('Payment');
@@ -495,6 +498,7 @@ const wrappedModule = createMongooseLikeWrapper(Module, defineModule, 'Module');
 const wrappedRolePermission = createMongooseLikeWrapper(RolePermission, defineRolePermission, 'RolePermission');
 const wrappedSession = createMongooseLikeWrapper(Session, defineSession, 'Session');
 const wrappedCart = createMongooseLikeWrapper(Cart, defineCart, 'Cart');
+const wrappedCartItem = createMongooseLikeWrapper(CartItem, defineCartItem, 'CartItem');
 const wrappedWishlist = createMongooseLikeWrapper(Wishlist, defineWishlist, 'Wishlist');
 const wrappedOrder = createMongooseLikeWrapper(Order, defineOrder, 'Order');
 const wrappedPayment = createMongooseLikeWrapper(Payment, definePayment, 'Payment');
@@ -599,16 +603,22 @@ const setupAssociations = (models_obj) => {
   // 8. Cart ↔ User
   if (Cart && Cart.belongsTo && User && User.hasMany) {
     Cart.belongsTo(User, { foreignKey: 'userId', as: 'user' });
-    User.hasMany(Cart, { foreignKey: 'userId', as: 'cartItems' });
+    User.hasMany(Cart, { foreignKey: 'userId', as: 'carts' });
   }
 
-  // 9. Cart ↔ Product
-  if (Cart && Cart.belongsTo && Product && Product.hasMany) {
-    Cart.belongsTo(Product, { foreignKey: 'productId', as: 'product' });
-    Product.hasMany(Cart, { foreignKey: 'productId', as: 'cartItems' });
+  // 9. CartItem ↔ Cart
+  if (CartItem && CartItem.belongsTo && Cart && Cart.hasMany) {
+    CartItem.belongsTo(Cart, { foreignKey: 'cartId', as: 'cart' });
+    Cart.hasMany(CartItem, { foreignKey: 'cartId', as: 'items' });
   }
 
-  // 10. Wishlist ↔ User
+  // 10. CartItem ↔ Product
+  if (CartItem && CartItem.belongsTo && Product && Product.hasMany) {
+    CartItem.belongsTo(Product, { foreignKey: 'productId', as: 'product' });
+    Product.hasMany(CartItem, { foreignKey: 'productId', as: 'cartItems' });
+  }
+
+  // 11. Wishlist ↔ User
   if (Wishlist && Wishlist.belongsTo && User && User.hasMany) {
     Wishlist.belongsTo(User, { foreignKey: 'userId', as: 'user' });
     User.hasMany(Wishlist, { foreignKey: 'userId', as: 'wishlistItems' });
@@ -756,7 +766,7 @@ const setupAssociations = (models_obj) => {
 // Call setupAssociations with initial models
 setupAssociations({
   Category, SubCategory, User, Role, Department, RolePermission, Permission,
-  Product, Brand, Cart, Wishlist, Order, Payment, Return, Shipment, Courier,
+  Product, Brand, Cart, CartItem, Wishlist, Order, Payment, Return, Shipment, Courier,
   ProductComment, Post, Story, Reel, LiveStream, Transaction, AuditLog, Ticket,
   Notification, SellerCommission, SellerPerformance, KYCDocument, Inventory, Warehouse
 });
@@ -791,6 +801,7 @@ const reinitializeModels = async () => {
       const RolePermission_new = defineRolePermission(instance, DataTypes);
       const Session_new = defineSession(instance, DataTypes);
       const Cart_new = defineCart(instance, DataTypes);
+      const CartItem_new = defineCartItem(instance, DataTypes);
       const Wishlist_new = defineWishlist(instance, DataTypes);
       const Order_new = defineOrder(instance, DataTypes);
       const Payment_new = definePayment(instance, DataTypes);
@@ -849,6 +860,7 @@ const reinitializeModels = async () => {
         RolePermission: RolePermission_new,
         Session: Session_new,
         Cart: Cart_new,
+        CartItem: CartItem_new,
         Wishlist: Wishlist_new,
         Order: Order_new,
         Payment: Payment_new,
@@ -893,7 +905,7 @@ const reinitializeModels = async () => {
       setupAssociations({
         Category: Category_new, SubCategory: SubCategory_new, User: User_new, Role: Role_new,
         Department: Department_new, RolePermission: RolePermission_new, Permission: Permission_new,
-        Product: Product_new, Brand: Brand_new, Cart: Cart_new, Wishlist: Wishlist_new,
+        Product: Product_new, Brand: Brand_new, Cart: Cart_new, CartItem: CartItem_new, Wishlist: Wishlist_new,
         Order: Order_new, Payment: Payment_new, Return: Return_new, Shipment: Shipment_new,
         Courier: Courier_new, ProductComment: ProductComment_new, Post: Post_new, Story: Story_new,
         Reel: Reel_new, LiveStream: LiveStream_new, Transaction: Transaction_new, AuditLog: AuditLog_new,
@@ -934,6 +946,7 @@ module.exports = {
   RolePermission: wrappedRolePermission,
   Session: wrappedSession,
   Cart: wrappedCart,
+  CartItem: wrappedCartItem,
   Wishlist: wrappedWishlist,
   Order: wrappedOrder,
   Payment: wrappedPayment,
@@ -991,6 +1004,7 @@ module.exports = {
     RolePermission,
     Session,
     Cart,
+    CartItem,
     Wishlist,
     Order,
     Payment,

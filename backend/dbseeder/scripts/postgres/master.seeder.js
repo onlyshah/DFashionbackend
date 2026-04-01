@@ -142,7 +142,17 @@ async function runMasterSeeder() {
       logger.success('Models reinitialized');
     }
 
-    // Step 3: Execute seeders in phases
+    // Step 3: Sync database (create tables)
+    logger.info('Syncing database schema (creating tables)...');
+    try {
+      await sequelize.sync({ alter: false, force: false });
+      logger.success('Database schema synced - all tables created');
+    } catch (syncError) {
+      // Log but continue - tables might already exist
+      logger.warn(`Database sync note: ${syncError.message}`);
+    }
+
+    // Step 4: Execute seeders in phases
     let totalSeeded = 0;
     const seedersDir = __dirname;
 

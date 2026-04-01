@@ -9,7 +9,7 @@ const cors = require('cors');
 const http = require('http');
 const mongoose = require('mongoose');
 const fs = require('fs');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 // Local modules
 const ServiceLoader = require('./services/ServiceLoader');
@@ -149,6 +149,43 @@ const ensureStaticCors = (req, res, next) => {
 
 app.use('/uploads', ensureStaticCors);
 app.use('/assets', ensureStaticCors);
+
+// -------- Middleware to serve default images when files are missing --------
+const serveDefaultImage = (req, res, next) => {
+  const filePath = path.join(uploadsPath, req.path);
+  
+  // Check if file exists
+  if (fs.existsSync(filePath)) {
+    return next(); // File exists, let it be served
+  }
+  
+  // Determine which default image to serve based on path
+  let defaultFile = null;
+  
+  if (req.path.includes('/avatars/') || req.path.includes('/avatar')) {
+    defaultFile = path.join(uploadsPath, 'avatars', 'default-avatar.svg');
+  } else if (req.path.includes('/products/') || req.path.includes('/product')) {
+    defaultFile = path.join(uploadsPath, 'default-product.svg');
+  } else if (req.path.includes('/stories/') || req.path.includes('/story')) {
+    defaultFile = path.join(uploadsPath, 'default-story.svg');
+  } else if (req.path.includes('/posts/') || req.path.includes('/post')) {
+    defaultFile = path.join(uploadsPath, 'default-post.svg');
+  } else if (req.path.includes('/brands/')) {
+    defaultFile = path.join(uploadsPath, 'default-product.svg');
+  }
+  
+  // Serve default image if found
+  if (defaultFile && fs.existsSync(defaultFile)) {
+    console.log(`[Uploads] Serving default image for missing: ${req.path}`);
+    setStaticFileHeaders(res);
+    return res.sendFile(defaultFile);
+  }
+  
+  // No default found, continue to 404
+  next();
+};
+
+app.use('/uploads', serveDefaultImage);
 
 // Ensure critical paths exist and are accessible
 [
@@ -301,7 +338,8 @@ safeMount('/api/posts', './routes/posts');
 safeMount('/api/products', './routes/products');
 safeMount('/api/users', './routes/users');
 safeMount('/api/cart-new', './routes/cart');
- safeMount('/api/wishlist', './routes/wishlist');
+safeMount('/api/wishlist', './routes/wishlist');
+safeMount('/api/wishlist-new', './routes/wishlist');
 safeMount('/api/orders', './routes/orders');
 safeMount('/api/payments', './routes/payments');
 safeMount('/api/checkout', './routes/checkout');
@@ -397,6 +435,12 @@ const startServer = async () => {
         console.log('🔌 Attempting to connect to PostgreSQL...');
         const pg = await connectPostgres();
         if (!pg) throw new Error('Postgres connection returned null');
+        // Reinitialize models with active connection (use models_sql for PostgreSQL)
+        const models = require('./models_sql');
+        if (models.reinitializeModels) {
+          await models.reinitializeModels();
+        }
+        console.log('✅ PostgreSQL (Sequelize) connected successfully');
         // Mark DB available for metrics
         dataProvider.enableDb();
       } catch (err) {
@@ -427,7 +471,7 @@ const startServer = async () => {
       console.log('ℹ️ Skipping MongoDB connection (DB_TYPE=' + dbType + ')');
     }
 
-    const PORT = process.env.PORT || 9000;
+    const PORT = process.env.PORT || 3000;
     const server = http.createServer(app);
 
     // Initialize Socket.IO

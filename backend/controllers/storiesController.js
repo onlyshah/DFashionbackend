@@ -50,13 +50,41 @@ exports.getAllStories = async (req, res) => {
 };
 
 /**
+ * Get stories preview (limited set for homepage/sidebar)
+ */
+exports.getStoriesPreview = async (req, res) => {
+  try {
+    const limit = 5; // Show 5 stories in preview
+
+    const { rows } = await models.Story.findAndCountAll({
+      where: {
+        expires_at: { [Op.gt]: new Date() }
+      },
+      include: {
+        model: models.User,
+        as: 'creator',
+        attributes: ['id', 'username', 'full_name', 'avatar_url']
+      },
+      order: [['createdAt', 'DESC']],
+      limit,
+      distinct: true
+    });
+
+    return ApiResponse.success(res, rows, 'Stories preview retrieved successfully');
+  } catch (error) {
+    console.error('❌ getStoriesPreview error:', error);
+    return ApiResponse.serverError(res, error);
+  }
+};
+
+/**
  * Get story by ID
  */
 exports.getStoryById = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { storyId } = req.params;
 
-    const story = await models.Story.findByPk(id, {
+    const story = await models.Story.findByPk(storyId, {
       include: {
         model: models.User,
         as: 'creator',

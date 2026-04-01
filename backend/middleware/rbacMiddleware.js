@@ -114,6 +114,7 @@ const rbacAuth = async (req, res, next) => {
     try {
       const decoded = jwt.verify(token, JWT_SECRET);
       req.user = {
+        id: decoded.userId,
         userId: decoded.userId,
         email: decoded.email,
         role: decoded.role,
@@ -256,7 +257,7 @@ const requireOwnershipOrAdmin = (resourceOwnerId) => {
       });
     }
 
-    const isOwner = req.user.userId === resourceOwnerId;
+    const isOwner = req.user.id === resourceOwnerId;
     const isAdmin = ROLE_HIERARCHY[req.user.role] <= ROLE_HIERARCHY['admin'];
 
     if (!isOwner && !isAdmin) {
@@ -265,7 +266,7 @@ const requireOwnershipOrAdmin = (resourceOwnerId) => {
         message: 'Access denied. You do not own this resource',
         code: 'NOT_RESOURCE_OWNER',
         ownerId: resourceOwnerId,
-        userId: req.user.userId
+        userId: req.user.id
       });
     }
 
@@ -284,6 +285,7 @@ const optionalRbacAuth = (req, res, next) => {
     if (token) {
       const decoded = jwt.verify(token, JWT_SECRET);
       req.user = {
+        id: decoded.userId,
         userId: decoded.userId,
         email: decoded.email,
         role: decoded.role,
@@ -451,3 +453,4 @@ module.exports = {
   ROLE_HIERARCHY,
   ROLE_PERMISSIONS
 };
+
