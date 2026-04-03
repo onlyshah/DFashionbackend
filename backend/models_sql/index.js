@@ -182,6 +182,48 @@ const FeatureFlag = defineModelSafely(defineFeatureFlag, 'FeatureFlag') || creat
 const SmartCollection = defineModelSafely(defineSmartCollection, 'SmartCollection') || createNullStub('SmartCollection');
 const Upload = defineModelSafely(defineUpload, 'Upload') || createNullStub('Upload');
 
+// Helper functions to normalize include model references so wrapper models can be used in Sequelize include
+const getRawModelFromWrapper = (possibleModel) => {
+  if (!possibleModel) return possibleModel;
+  if (typeof possibleModel.getTableName === 'function') {
+    return possibleModel;
+  }
+  if (possibleModel._sequelize && typeof possibleModel._sequelize.getTableName === 'function') {
+    return possibleModel._sequelize;
+  }
+  // fallback: if this looks like a wrapped model object from models_sql, attempt to resolve via _raw if available
+  if (possibleModel._raw) {
+    return possibleModel._raw;
+  }
+  return possibleModel;
+};
+
+const normalizeIncludeModels = (include) => {
+  if (!include) return include;
+  if (Array.isArray(include)) {
+    return include.map(normalizeIncludeModels);
+  }
+
+  const normalizedInclude = { ...include };
+  if (normalizedInclude.model) {
+    normalizedInclude.model = getRawModelFromWrapper(normalizedInclude.model);
+  }
+
+  if (normalizedInclude.include) {
+    normalizedInclude.include = normalizeIncludeModels(normalizedInclude.include);
+  }
+
+  return normalizedInclude;
+};
+
+const normalizeOptions = (options = {}) => {
+  const normalized = { ...options };
+  if (normalized.include) {
+    normalized.include = normalizeIncludeModels(normalized.include);
+  }
+  return normalized;
+};
+
 // SequelizeQueryWrapper class - provides Promise-based chainable interface
 class SequelizeQueryWrapper {
   constructor(sequelizeModel) {
@@ -310,10 +352,12 @@ const createMongooseLikeWrapper = (sequelizeModel, defineFunc, modelName) => {
       try {
         const model = await getActualModel();
         if (query && query.where) {
-          const result = await model.findOne({ ...query, raw: true });
+          const normalizedQuery = normalizeOptions(query);
+          const result = await model.findOne({ ...normalizedQuery, raw: true });
           return result || null;
         }
-        const result = await model.findOne({ where: query, raw: true });
+        const normalizedQuery = normalizeOptions({ where: query });
+        const result = await model.findOne({ ...normalizedQuery, raw: true });
         return result || null;
       } catch (err) {
         console.error(`Error in findOne for ${modelName}:`, err);
@@ -373,9 +417,10 @@ const createMongooseLikeWrapper = (sequelizeModel, defineFunc, modelName) => {
     // Sequelize-style findAll() method
     findAll: async (options = {}) => {
       try {
-        console.log(`[WRAPPER] findAll called on ${modelName} with options:`, JSON.stringify(options));
+        const normalizedOptions = normalizeOptions(options);
+        console.log(`[WRAPPER] findAll called on ${modelName} with options:`, JSON.stringify(normalizedOptions));
         const model = await getActualModel();
-        const result = await model.findAll(options);
+        const result = await model.findAll(normalizedOptions);
         console.log(`[WRAPPER] findAll result count:`, result?.length);
         return result;
       } catch (err) {
@@ -387,19 +432,20 @@ const createMongooseLikeWrapper = (sequelizeModel, defineFunc, modelName) => {
     // Sequelize-style findAndCountAll() - used by admin controllers
     findAndCountAll: async (options = {}) => {
       try {
-        console.log(`[WRAPPER] findAndCountAll called on ${modelName} with options:`, JSON.stringify(options));
+        const normalizedOptions = normalizeOptions(options);
+        console.log(`[WRAPPER] findAndCountAll called on ${modelName} with options:`, JSON.stringify(normalizedOptions));
         const model = await getActualModel();
         if (model.findAndCountAll && typeof model.findAndCountAll === 'function') {
-          const result = await model.findAndCountAll(options);
+          const result = await model.findAndCountAll(normalizedOptions);
           return result;
         }
 
         // Fallback: emulate findAndCountAll using the actual Sequelize model where possible
         const realModel = model && model.findAll ? model : (module.exports._raw && module.exports._raw[modelName] ? module.exports._raw[modelName] : null);
-        const rows = realModel && realModel.findAll ? await realModel.findAll(options) : [];
+        const rows = realModel && realModel.findAll ? await realModel.findAll(normalizedOptions) : [];
         // Count respects where clause if provided
         const countOptions = {};
-        if (options && options.where) countOptions.where = options.where;
+        if (normalizedOptions && normalizedOptions.where) countOptions.where = normalizedOptions.where;
         const count = realModel && realModel.count ? await realModel.count(countOptions) : 0;
         return { rows, count };
       } catch (err) {

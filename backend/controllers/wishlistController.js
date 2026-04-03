@@ -4,7 +4,8 @@
  * Model → Controller → Routes pattern
  */
 
-const models = require('../models');
+const dbType = process.env.DB_TYPE || 'mongodb';
+const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 
 // ==================== WISHLIST OPERATIONS ====================
 
@@ -129,13 +130,13 @@ exports.getWishlist = async (req, res) => {
 
     res.json({
       success: true,
-      wishlist: { items, itemCount: count },
+      wishlist: { items, itemCount: total },
       summary: summary,
       pagination: {
         page: parseInt(page),
         limit: parseInt(limit),
-        total: count,
-        totalPages: Math.ceil(count / limit)
+        total: total,
+        totalPages: Math.ceil(total / limit)
       }
     });
   } catch (error) {

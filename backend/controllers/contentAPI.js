@@ -1,4 +1,5 @@
-const models = require('../models');
+const dbType = process.env.DB_TYPE || 'mongodb';
+const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 
 exports.getTrending = async (req, res) => {
   try {
@@ -179,36 +180,19 @@ exports.getInfluencers = async (req, res) => {
     const { page = 1, limit = 10 } = req.query;
     const offset = (page - 1) * limit;
 
-    let users;
-    let total;
+    const User = models._raw?.User || models.User;
 
-    if (models.isPostgres) {
-      const result = await models.User.findAndCountAll({
-        where: { isInfluencer: true, isActive: true },
-        limit: +limit,
-        offset: +offset,
-        order: [['createdAt', 'DESC']]
-      });
-
-      users = result.rows;
-      total = result.count;
-    } else {
-      const result = await models.User.findAndCountAll({
-        isInfluencer: true,
-        isActive: true,
-        skip: offset,
-        limit: +limit,
-        sort: { createdAt: -1 }
-      });
-
-      users = result.rows;
-      total = result.count;
-    }
+    const result = await User.findAndCountAll({
+      where: { isInfluencer: true, isActive: true },
+      limit: +limit,
+      offset: +offset,
+      order: [['created_at', 'DESC']]
+    });
 
     res.json({
       success: true,
-      data: users,
-      pagination: { page: +page, limit: +limit, total: total, pages: Math.ceil(total / limit) }
+      data: result.rows,
+      pagination: { page: +page, limit: +limit, total: result.count, pages: Math.ceil(result.count / limit) }
     });
   } catch (error) {
     console.error('[getInfluencers] Error:', error.message);

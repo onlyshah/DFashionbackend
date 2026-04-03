@@ -4,7 +4,8 @@
  * Model → Controller → Routes pattern
  */
 
-const models = require('../models');
+const dbType = process.env.DB_TYPE || 'mongodb';
+const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 const { Category, Product } = models;
 const { validateFK } = require('../utils/fkResponseFormatter');
 
@@ -19,21 +20,16 @@ exports.getAllCategories = async (req, res) => {
 
     let categories = [];
 
-    if (models.isPostgres) {
+    if (dbType.includes('postgres')) {
       // PostgreSQL implementation
-      const where = level === 'parent' ? { parentId: null } : {};
       categories = await models.Category.findAll({
-        where,
-        include: [{ model: models.SubCategory._model, as: 'SubCategories', attributes: ['id', 'name'] }],
         limit: parseInt(limit),
         order: [['name', 'ASC']],
         raw: true
       });
     } else {
       // MongoDB implementation
-      const query = level === 'parent' ? { parentId: null } : {};
-      categories = await models.Category.find(query)
-        .populate('subcategories', 'id name')
+      categories = await models.Category.find({})
         .limit(parseInt(limit))
         .sort({ name: 1 });
     }

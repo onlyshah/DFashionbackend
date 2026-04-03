@@ -17,6 +17,7 @@ router.get('/vendors', auth, requireRole(['end_user']), cartController.getCartBy
 router.post('/move-to-wishlist/:itemId', auth, requireRole(['end_user']), cartController.moveToWishlist);
 router.post('/recalculate', auth, requireRole(['end_user']), cartController.recalculateCart);
 router.get('/count', auth, requireRole(['end_user']), cartController.getCartItemCount);
+router.get('/total-count', auth, requireRole(['end_user']), cartController.getCartTotalCount);
 router.get('/debug', auth, requireRole(['end_user']), cartController.debugCart);
 
 module.exports = router;

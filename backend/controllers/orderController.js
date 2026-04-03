@@ -6,7 +6,8 @@
  * Database: PostgreSQL/MongoDB via unified models
  */
 
-const models = require('../models');
+const dbType = process.env.DB_TYPE || 'mongodb';
+const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 const ApiResponse = require('../utils/ApiResponse');
 const { validatePagination } = require('../utils/validation');
 const { formatPaginatedResponse, formatSingleResponse, validateMultipleFK } = require('../utils/fkResponseFormatter');

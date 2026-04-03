@@ -100,7 +100,9 @@ async function seedUsers() {
         isVerified: true,
         isEmailVerified: true,
         twoFactorEnabled: false,
-        loginAttempts: 0
+        loginAttempts: 0,
+        isInfluencer: true,
+        followersCount: 15000
       },
       {
         username: 'customer2',
@@ -115,7 +117,9 @@ async function seedUsers() {
         isVerified: true,
         isEmailVerified: true,
         twoFactorEnabled: false,
-        loginAttempts: 0
+        loginAttempts: 0,
+        isInfluencer: true,
+        followersCount: 25000
       },
       ...(marketingManagerRole ? [{
         username: 'marketing_mgr',
@@ -141,7 +145,19 @@ async function seedUsers() {
       });
 
       if (existing) {
-        console.log(`✅ User '${user.email}' already exists (skipping)`);
+        const needsUpdate =
+          existing.isInfluencer !== user.isInfluencer ||
+          existing.followersCount !== user.followersCount;
+
+        if (needsUpdate) {
+          await existing.update({
+            isInfluencer: user.isInfluencer,
+            followersCount: user.followersCount
+          });
+          console.log(`✅ Updated influencer fields for existing user: ${user.email}`);
+        } else {
+          console.log(`✅ User '${user.email}' already exists; no update needed`);
+        }
         continue;
       }
 

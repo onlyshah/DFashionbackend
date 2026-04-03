@@ -44,11 +44,14 @@ async function seedCarts() {
     let createdCount = 0;
 
     for (const customer of customers) {
-      // Create 1-2 cart items per customer
-      const itemCount = Math.floor(Math.random() * 2) + 1;
-      const selectedProducts = products.slice(0, itemCount);
+      // Deterministic cart items for reliable UI behavior
+      const selectedProducts = products.slice(0, Math.min(4, products.length));
+      const cartItems = selectedProducts.map((product, index) => ({
+        product,
+        quantity: index % 3 + 1
+      }));
 
-      for (const product of selectedProducts) {
+      for (const { product, quantity } of cartItems) {
         const existing = await Cart.findOne({
           where: { userId: customer.id, productId: product.id }
         });
@@ -58,12 +61,10 @@ async function seedCarts() {
           continue;
         }
 
-        const quantity = Math.floor(Math.random() * 3) + 1;
-
         await Cart.create({
           userId: customer.id,
           productId: product.id,
-          quantity: quantity,
+          quantity,
           addedAt: new Date()
         });
 

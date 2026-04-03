@@ -130,6 +130,18 @@ module.exports = (sequelize, DataTypes) => {
       field: 'last_activity_at'
     },
 
+    isInfluencer: {
+      type: DataTypes.BOOLEAN,
+      defaultValue: false,
+      field: 'is_influencer'
+    },
+
+    followersCount: {
+      type: DataTypes.INTEGER,
+      defaultValue: 0,
+      field: 'followers_count'
+    },
+
     deletedAt: {
       type: DataTypes.DATE,
       field: 'deleted_at'

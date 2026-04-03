@@ -208,13 +208,37 @@ app.post('/api/login', (req, res) => res.redirect(307, '/api/auth/login'));
 app.post('/admin/login', (req, res) => res.redirect(307, '/api/auth/admin/login'));
 
 // -------- Utility endpoints --------
-app.get('/api/health', (req, res) => {
-  res.json({
-    status: 'OK',
-    timestamp: new Date().toISOString(),
-    message: 'DFashion API Server Running',
-    database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected'
-  });
+app.get('/api/health', async (req, res) => {
+  try {
+    const dbType = process.env.DB_TYPE || 'mongodb';
+    let databaseStatus = 'Unknown';
+
+    if (dbType.includes('postgres')) {
+      // Check PostgreSQL connection
+      const postgresModule = require('./config/postgres');
+      const sequelize = await postgresModule.getPostgresConnection();
+      databaseStatus = sequelize ? 'Connected' : 'Disconnected';
+    } else {
+      // Check MongoDB connection
+      databaseStatus = mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected';
+    }
+
+    res.json({
+      status: 'OK',
+      timestamp: new Date().toISOString(),
+      message: 'DFashion API Server Running',
+      database: databaseStatus,
+      dbType: dbType
+    });
+  } catch (error) {
+    res.json({
+      status: 'OK',
+      timestamp: new Date().toISOString(),
+      message: 'DFashion API Server Running',
+      database: 'Error checking connection',
+      dbType: process.env.DB_TYPE || 'mongodb'
+    });
+  }
 });
 
 app.get('/', (req, res) => {
@@ -335,6 +359,11 @@ safeMount('/admin', './routes/auth');
 // Features & content
 safeMount('/api/stories', './routes/stories');
 safeMount('/api/posts', './routes/posts');
+// Historic support for `/cart` endpoint path used by some frontend code
+safeMount('/cart', './routes/cart');
+safeMount('/api/cart', './routes/cart');
+// New path for cart module
+safeMount('/api/cart-new', './routes/cart');
 safeMount('/api/products', './routes/products');
 safeMount('/api/users', './routes/users');
 safeMount('/api/cart-new', './routes/cart');

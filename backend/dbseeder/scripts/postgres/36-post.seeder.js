@@ -28,20 +28,27 @@ async function seedPosts() {
     const count = await Post.count();
     if (count > 0) {
       console.log(`✅ Post data already exists (${count} records)`);
-      // Patch existing posts that have NULL user_id to a default creator
+      // Patch existing posts that have NULL user_id or are draft to a default creator/published state
       try {
-        const [affected] = await Post.update({ userId: user.id, user_id: user.id }, { where: { user_id: null } });
-        console.log(`🔧 Updated ${affected} existing posts to set user_id`);
+        const [userUpdated] = await Post.update({ userId: user.id, user_id: user.id }, { where: { user_id: null } });
+        const now = new Date();
+        const [statusUpdated] = await Post.update(
+          { status: 'published', publishedAt: now, published_at: now },
+          { where: { status: 'draft' } }
+        );
+        console.log(`🔧 Updated ${userUpdated} existing posts to set user_id`);
+        console.log(`🔧 Updated ${statusUpdated} existing posts to published`);
       } catch (err) {
-        console.warn('⚠️  Failed to update existing posts user_id:', err.message);
+        console.warn('⚠️  Failed to patch existing posts:', err.message);
       }
       return true;
     }
 
+    const now = new Date();
     const postData = [
-      { title: 'New Collection Launch', content: 'Check out our summer collection...', userId: user.id, user_id: user.id },
-      { title: 'Fashion Tips', content: 'How to style the perfect outfit...', userId: user.id, user_id: user.id },
-      { title: 'Customer Spotlight', content: 'Meet our amazing customers...', userId: user.id, user_id: user.id }
+      { title: 'New Collection Launch', content: 'Check out our summer collection...', userId: user.id, user_id: user.id, status: 'published', publishedAt: now, published_at: now },
+      { title: 'Fashion Tips', content: 'How to style the perfect outfit...', userId: user.id, user_id: user.id, status: 'published', publishedAt: now, published_at: now },
+      { title: 'Customer Spotlight', content: 'Meet our amazing customers...', userId: user.id, user_id: user.id, status: 'published', publishedAt: now, published_at: now }
     ];
 
     for (const post of postData) {

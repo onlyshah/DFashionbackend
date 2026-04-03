@@ -7,6 +7,7 @@ const { auth, optionalAuth, isApprovedVendor, allowResourceOwnerOrRoles } = requ
 router.get('/trending', productController.getTrendingProducts);
 router.get('/new-arrivals', productController.getNewArrivals);
 router.get('/featured-brands', optionalAuth, productController.getFeaturedBrands);
+router.get('/brands', optionalAuth, productController.getFeaturedBrands); // Alias for featured-brands
 router.get('/suggested', optionalAuth, productController.getSuggestedProducts);
 router.get('/', optionalAuth, productController.getAllProducts);
 router.get('/search/suggestions', optionalAuth, productController.getSearchSuggestions);

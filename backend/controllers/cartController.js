@@ -6,7 +6,8 @@
  * Database: PostgreSQL via Sequelize ORM
  */
 
-const models = require('../models');
+const dbType = process.env.DB_TYPE || 'mongodb';
+const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 const ApiResponse = require('../utils/ApiResponse');
 const { validatePagination } = require('../utils/validation');
 const { Op } = require('sequelize');
@@ -345,13 +346,46 @@ exports.getCartCount = async (req, res) => {
   }
 };
 
+exports.getCartTotalCount = async (req, res) => {
+  try {
+    const cart = await models.Cart.findOne({
+      where: { user_id: req.user.id },
+      include: {
+        model: models.CartItem,
+        as: 'items'
+      }
+    });
+
+    const cartItems = cart?.items || [];
+    const itemCount = cartItems.length;
+    const quantityTotal = cartItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
+    const totalAmount = cartItems.reduce((sum, item) => sum + ((item.Product?.price || 0) * (item.quantity || 0)), 0);
+
+    const data = {
+      cart: {
+        itemCount,
+        quantityTotal,
+        totalAmount
+      },
+      wishlist: {
+        itemCount: 0
+      },
+      totalCount: quantityTotal,
+      showCartTotalPrice: true
+    };
+
+    return ApiResponse.success(res, data, 'Cart total count retrieved');
+  } catch (error) {
+    console.error('❌ getCartTotalCount error:', error);
+    return ApiResponse.serverError(res, error);
+  }
+};
+
 /**
  * Bulk remove items from cart
  */
-// Stub for missing functions
-exports.getCartItemCount = exports.getCartCount = async (req, res) => {
-  return ApiResponse.success(res, { count: 0 }, 'Cart count retrieved');
-};
+// Alias method name for backward compatibility
+exports.getCartItemCount = exports.getCartCount;
 
 exports.getCartByVendors = async (req, res) => {
   return ApiResponse.success(res, {}, 'Cart by vendors retrieved');
