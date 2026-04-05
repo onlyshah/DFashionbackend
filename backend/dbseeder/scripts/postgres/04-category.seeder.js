@@ -7,16 +7,16 @@
 const models = require('../../../models_sql');
 
 const categoryData = [
-  { name: 'Men', slug: 'men', description: 'Men fashion and apparel' },
-  { name: 'Women', slug: 'women', description: 'Women fashion and apparel' },
-  { name: 'Kids', slug: 'kids', description: 'Kids and children clothing' },
-  { name: 'Accessories', slug: 'accessories', description: 'Fashion accessories' },
-  { name: 'Footwear', slug: 'footwear', description: 'Shoes and footwear' },
-  { name: 'Sportswear', slug: 'sportswear', description: 'Sports and athletic wear' },
-  { name: 'Ethnic Wear', slug: 'ethnic-wear', description: 'Traditional and ethnic clothing' },
-  { name: 'Western Wear', slug: 'western-wear', description: 'Western style clothing' },
-  { name: 'Formal Wear', slug: 'formal-wear', description: 'Formal and business attire' },
-  { name: 'Casual Wear', slug: 'casual-wear', description: 'Casual everyday clothing' }
+  { name: 'Men', slug: 'men', description: 'Men fashion and apparel', image: '/uploads/categories/men.svg', icon: '👔', sortOrder: 1 },
+  { name: 'Women', slug: 'women', description: 'Women fashion and apparel', image: '/uploads/categories/women.svg', icon: '👗', sortOrder: 2 },
+  { name: 'Kids', slug: 'kids', description: 'Kids and children clothing', image: '/uploads/categories/kids.svg', icon: '👶', sortOrder: 3 },
+  { name: 'Accessories', slug: 'accessories', description: 'Fashion accessories', image: '/uploads/categories/accessories.svg', icon: '💍', sortOrder: 4 },
+  { name: 'Footwear', slug: 'footwear', description: 'Shoes and footwear', image: '/uploads/categories/shoes.svg', icon: '👟', sortOrder: 5 },
+  { name: 'Sportswear', slug: 'sportswear', description: 'Sports and athletic wear', image: '/uploads/categories/sportswear.svg', icon: '⚽', sortOrder: 6 },
+  { name: 'Ethnic Wear', slug: 'ethnic-wear', description: 'Traditional and ethnic clothing', image: '/uploads/categories/ethnic-wear.svg', icon: '🥻', sortOrder: 7 },
+  { name: 'Western Wear', slug: 'western-wear', description: 'Western style clothing', image: '/uploads/categories/western-wear.svg', icon: '🤠', sortOrder: 8 },
+  { name: 'Formal Wear', slug: 'formal-wear', description: 'Formal and business attire', image: '/uploads/categories/formal-wear.svg', icon: '🎩', sortOrder: 9 },
+  { name: 'Casual Wear', slug: 'casual-wear', description: 'Casual everyday clothing', image: '/uploads/categories/casual-wear.svg', icon: '👕', sortOrder: 10 }
 ];
 
 async function seedCategories() {
@@ -42,7 +42,19 @@ async function seedCategories() {
       });
 
       if (existing) {
-        console.log(`✅ Category '${cat.name}' already exists (skipping)`);
+        // Update existing category with image and icon if missing
+        const needsUpdate = !existing.image || !existing.icon;
+        if (needsUpdate) {
+          await existing.update({
+            image: cat.image,
+            icon: cat.icon,
+            sortOrder: cat.sortOrder,
+            description: cat.description || existing.description
+          });
+          console.log(`✅ Updated category '${cat.name}' with image and icon`);
+        } else {
+          console.log(`✅ Category '${cat.name}' already exists (skipping)`);
+        }
         continue;
       }
 
