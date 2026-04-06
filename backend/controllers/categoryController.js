@@ -17,34 +17,45 @@ const { validateFK } = require('../utils/fkResponseFormatter');
 exports.getAllCategories = async (req, res) => {
   try {
     const { limit = 50, level = 'parent' } = req.query;
+    console.log('🔍 [getAllCategories] Called with query:', { limit, level });
 
     let categories = [];
 
     if (dbType.includes('postgres')) {
+      console.log('🔍 [getAllCategories] Using PostgreSQL');
       // PostgreSQL implementation
       categories = await models.Category.findAll({
         limit: parseInt(limit),
         order: [['name', 'ASC']],
         raw: true
       });
+      console.log('🔍 [getAllCategories] PostgreSQL returned:', categories.length, 'categories');
+      console.log('🔍 [getAllCategories] First 3 categories:', categories.slice(0, 3));
     } else {
+      console.log('🔍 [getAllCategories] Using MongoDB');
       // MongoDB implementation
       categories = await models.Category.find({})
         .limit(parseInt(limit))
         .sort({ name: 1 });
+      console.log('🔍 [getAllCategories] MongoDB returned:', categories.length, 'categories');
+      console.log('🔍 [getAllCategories] First 3 categories:', categories.slice(0, 3));
     }
 
     // If no data from database, return empty array
     if (!categories || categories.length === 0) {
+      console.log('🔍 [getAllCategories] No categories found, returning empty array');
       categories = [];
     }
 
-    res.json({
+    const response = {
       success: true,
       data: categories
-    });
+    };
+    console.log('🔍 [getAllCategories] Sending response:', JSON.stringify(response, null, 2).slice(0, 500));
+    res.json(response);
   } catch (error) {
-    console.error('Get categories error:', error.message);
+    console.error('❌ [getAllCategories] Error:', error.message);
+    console.error('❌ [getAllCategories] Stack:', error.stack);
     res.status(500).json({
       success: false,
       error: error.message
