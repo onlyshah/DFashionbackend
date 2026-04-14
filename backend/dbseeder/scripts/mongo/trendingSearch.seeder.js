@@ -16,15 +16,11 @@ async function seedTrendingSearches() {
   console.log('Connected to MongoDB');
   // Example image pool from uploads
   const imagePool = [
-    '/uploads/products/product-1.jpg',
-    '/uploads/products/product-2.jpg',
-    '/uploads/products/product-3.jpg',
-    '/uploads/categories/men.jpg',
-    '/uploads/categories/women.jpg',
-    '/uploads/categories/accessories.jpg',
-    '/uploads/brands/nike.png',
-    '/uploads/brands/adidas.png',
-    '/uploads/brands/louis-vuitton.png'
+    '/uploads/default-product.jpg',
+    '/uploads/categories/men.svg',
+    '/uploads/categories/women.svg',
+    '/uploads/categories/accessories.svg',
+    '/uploads/brands/default-brand.png'
   ];
   const trending = Array.from({ length: 25 }, (_, i) => ({
     query: `trending${i+1}`,

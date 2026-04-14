@@ -78,7 +78,7 @@ exports.getFeaturedBrands = async (req, res) => {
     const transformedBrands = brands.map(brand => ({
       id: brand.id || brand._id,
       name: brand.name,
-      logo: `/uploads/brands/${brand.name.toLowerCase().replace(/\s+/g, '-')}.png`,
+      logo: '/uploads/brands/default-brand.png',
       isPopular: true
     }));
 

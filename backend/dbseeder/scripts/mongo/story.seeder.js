@@ -16,12 +16,13 @@ if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
 }
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/dfashion';
-const DEFAULT_IMAGE = '/uploads/stories/default-story.jpg';
+const DEFAULT_IMAGE = '/uploads/default-story.jpg';
 
 function validateMediaPath(mediaPath) {
-  const absPath = path.join(__dirname, '..', mediaPath);
+  const relPath = mediaPath.replace(/^[/\\]+/, '');
+  const absPath = path.join(__dirname, '..', relPath);
   if (fs.existsSync(absPath)) {
-    return mediaPath;
+    return '/' + relPath.replace(/\\/g, '/');
   }
   return DEFAULT_IMAGE;
 }

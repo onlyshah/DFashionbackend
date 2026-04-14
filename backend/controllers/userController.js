@@ -615,7 +615,7 @@ const getUserProfile = async (req, res) => {
     }
 
     const userObj = user.toObject();
-    userObj.image = user.image || user.avatar || '/uploads/default-avatar.svg';
+    userObj.image = user.image || user.avatar || '/uploads/avatars/default-avatar.svg';
 
     res.json({
       success: true,
@@ -871,7 +871,7 @@ const getSuggestedUsers = async (req, res) => {
       id: user.id,
       username: user.username,
       fullName: user.full_name,
-      image: user.avatar_url || '/uploads/default-avatar.svg',
+      image: user.avatar_url || '/uploads/avatars/default-avatar.svg',
       followedBy: `Followed by ${Math.floor(Math.random() * 50) + 10} others`,
       isFollowing: false
     }));
@@ -926,7 +926,7 @@ const getInfluencers = async (req, res) => {
       id: influencer._id,
       username: influencer.username,
       fullName: influencer.fullName,
-      avatar: influencer.avatar || '/uploads/default-avatar.svg',
+      avatar: influencer.avatar || '/uploads/avatars/default-avatar.svg',
       followersCount: influencer.socialStats?.followersCount || Math.floor(Math.random() * 100000) + 10000,
       postsCount: influencer.socialStats?.postsCount || Math.floor(Math.random() * 500) + 50,
       engagement: Math.floor(Math.random() * 15) + 5,

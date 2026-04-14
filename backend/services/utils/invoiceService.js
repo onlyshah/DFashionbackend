@@ -25,7 +25,7 @@ class InvoiceService {
             try {
                 const doc = new PDFDocument({ margin: 50 });
                 const filename = `invoice-${orderData.orderNumber}.pdf`;
-                const filepath = path.join(__dirname, '../uploads/invoices', filename);
+                const filepath = path.join(__dirname, '../../uploads/invoices', filename);
 
                 // Ensure directory exists
                 const dir = path.dirname(filepath);

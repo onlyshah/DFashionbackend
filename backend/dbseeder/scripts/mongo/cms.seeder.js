@@ -3,6 +3,8 @@
 // Usage: node scripts/cms.seeder.js
 
 require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
 const mongoose = require('mongoose');
 const Page = require('../models/Page');
 const Banner = require('../models/Banner');
@@ -15,6 +17,16 @@ if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
 }
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/dfashion';
+const DEFAULT_BANNER_IMAGE = '/uploads/default-post.jpg';
+
+function validateImagePath(imagePath) {
+  const relPath = imagePath.replace(/^[/\\]+/, '');
+  const absPath = path.join(__dirname, '..', relPath);
+  if (fs.existsSync(absPath)) {
+    return '/' + relPath.replace(/\\/g, '/');
+  }
+  return DEFAULT_BANNER_IMAGE;
+}
 
 async function seedCMS() {
   try {
@@ -125,7 +137,7 @@ async function seedCMS() {
     for (let i = 0; i < bannerCount; i++) {
       const banner = {
         title: `Banner ${i + 1}`,
-        imageUrl: `/uploads/banners/banner-${i}.jpg`,
+        imageUrl: validateImagePath(`/uploads/banners/banner-${i}.jpg`),
         imageAlt: `Banner image ${i + 1}`,
         redirectUrl: i % 3 === 0 ? '/products' : '/category/fashion',
         type: bannerTypes[i % bannerTypes.length],

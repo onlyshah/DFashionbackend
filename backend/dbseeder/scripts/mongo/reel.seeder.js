@@ -19,9 +19,10 @@ const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/dfashion';
 const DEFAULT_VIDEO = '/uploads/reels/default-reel.mp4';
 
 function validateMediaPath(mediaPath) {
-  const absPath = path.join(__dirname, '..', mediaPath);
+  const relPath = mediaPath.replace(/^[/\\]+/, '');
+  const absPath = path.join(__dirname, '..', relPath);
   if (fs.existsSync(absPath)) {
-    return mediaPath;
+    return '/' + relPath.replace(/\\/g, '/');
   }
   return DEFAULT_VIDEO;
 }

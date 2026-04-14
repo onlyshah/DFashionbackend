@@ -16,14 +16,15 @@ if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
 }
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/dfashion';
-const UPLOADS_DIR = path.join(__dirname, '../uploads/products');
-const DEFAULT_IMAGE = '/uploads/products/default.jpg';
+const UPLOADS_DIR = path.join(__dirname, '../../../uploads/products');
+const DEFAULT_IMAGE = '/uploads/default-product.jpg';
 
 // Helper to validate image path
 function validateImagePath(imagePath) {
-  const absPath = path.join(__dirname, '..', imagePath);
+  const relPath = imagePath.replace(/^[/\\]+/, '');
+  const absPath = path.join(__dirname, '..', relPath);
   if (fs.existsSync(absPath)) {
-    return imagePath;
+    return '/' + relPath.replace(/\\/g, '/');
   }
   return DEFAULT_IMAGE;
 }

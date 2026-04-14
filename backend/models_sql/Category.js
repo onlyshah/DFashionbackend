@@ -8,7 +8,7 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.STRING(500), 
       allowNull: true, 
       field: 'image',
-      comment: 'Category image URL/path (e.g., /uploads/categories/fashion.jpg)'
+      comment: 'Category image URL/path (e.g., /uploads/categories/fashion.svg)'
     },
     icon: { 
       type: DataTypes.STRING(100), 

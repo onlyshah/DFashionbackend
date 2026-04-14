@@ -14,15 +14,15 @@ if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
 }
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/dfashion';
-const UPLOADS_DIR = path.join(__dirname, '../uploads/categories');
-const DEFAULT_IMAGE = '/uploads/categories/default.jpg';
+const UPLOADS_DIR = path.join(__dirname, '../../../uploads/categories');
+const DEFAULT_IMAGE = '/uploads/categories/default.svg';
 
 const categories = [
   {
     name: 'Men',
     slug: 'men',
     description: 'Men\'s clothing and fashion',
-    image: '/uploads/categories/men.jpg',
+    image: '/uploads/categories/men.svg',
     isActive: true,
     isFeatured: true,
     sortOrder: 1,
@@ -38,7 +38,7 @@ const categories = [
     name: 'Women',
     slug: 'women',
     description: 'Women\'s clothing and fashion',
-    image: '/uploads/categories/women.jpg',
+    image: '/uploads/categories/women.svg',
     isActive: true,
     isFeatured: true,
     sortOrder: 2,
@@ -54,7 +54,7 @@ const categories = [
     name: 'Kids',
     slug: 'kids',
     description: 'Kids fashion and accessories',
-    image: '/uploads/categories/kids.jpg',
+    image: '/uploads/categories/kids.svg',
     isActive: true,
     isFeatured: true,
     sortOrder: 3,
@@ -69,7 +69,7 @@ const categories = [
     name: 'Shoes',
     slug: 'shoes',
     description: 'Footwear for all occasions',
-    image: '/uploads/categories/shoes.jpg',
+    image: '/uploads/categories/shoes.svg',
     isActive: true,
     isFeatured: true,
     sortOrder: 4,
@@ -85,7 +85,7 @@ const categories = [
     name: 'Bags',
     slug: 'bags',
     description: 'Handbags, backpacks, and more',
-    image: '/uploads/categories/bags.jpg',
+    image: '/uploads/categories/bags.svg',
     isActive: true,
     isFeatured: true,
     sortOrder: 5,
@@ -100,7 +100,7 @@ const categories = [
     name: 'Jewelry',
     slug: 'jewelry',
     description: 'Fine jewelry and accessories',
-    image: '/uploads/categories/jewelry.jpg',
+    image: '/uploads/categories/jewelry.svg',
     isActive: true,
     isFeatured: true,
     sortOrder: 6,
@@ -115,7 +115,7 @@ const categories = [
     name: 'Watches',
     slug: 'watches',
     description: 'Luxury and casual watches',
-    image: '/uploads/categories/watches.jpg',
+    image: '/uploads/categories/watches.svg',
     isActive: true,
     isFeatured: false,
     sortOrder: 7,
@@ -129,7 +129,7 @@ const categories = [
     name: 'Accessories',
     slug: 'accessories',
     description: 'Belts, hats, scarves, and more',
-    image: '/uploads/categories/accessories.jpg',
+    image: '/uploads/categories/accessories.svg',
     isActive: true,
     isFeatured: false,
     sortOrder: 8,
@@ -144,7 +144,7 @@ const categories = [
     name: 'Eyewear',
     slug: 'eyewear',
     description: 'Sunglasses and optical frames',
-    image: '/uploads/categories/eyewear.jpg',
+    image: '/uploads/categories/eyewear.svg',
     isActive: true,
     isFeatured: false,
     sortOrder: 9,
@@ -158,7 +158,7 @@ const categories = [
     name: 'Sportswear',
     slug: 'sportswear',
     description: 'Activewear and sports fashion',
-    image: '/uploads/categories/sportswear.jpg',
+    image: '/uploads/categories/sportswear.svg',
     isActive: true,
     isFeatured: false,
     sortOrder: 10,
@@ -172,9 +172,10 @@ const categories = [
 
 // Check if image exists, else use default
 function validateImagePath(imagePath) {
-  const absPath = path.join(__dirname, '..', imagePath);
+  const relPath = imagePath.replace(/^[/\\]+/, '');
+  const absPath = path.join(__dirname, '..', relPath);
   if (fs.existsSync(absPath)) {
-    return imagePath;
+    return '/' + relPath.replace(/\\/g, '/');
   }
   return DEFAULT_IMAGE;
 }
