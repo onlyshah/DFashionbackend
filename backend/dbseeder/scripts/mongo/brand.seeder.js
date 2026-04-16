@@ -16,14 +16,14 @@ if (!DB_TYPE.includes('postgres')) {
 }
 
 const BRANDS_DATA = [
-  { name: 'Nike', slug: 'nike', description: 'Athletic footwear and apparel', website: 'https://www.nike.com', logo: '/uploads/brands/default-brand.png', is_active: true },
-  { name: 'Adidas', slug: 'adidas', description: 'Sports shoes and clothing', website: 'https://www.adidas.com', logo: '/uploads/brands/default-brand.png', is_active: true },
-  { name: 'Puma', slug: 'puma', description: 'Performance sportswear', website: 'https://www.puma.com', logo: '/uploads/brands/default-brand.png', is_active: true },
-  { name: 'Ralph Lauren', slug: 'ralph-lauren', description: 'Premium fashion brand', website: 'https://www.ralphlauren.com', logo: '/uploads/brands/default-brand.png', is_active: true },
-  { name: 'Levi\'s', slug: 'levis', description: 'Denim and casual clothing', website: 'https://www.levi.com', logo: '/uploads/brands/default-brand.png', is_active: true },
-  { name: 'Tommy Hilfiger', slug: 'tommy-hilfiger', description: 'Classic American fashion', website: 'https://www.tommyhilfiger.com', logo: '/uploads/brands/default-brand.png', is_active: true },
-  { name: 'Calvin Klein', slug: 'calvin-klein', description: 'Contemporary fashion', website: 'https://www.calvinklein.com', logo: '/uploads/brands/default-brand.png', is_active: true },
-  { name: 'Gucci', slug: 'gucci', description: 'Luxury fashion house', website: 'https://www.gucci.com', logo: '/uploads/brands/default-brand.png', is_active: true }
+  { name: 'Nike', slug: 'nike', description: 'Athletic footwear and apparel', website: 'https://www.nike.com', logo: '/uploads/brands/nike.png', is_active: true },
+  { name: 'Adidas', slug: 'adidas', description: 'Sports shoes and clothing', website: 'https://www.adidas.com', logo: '/uploads/brands/adidas.png', is_active: true },
+  { name: 'Puma', slug: 'puma', description: 'Performance sportswear', website: 'https://www.puma.com', logo: '/uploads/brands/puma.png', is_active: true },
+  { name: 'Ralph Lauren', slug: 'ralph-lauren', description: 'Premium fashion brand', website: 'https://www.ralphlauren.com', logo: '/uploads/brands/ralph-lauren.png', is_active: true },
+  { name: 'Levi\'s', slug: 'levis', description: 'Denim and casual clothing', website: 'https://www.levi.com', logo: '/uploads/brands/levis.png', is_active: true },
+  { name: 'Tommy Hilfiger', slug: 'tommy-hilfiger', description: 'Classic American fashion', website: 'https://www.tommyhilfiger.com', logo: '/uploads/brands/tommy-hilfiger.png', is_active: true },
+  { name: 'Calvin Klein', slug: 'calvin-klein', description: 'Contemporary fashion', website: 'https://www.calvinklein.com', logo: '/uploads/brands/calvin-klein.png', is_active: true },
+  { name: 'Gucci', slug: 'gucci', description: 'Luxury fashion house', website: 'https://www.gucci.com', logo: '/uploads/brands/gucci.png', is_active: true }
 ];
 
 async function seedBrands() {

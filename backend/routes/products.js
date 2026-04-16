@@ -17,7 +17,7 @@ router.delete('/search/recent', auth, productController.clearSearchHistory);
 router.post('/search/track', auth, productController.trackSearchInteraction);
 router.get('/categories', productController.getCategories);
 router.get('/filters', productController.getFilters);
-router.get('/category/:slug', productController.getProductsByCategory);
+router.get('/category/:category_id', productController.getProductsByCategory);
 router.get('/:id', optionalAuth, productController.getProductById);
 
 // Admin/Vendor routes

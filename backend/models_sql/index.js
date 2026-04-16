@@ -108,6 +108,7 @@ const defineAnalytics = require('./Analytics');
 const defineFeatureFlag = require('./FeatureFlag');
 const defineSmartCollection = require('./SmartCollection');
 const defineUpload = require('./Upload');
+const defineAddress = require('./Address');
 
 // Create null-safe stub models for initialization phase
 const createNullStub = (name) => {
@@ -181,6 +182,7 @@ const Analytics = defineModelSafely(defineAnalytics, 'Analytics') || createNullS
 const FeatureFlag = defineModelSafely(defineFeatureFlag, 'FeatureFlag') || createNullStub('FeatureFlag');
 const SmartCollection = defineModelSafely(defineSmartCollection, 'SmartCollection') || createNullStub('SmartCollection');
 const Upload = defineModelSafely(defineUpload, 'Upload') || createNullStub('Upload');
+const Address = defineModelSafely(defineAddress, 'Address') || createNullStub('Address');
 
 // Helper functions to normalize include model references so wrapper models can be used in Sequelize include
 const getRawModelFromWrapper = (possibleModel) => {
@@ -584,6 +586,7 @@ const wrappedFeatureFlag = createMongooseLikeWrapper(FeatureFlag, defineFeatureF
 const wrappedSmartCollection = createMongooseLikeWrapper(SmartCollection, defineSmartCollection, 'SmartCollection');
 const wrappedUpload = createMongooseLikeWrapper(Upload, defineUpload, 'Upload');
 const wrappedSubCategory = createMongooseLikeWrapper(SubCategory, defineSubCategory, 'SubCategory');
+const wrappedAddress = createMongooseLikeWrapper(Address, defineAddress, 'Address');
 
 // ============================================================================
 // SET UP SEQUELIZE RELATIONSHIPS & ASSOCIATIONS
@@ -1031,6 +1034,7 @@ module.exports = {
   FeatureFlag: wrappedFeatureFlag,
   SmartCollection: wrappedSmartCollection,
   Upload: wrappedUpload,
+  Address: wrappedAddress,
   // Export raw Sequelize models for direct access if needed
   _raw: {
     Role,
@@ -1088,7 +1092,8 @@ module.exports = {
     Analytics,
     FeatureFlag,
     SmartCollection,
-    Upload
+    Upload,
+    Address
   },
   // Initialization helper
   getSequelizeInstance,

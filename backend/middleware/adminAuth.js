@@ -66,7 +66,10 @@ exports.verifyAdminToken = async (req, res, next) => {
       });
     }
 
-    const secret = process.env.JWT_SECRET || 'dfashion_secret_key';
+    if (!process.env.JWT_SECRET) {
+      throw new Error('JWT_SECRET environment variable is not set');
+    }
+    const secret = process.env.JWT_SECRET;
     // Verify token
     const decoded = jwt.verify(token, secret);
     console.log('✅ verifyAdminToken: Token verified, userId:', decoded.userId, 'role:', decoded.role);

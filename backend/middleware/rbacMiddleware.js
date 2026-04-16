@@ -11,7 +11,11 @@
 
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'dfashion_secret_key_change_in_production';
+if (!process.env.JWT_SECRET) {
+  console.error('🔐 CRITICAL ERROR: JWT_SECRET environment variable must be set!');
+  process.exit(1);
+}
+const JWT_SECRET = process.env.JWT_SECRET;
 
 /**
  * Role hierarchy (lower number = more privileged)

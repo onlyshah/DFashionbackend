@@ -23,78 +23,67 @@ const STANDARD_SHIPPING = 100;
  */
 exports.getCart = async (req, res) => {
   try {
-    let cart;
-    if (models.isPostgres) {
-      cart = await models.Cart.findOne({
-        where: { user_id: req.user.id },
-        include: {
-          model: models.CartItem._model,
+    // Use Sequelize findOne with proper include
+    const cart = await models.Cart.findOne({
+      where: { userId: req.user.id },
+      include: [
+        {
+          model: models.CartItem,
           as: 'items',
-          include: {
-            model: models.Product._model,
-            include: [
-              { model: models.Brand._model, as: 'brand' },
-              { model: models.Category._model, as: 'category' },
-              { model: models.User._model, as: 'seller' }
-            ]
-          }
+          required: false,
+          include: [
+            {
+              model: models.Product,
+              as: 'product',
+              required: false
+            }
+          ]
         }
-      });
-    } else {
-      // MongoDB implementation
-      cart = await models.Cart.findOne({ userId: req.user.id })
-        .populate({
-          path: 'items',
-          populate: {
-            path: 'product',
-            populate: ['brand', 'category', 'seller']
-          }
-        });
-    }
+      ]
+    });
 
     // If no cart exists, create empty one
     if (!cart) {
-      if (models.isPostgres) {
-        cart = await models.Cart.create({
-          user_id: req.user.id,
-          items_count: 0,
-          subtotal: 0,
-          tax_amount: 0,
-          shipping_cost: 0,
-          total_amount: 0
-        });
-        cart.items = [];
-      } else {
-        cart = await models.Cart.create({
-          userId: req.user.id,
+      const newCart = await models.Cart.create({
+        userId: req.user.id
+      });
+      return ApiResponse.success(res, {
+        cart: {
+          id: newCart.id,
+          userId: newCart.userId,
           items: [],
           itemsCount: 0,
           subtotal: 0,
           taxAmount: 0,
-          shippingCost: 0,
-          totalAmount: 0
-        });
-      }
+          shippingCost: STANDARD_SHIPPING,
+          totalAmount: STANDARD_SHIPPING
+        }
+      });
     }
 
     // Calculate totals
     let subtotal = 0;
-    for (const item of cart.items || []) {
+    const items = cart.CartItems || [];
+    
+    for (const item of items) {
       if (item.Product) {
         subtotal += item.Product.price * item.quantity;
       }
     }
 
-    const tax_amount = subtotal * TAX_RATE;
-    const shipping_cost = subtotal > FREE_SHIPPING_THRESHOLD ? 0 : STANDARD_SHIPPING;
-    const total_amount = subtotal + tax_amount + shipping_cost;
+    const taxAmount = subtotal * TAX_RATE;
+    const shippingCost = subtotal > FREE_SHIPPING_THRESHOLD ? 0 : STANDARD_SHIPPING;
+    const totalAmount = subtotal + taxAmount + shippingCost;
 
-    // Format response - removes raw FK IDs from products
-    const formattedItems = (cart.items || []).map(item => ({
+    // Format response
+    const formattedItems = items.map(item => ({
       id: item.id,
-      product: formatSingleResponse(item.Product),  // ← Full product object, not ID
+      product: item.Product ? formatSingleResponse(item.Product) : null,
       quantity: item.quantity,
-      subtotal: item.Product.price * item.quantity
+      price: item.price,
+      selectedColor: item.selectedColor,
+      selectedSize: item.selectedSize,
+      subtotal: item.Product ? item.Product.price * item.quantity : 0
     }));
 
     return ApiResponse.success(res, {
@@ -103,9 +92,9 @@ exports.getCart = async (req, res) => {
       summary: {
         items_count: formattedItems.length,
         subtotal,
-        tax_amount,
-        shipping_cost,
-        total_amount
+        tax_amount: taxAmount,
+        shipping_cost: shippingCost,
+        total_amount: totalAmount
       }
     }, 'Cart retrieved successfully');
   } catch (error) {

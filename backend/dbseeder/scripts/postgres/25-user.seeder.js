@@ -29,13 +29,22 @@ async function seedUsers() {
     // Get default roles
     const superAdminRole = await Role.findOne({ where: { name: 'super_admin' } });
     const adminRole = await Role.findOne({ where: { name: 'admin' } });
-    const userRole = await Role.findOne({ where: { name: 'user' } });
+    const userRole = await Role.findOne({ where: { name: 'end_user' } });
     const sellerRole = await Role.findOne({ where: { name: 'seller' } });
     const marketingManagerRole = await Role.findOne({ where: { name: 'marketing_manager' } });
 
     if (!superAdminRole || !adminRole || !userRole || !sellerRole) {
       throw new Error('Required roles not found. Ensure Role seeder ran first.');
     }
+
+    // Create a role lookup map (roleId -> role name)
+    const roleNameMap = {
+      [superAdminRole.id]: 'super_admin',
+      [adminRole.id]: 'admin',
+      [userRole.id]: 'end_user',
+      [sellerRole.id]: 'seller',
+      ...(marketingManagerRole && { [marketingManagerRole.id]: 'marketing_manager' })
+    };
 
     // Get departments
     const engDept = await Department.findOne({ where: { name: 'Engineering' } });
@@ -140,6 +149,11 @@ async function seedUsers() {
 
     let createdCount = 0;
     for (const user of userData) {
+      // Ensure both roleId and role field are set for consistency
+      if (user.roleId && !user.role) {
+        user.role = roleNameMap[user.roleId];
+      }
+
       const existing = await User.findOne({
         where: { email: user.email }
       });
@@ -147,14 +161,18 @@ async function seedUsers() {
       if (existing) {
         const needsUpdate =
           existing.isInfluencer !== user.isInfluencer ||
-          existing.followersCount !== user.followersCount;
+          existing.followersCount !== user.followersCount ||
+          existing.roleId !== user.roleId ||
+          existing.role !== user.role;
 
         if (needsUpdate) {
           await existing.update({
             isInfluencer: user.isInfluencer,
-            followersCount: user.followersCount
+            followersCount: user.followersCount,
+            roleId: user.roleId,
+            role: user.role
           });
-          console.log(`✅ Updated influencer fields for existing user: ${user.email}`);
+          console.log(`✅ Updated user: ${user.email} (roleId: ${user.roleId}, role: ${user.role})`);
         } else {
           console.log(`✅ User '${user.email}' already exists; no update needed`);
         }

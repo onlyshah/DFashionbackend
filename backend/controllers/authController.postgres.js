@@ -36,9 +36,12 @@ const emailTransporter = nodemailer.createTransport({
 
 // Generate JWT Token
 const generateToken = (userId, role) => {
+  if (!process.env.JWT_SECRET) {
+    throw new Error('JWT_SECRET environment variable is not set. Token generation failed.');
+  }
   return jwt.sign(
     { userId, role },
-    process.env.JWT_SECRET || 'dfashion_secret_key',
+    process.env.JWT_SECRET,
     { expiresIn: '7d' }
   );
 };

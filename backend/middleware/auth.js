@@ -43,8 +43,16 @@ const auth = async (req, res, next) => {
       });
     }
 
-    // ✅ Use same JWT secret as login controller (with fallback)
-    const JWT_SECRET = process.env.JWT_SECRET || 'dfashion_secret_key';
+    // ✅ Use JWT secret from environment variables - MUST be set
+    if (!process.env.JWT_SECRET) {
+      console.error('🔐 ERROR: JWT_SECRET environment variable is not set!');
+      return res.status(500).json({
+        success: false,
+        message: 'Server configuration error: JWT_SECRET not set',
+        statusCode: 500
+      });
+    }
+    const JWT_SECRET = process.env.JWT_SECRET;
     const decoded = jwt.verify(token, JWT_SECRET);
     console.log('🔐 Auth middleware - Token decoded, userId:', decoded.userId);
 
@@ -127,8 +135,13 @@ const optionalAuth = async (req, res, next) => {
       return next();
     }
 
-    // ✅ Use same JWT secret as login controller (with fallback)
-    const JWT_SECRET = process.env.JWT_SECRET || 'dfashion_secret_key';
+    // ✅ Use JWT secret from environment variables - MUST be set
+    if (!process.env.JWT_SECRET) {
+      console.error('🔐 ERROR: JWT_SECRET environment variable is not set!');
+      req.user = null;
+      return next();
+    }
+    const JWT_SECRET = process.env.JWT_SECRET;
     const decoded = jwt.verify(token, JWT_SECRET);
     
     try {

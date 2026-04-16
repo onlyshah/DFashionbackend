@@ -7,21 +7,21 @@
 const models = require('../../../models_sql');
 
 const brandData = [
-  { name: 'Nike', logoUrl: 'https://example.com/logos/nike.png', description: 'Athletic and sports brand' },
-  { name: 'Adidas', logoUrl: 'https://example.com/logos/adidas.png', description: 'Sports equipment and apparel' },
-  { name: 'Puma', logoUrl: 'https://example.com/logos/puma.png', description: 'Sports lifestyle brand' },
-  { name: 'Tommy Hilfiger', logoUrl: 'https://example.com/logos/tommy.png', description: 'Premium fashion brand' },
-  { name: 'Ralph Lauren', logoUrl: 'https://example.com/logos/ralph-lauren.png', description: 'Luxury brand' },
-  { name: 'Calvin Klein', logoUrl: 'https://example.com/logos/calvin-klein.png', description: 'Designer brand' },
-  { name: 'H&M', logoUrl: 'https://example.com/logos/hm.png', description: 'Fast fashion retailer' },
-  { name: 'Zara', logoUrl: 'https://example.com/logos/zara.png', description: 'Fashion brand' },
-  { name: 'Forever 21', logoUrl: 'https://example.com/logos/forever21.png', description: 'Affordable fashion' },
-  { name: 'Gucci', logoUrl: 'https://example.com/logos/gucci.png', description: 'Luxury brand' },
-  { name: 'Louis Vuitton', logoUrl: null, description: 'Premium luxury brand' },
-  { name: 'Versace', logoUrl: null, description: 'Italian luxury brand' },
-  { name: 'Chanel', logoUrl: null, description: 'French luxury brand' },
-  { name: 'Dior', logoUrl: null, description: 'French fashion house' },
-  { name: 'Prada', logoUrl: null, description: 'Italian luxury brand' }
+  { name: 'Nike', logoUrl: '/uploads/brands/nike.png', description: 'Athletic and sports brand' },
+  { name: 'Adidas', logoUrl: '/uploads/brands/adidas.png', description: 'Sports equipment and apparel' },
+  { name: 'Puma', logoUrl: '/uploads/brands/puma.png', description: 'Sports lifestyle brand' },
+  { name: 'Tommy Hilfiger', logoUrl: '/uploads/brands/tommy-hilfiger.png', description: 'Premium fashion brand' },
+  { name: 'Ralph Lauren', logoUrl: '/uploads/brands/ralph-lauren.png', description: 'Luxury brand' },
+  { name: 'Calvin Klein', logoUrl: '/uploads/brands/calvin-klein.png', description: 'Designer brand' },
+  { name: 'H&M', logoUrl: '/uploads/brands/hm.png', description: 'Fast fashion retailer' },
+  { name: 'Zara', logoUrl: '/uploads/brands/zara.png', description: 'Fashion brand' },
+  { name: 'Forever 21', logoUrl: '/uploads/brands/forever21.png', description: 'Affordable fashion' },
+  { name: 'Gucci', logoUrl: '/uploads/brands/gucci.png', description: 'Luxury brand' },
+  { name: 'Louis Vuitton', logoUrl: '/uploads/brands/louis-vuitton.png', description: 'Premium luxury brand' },
+  { name: 'Versace', logoUrl: '/uploads/brands/versace.png', description: 'Italian luxury brand' },
+  { name: 'Chanel', logoUrl: '/uploads/brands/chanel.png', description: 'French luxury brand' },
+  { name: 'Dior', logoUrl: '/uploads/brands/dior.png', description: 'French fashion house' },
+  { name: 'Prada', logoUrl: '/uploads/brands/prada.png', description: 'Italian luxury brand' }
 ];
 
 async function seedBrands() {

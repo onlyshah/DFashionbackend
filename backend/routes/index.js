@@ -47,6 +47,10 @@ const brandsRoutes = require('./brands');
 const analyticsRoutes = require('./analytics');
 const recommendationsRoutes = require('./recommendations');
 const marketingRoutes = require('./marketing');
+const addressRoutes = require('./addresses');
+const postLikesRoutes = require('./postLikes');
+const commentRoutes = require('./comments');
+const followsRoutes = require('./follows');
 
 // New enterprise route stubs
 const sellersRoutes = require('./sellers');
@@ -74,6 +78,10 @@ router.use(`/stories`, storyRoutes);
 router.use(`/payments`, paymentRoutes);
 router.use(`/checkout`, checkoutRoutes);
 router.use(`/notifications`, notificationRoutes);
+router.use(`/addresses`, addressRoutes);
+router.use(`/post-likes`, postLikesRoutes);
+router.use(`/comments`, commentRoutes);
+router.use(`/follows`, followsRoutes);
 router.use(`/product-comments`, productCommentsRoutes);
 router.use(`/product-shares`, productSharesRoutes);
 router.use(`/ecommerce`, ecommerceAPIRoutes);

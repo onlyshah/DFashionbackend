@@ -50,10 +50,17 @@ const roleData = [
     isSystemRole: true
   },
   {
+    name: 'end_user',
+    displayName: 'End User',
+    description: 'Customer/End user access with purchase and cart permissions',
+    level: 6,
+    isSystemRole: true
+  },
+  {
     name: 'customer',
     displayName: 'Customer',
     description: 'Customer access with purchase permissions',
-    level: 6,
+    level: 7,
     isSystemRole: false
   }
 ];

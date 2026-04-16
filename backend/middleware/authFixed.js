@@ -33,7 +33,10 @@ const auth = async (req, res, next) => {
     }
 
     // Verify token
-    const jwtSecret = process.env.JWT_SECRET || 'dfashion_secret_key';
+    if (!process.env.JWT_SECRET) {
+      throw new Error('JWT_SECRET environment variable is not set');
+    }
+    const jwtSecret = process.env.JWT_SECRET;
     console.log('🔐 Auth middleware - Verifying token with secret');
     
     const decoded = jwt.verify(token, jwtSecret);
@@ -197,7 +200,11 @@ const optionalAuth = async (req, res, next) => {
       return next();
     }
 
-    const jwtSecret = process.env.JWT_SECRET || 'dfashion_secret_key';
+    if (!process.env.JWT_SECRET) {
+      console.log('🔐 Optional auth - JWT_SECRET not set, continuing as guest');
+      return next();
+    }
+    const jwtSecret = process.env.JWT_SECRET;
     const decoded = jwt.verify(token, jwtSecret);
     const user = await User.findById(decoded.userId).select('-password');
 

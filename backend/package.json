@@ -21,7 +21,9 @@
     "validate:role-users": "node scripts/validateRoleUserAssociation.js",
     "create:all-users": "node scripts/createUsersForAllRoles.js",
     "create:vendor": "node scripts/createVendorUser.js",
-    "test:api": "node scripts/testApiEndpoints.js"
+    "test:api": "node scripts/testApiEndpoints.js",
+    "generate:logos": "node scripts/ai-brand-logo-generator.js",
+    "logos:setup": "node scripts/setup-and-generate-logos.js"
   },
   "keywords": [
     "fashion",
