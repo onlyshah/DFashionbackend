@@ -7,6 +7,17 @@
 const dbType = process.env.DB_TYPE || 'mongodb';
 const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 
+// Helper to ensure models are initialized before use
+const ensureModelsReady = async () => {
+  try {
+    if (models.reinitializeModels) {
+      await models.reinitializeModels();
+    }
+  } catch (err) {
+    console.warn('⚠️  Warning: Could not reinitialize models:', err.message);
+  }
+};
+
 // ==================== WISHLIST OPERATIONS ====================
 
 /**
@@ -154,6 +165,9 @@ exports.getWishlist = async (req, res) => {
  */
 exports.addToWishlist = async (req, res) => {
   try {
+    // Ensure models are ready before use
+    await ensureModelsReady();
+
     // Get lazy-loaded models
     const Wishlist = models.Wishlist;
     const Product = models.Product;
@@ -332,19 +346,30 @@ exports.moveToCart = async (req, res) => {
     }
 
     // Add to cart or update existing cart item
-    const cartItem = await Cart.findOne({
-      where: { userId: req.user.id, productId: wishlistItem.productId }
+    let userCart = await Cart.findOne({
+      where: { userId: req.user.id }
     });
 
-    if (cartItem) {
-      cartItem.quantity += quantity;
-      await cartItem.save();
+    if (!userCart) {
+      userCart = await Cart.create({
+        userId: req.user.id
+      });
+    }
+
+    const CartItem = models.CartItem;
+    const existingItem = await CartItem.findOne({
+      where: { cartId: userCart.id, productId: wishlistItem.productId }
+    });
+
+    if (existingItem) {
+      existingItem.quantity += quantity;
+      await existingItem.save();
     } else {
-      await Cart.create({
-        userId: req.user.id,
+      await CartItem.create({
+        cartId: userCart.id,
         productId: wishlistItem.productId,
         quantity,
-        addedAt: new Date()
+        price: product.price || 0
       });
     }
 

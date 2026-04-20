@@ -13,7 +13,7 @@ class ProductSharesController {
     try {
       const { productId } = req.params;
       const { page = 1, limit = 20 } = req.query;
-      const shares = await ProductSharesRepository.findByProductId(productId, { page, limit });
+      const shares = await productSharesService.findByProductId(productId, { page, limit });
       return sendResponse(res, {
         success: true,
         data: shares,
@@ -37,7 +37,7 @@ class ProductSharesController {
     try {
       const { productId } = req.params;
       const userId = req.user?.id;
-      const share = await ProductSharesRepository.create({
+      const share = await productSharesService.create({
         productId,
         userId,
         shortUrl: `share-${Date.now()}`,
@@ -60,7 +60,7 @@ class ProductSharesController {
   static async getShareByUrl(req, res) {
     try {
       const { shortUrl } = req.params;
-      const share = await ProductSharesRepository.findByShortUrl(shortUrl);
+      const share = await productSharesService.findByShortUrl(shortUrl);
       if (!share) return sendError(res, 'Share link not found', 404);
       return sendResponse(res, {
         success: true,
@@ -79,7 +79,7 @@ class ProductSharesController {
   static async trackShareClick(req, res) {
     try {
       const { shortUrl } = req.params;
-      const result = await ProductSharesRepository.trackClick(shortUrl);
+      const result = await productSharesService.trackClick(shortUrl);
       if (!result) return sendError(res, 'Share link not found', 404);
       return sendResponse(res, {
         success: true,
@@ -98,7 +98,7 @@ class ProductSharesController {
   static async deleteShare(req, res) {
     try {
       const { shareId } = req.params;
-      await ProductSharesRepository.delete(shareId);
+      await productSharesService.delete(shareId);
       return sendResponse(res, {
         success: true,
         message: 'Share deleted successfully'
@@ -116,7 +116,7 @@ class ProductSharesController {
     try {
       const { shareId } = req.params;
       const userId = req.user?.id;
-      const result = await ProductSharesRepository.toggleLike(shareId, userId);
+      const result = await productSharesService.toggleLike(shareId, userId);
       return sendResponse(res, {
         success: true,
         data: result,
@@ -134,7 +134,7 @@ class ProductSharesController {
   static async getShareAnalytics(req, res) {
     try {
       const { shareId } = req.params;
-      const analytics = await ProductSharesRepository.getAnalytics(shareId);
+      const analytics = await productSharesService.getAnalytics(shareId);
       return sendResponse(res, {
         success: true,
         data: analytics,

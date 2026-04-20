@@ -470,6 +470,13 @@ const startServer = async () => {
           await models.reinitializeModels();
         }
         console.log('✅ PostgreSQL (Sequelize) connected successfully');
+
+        // Initialize Adapter Layer
+        console.log('\n🔧 Initializing Database Adapter Layer...');
+        const adapterInit = require('./services/adapters/init');
+        await adapterInit.initialize();
+        console.log('✅ Database Adapter Layer initialized\n');
+
         // Mark DB available for metrics
         dataProvider.enableDb();
       } catch (err) {

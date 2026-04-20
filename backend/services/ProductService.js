@@ -1,17 +1,29 @@
 /**
  * ============================================================================
- * PRODUCT SERVICE - Business Logic Layer
+ * UNIFIED PRODUCT SERVICE - PostgreSQL with Adapter Pattern
  * ============================================================================
  * Purpose: Handle all product-related business logic
+ * Uses: PostgreSQL adapter (DB-agnostic)
+ * 
+ * Architecture: Single service file, uses adapter for all DB operations
+ * Migration: Combines logic from:
+ *   - services/postgres/productService.js (PostgreSQL)
+ *   - services/mongodb/productService.js (MongoDB - disabled)
+ *   - services/ProductService.js (Original)
  */
 
-class ProductService {
-  constructor(models) {
-    this.Product = models.Product;
-    this.Category = models.Category;
-    this.Inventory = models.Inventory;
-    this.InventoryHistory = models.InventoryHistory;
-    this.ProductVariant = models.ProductVariant;
+const db = require('./adapters');
+const BaseService = require('./postgres/BaseService');
+
+class ProductService extends BaseService {
+  constructor() {
+    super(db.Product, 'Product');
+    this.Category = db.Category;
+    this.Inventory = db.Inventory;
+    this.InventoryHistory = db.InventoryHistory;
+    this.ProductVariant = db.ProductVariant;
+    this.Brand = db.Brand;
+    this.SubCategory = db.SubCategory;
   }
 
   /**
@@ -19,6 +31,8 @@ class ProductService {
    */
   async createProduct(sellerId, productData) {
     try {
+      await this.db.ensureModelsReady();
+
       const {
         name,
         description,
@@ -40,7 +54,7 @@ class ProductService {
 
       // Check if SKU is unique
       if (sku) {
-        const existing = await this.Product.findOne({ where: { sku } });
+        const existing = await this.model.findOne({ where: { sku } });
         if (existing) {
           throw {
             code: 'SKU_EXISTS',
@@ -50,7 +64,7 @@ class ProductService {
       }
 
       // Create product
-      const product = await this.Product.create({
+      const product = await this.model.create({
         seller_id: sellerId,
         name,
         description,
@@ -75,14 +89,17 @@ class ProductService {
       }
 
       return {
-        id: product.id,
-        name: product.name,
-        status: product.status,
-        createdAt: product.created_at
+        success: true,
+        data: {
+          id: product.id,
+          name: product.name,
+          status: product.status,
+          createdAt: product.created_at
+        }
       };
     } catch (error) {
-      console.error('ProductService.createProduct error:', error);
-      throw error;
+      console.error('[ProductService] createProduct error:', error.message);
+      return { success: false, error: error.message };
     }
   }
 

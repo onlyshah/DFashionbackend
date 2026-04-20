@@ -13,6 +13,17 @@ const { validatePagination } = require('../utils/validation');
 const { Op } = require('sequelize');
 const { formatSingleResponse, buildIncludeClause, validateMultipleFK } = require('../utils/fkResponseFormatter');
 
+// Helper to ensure models are initialized before use
+const ensureModelsReady = async () => {
+  try {
+    if (models.reinitializeModels) {
+      await models.reinitializeModels();
+    }
+  } catch (err) {
+    console.warn('⚠️  Warning: Could not reinitialize models:', err.message);
+  }
+};
+
 // Constants
 const TAX_RATE = 0.18; // 18% GST
 const FREE_SHIPPING_THRESHOLD = 500;
@@ -23,78 +34,73 @@ const STANDARD_SHIPPING = 100;
  */
 exports.getCart = async (req, res) => {
   try {
-    // Use Sequelize findOne with proper include
-    const cart = await models.Cart.findOne({
-      where: { userId: req.user.id },
+    const userId = req.user.id;
+    
+    // Get all cart items for this user
+    const cartItems = await models.CartItem.findAll({
+      where: { 
+        // Get cart_items through their cart_id where cart.user_id = userId
+      },
       include: [
         {
-          model: models.CartItem,
-          as: 'items',
+          model: models.Cart,
+          required: true,
+          where: { userId: userId },
+          attributes: ['id']
+        },
+        {
+          model: models.Product,
+          as: 'product',
           required: false,
-          include: [
-            {
-              model: models.Product,
-              as: 'product',
-              required: false
-            }
-          ]
+          attributes: ['id', 'title', 'price', 'stock', 'avatarUrl']
         }
       ]
     });
 
-    // If no cart exists, create empty one
-    if (!cart) {
-      const newCart = await models.Cart.create({
-        userId: req.user.id
-      });
+    // If no items, return empty cart
+    if (!cartItems || cartItems.length === 0) {
       return ApiResponse.success(res, {
-        cart: {
-          id: newCart.id,
-          userId: newCart.userId,
-          items: [],
+        cartId: null,
+        items: [],
+        summary: {
           itemsCount: 0,
           subtotal: 0,
           taxAmount: 0,
           shippingCost: STANDARD_SHIPPING,
           totalAmount: STANDARD_SHIPPING
         }
-      });
+      }, 'Cart is empty');
     }
 
     // Calculate totals
     let subtotal = 0;
-    const items = cart.CartItems || [];
-    
-    for (const item of items) {
-      if (item.Product) {
-        subtotal += item.Product.price * item.quantity;
-      }
-    }
+    const formattedItems = cartItems.map(item => {
+      const itemSubtotal = (item.price || (item.product?.price || 0)) * item.quantity;
+      subtotal += itemSubtotal;
+      return {
+        id: item.id,
+        product: item.product ? formatSingleResponse(item.product) : null,
+        quantity: item.quantity,
+        price: item.price || item.product?.price || 0,
+        selectedColor: item.selectedColor,
+        selectedSize: item.selectedSize,
+        subtotal: itemSubtotal
+      };
+    });
 
     const taxAmount = subtotal * TAX_RATE;
     const shippingCost = subtotal > FREE_SHIPPING_THRESHOLD ? 0 : STANDARD_SHIPPING;
     const totalAmount = subtotal + taxAmount + shippingCost;
 
-    // Format response
-    const formattedItems = items.map(item => ({
-      id: item.id,
-      product: item.Product ? formatSingleResponse(item.Product) : null,
-      quantity: item.quantity,
-      price: item.price,
-      selectedColor: item.selectedColor,
-      selectedSize: item.selectedSize,
-      subtotal: item.Product ? item.Product.price * item.quantity : 0
-    }));
-
     return ApiResponse.success(res, {
-      cart_id: cart.id,
+      cartId: cartItems[0]?.Cart?.id || null,
       items: formattedItems,
       summary: {
-        items_count: formattedItems.length,
-        subtotal,
-        tax_amount: taxAmount,
-        shipping_cost: shippingCost,
-        total_amount: totalAmount
+        itemsCount: formattedItems.length,
+        subtotal: parseFloat(subtotal.toFixed(2)),
+        taxAmount: parseFloat(taxAmount.toFixed(2)),
+        shippingCost: shippingCost,
+        totalAmount: parseFloat(totalAmount.toFixed(2))
       }
     }, 'Cart retrieved successfully');
   } catch (error) {
@@ -113,6 +119,9 @@ exports.addToCart = async (req, res) => {
     if (!product_id || quantity < 1) {
       return ApiResponse.error(res, 'Invalid product ID or quantity', 422);
     }
+
+    // Ensure models are ready before use
+    await ensureModelsReady();
 
     // VALIDATE foreign keys exist
     const validation = await validateMultipleFK([
@@ -134,24 +143,19 @@ exports.addToCart = async (req, res) => {
     }
 
     let cart = await models.Cart.findOne({
-      where: { user_id: req.user.id }
+      where: { userId: req.user.id }
     });
 
     if (!cart) {
       cart = await models.Cart.create({
-        user_id: req.user.id,
-        items_count: 0,
-        subtotal: 0,
-        tax_amount: 0,
-        shipping_cost: 0,
-        total_amount: 0
+        userId: req.user.id
       });
     }
 
     const existingItem = await models.CartItem.findOne({
       where: {
-        cart_id: cart.id,
-        product_id: product_id
+        cartId: cart.id,
+        productId: product_id
       }
     });
 
@@ -163,9 +167,10 @@ exports.addToCart = async (req, res) => {
       await existingItem.update({ quantity: new_quantity });
     } else {
       await models.CartItem.create({
-        cart_id: cart.id,
-        product_id: product_id,
-        quantity
+        cartId: cart.id,
+        productId: product_id,
+        quantity,
+        price: product.price || 0
       });
     }
 
@@ -188,7 +193,7 @@ exports.addToCart = async (req, res) => {
     }));
 
     return ApiResponse.success(res, {
-      cart_id: updated_cart.id,
+      cartId: updated_cart.id,
       items: formattedItems
     }, 'Item added to cart');
   } catch (error) {
@@ -211,7 +216,7 @@ exports.updateCartItem = async (req, res) => {
 
     const cartItem = await models.CartItem.findByPk(item_id, {
       include: [
-        { model: models.Cart, attributes: ['user_id'] },
+        { model: models.Cart, attributes: ['userId'] },
         { model: models.Product, attributes: ['stock'] }
       ]
     });
@@ -221,7 +226,7 @@ exports.updateCartItem = async (req, res) => {
     }
 
     // Verify ownership
-    if (cartItem.Cart.user_id !== req.user.id) {
+    if (cartItem.Cart.userId !== req.user.id) {
       return ApiResponse.forbidden(res, 'You can only update your own cart');
     }
 
@@ -237,7 +242,7 @@ exports.updateCartItem = async (req, res) => {
       await cartItem.update({ quantity });
     }
 
-    const cart = await models.Cart.findByPk(cartItem.cart_id, {
+    const cart = await models.Cart.findByPk(cartItem.cartId, {
       include: {
         model: models.CartItem,
         as: 'items',
@@ -260,21 +265,21 @@ exports.removeFromCart = async (req, res) => {
     const { item_id } = req.params;
 
     const cartItem = await models.CartItem.findByPk(item_id, {
-      include: { model: models.Cart, attributes: ['user_id'] }
+      include: { model: models.Cart, attributes: ['userId'] }
     });
 
     if (!cartItem) {
       return ApiResponse.notFound(res, 'Cart item');
     }
 
-    if (cartItem.Cart.user_id !== req.user.id) {
+    if (cartItem.Cart.userId !== req.user.id) {
       return ApiResponse.forbidden(res, 'You can only remove from your own cart');
     }
 
-    const cart_id = cartItem.cart_id;
+    const cartId = cartItem.cartId;
     await cartItem.destroy();
 
-    const cart = await models.Cart.findByPk(cart_id, {
+    const cart = await models.Cart.findByPk(cartId, {
       include: {
         model: models.CartItem,
         as: 'items',
@@ -295,7 +300,7 @@ exports.removeFromCart = async (req, res) => {
 exports.clearCart = async (req, res) => {
   try {
     const cart = await models.Cart.findOne({
-      where: { user_id: req.user.id }
+      where: { userId: req.user.id }
     });
 
     if (!cart) {
@@ -303,7 +308,7 @@ exports.clearCart = async (req, res) => {
     }
 
     await models.CartItem.destroy({
-      where: { cart_id: cart.id }
+      where: { cartId: cart.id }
     });
 
     const updated_cart = await models.Cart.findByPk(cart.id);
@@ -323,7 +328,7 @@ exports.getCartCount = async (req, res) => {
     const count = await models.CartItem.count({
       include: {
         model: models.Cart,
-        where: { user_id: req.user.id },
+        where: { userId: req.user.id },
         attributes: []
       }
     });
@@ -338,7 +343,7 @@ exports.getCartCount = async (req, res) => {
 exports.getCartTotalCount = async (req, res) => {
   try {
     const cart = await models.Cart.findOne({
-      where: { user_id: req.user.id },
+      where: { userId: req.user.id },
       include: {
         model: models.CartItem,
         as: 'items'
@@ -403,11 +408,11 @@ exports.bulkRemoveItems = async (req, res) => {
     // Verify all items belong to user
     const items = await models.CartItem.findAll({
       where: { id: item_ids },
-      include: [{ model: models.Cart, attributes: ['user_id'] }, { model: models.Product, attributes: ['id', 'name', 'price'] }]
+      include: [{ model: models.Cart, attributes: ['userId'] }, { model: models.Product, attributes: ['id', 'name', 'price'] }]
     });
 
     for (const item of items) {
-      if (item.Cart.user_id !== req.user.id) {
+      if (item.Cart.userId !== req.user.id) {
         return ApiResponse.forbidden(res, 'You can only modify your own cart');
       }
     }
@@ -417,7 +422,7 @@ exports.bulkRemoveItems = async (req, res) => {
     });
 
     const cart = await models.Cart.findOne({
-      where: { user_id: req.user.id },
+      where: { userId: req.user.id },
       include: {
         model: models.CartItem,
         as: 'items',
