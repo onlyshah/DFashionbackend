@@ -5,6 +5,7 @@
  */
 
 const models = require('../../../models_sql');
+const { createFashionArtwork } = require('../../utils/image-utils');
 
 const productDataTemplates = [
   // Men's T-Shirts
@@ -82,6 +83,9 @@ async function seedProducts() {
         description: `High-quality ${template.category} product - ${template.title}. Premium materials and excellent craftsmanship.`,
         price: template.price,
         discountPrice: template.discountPrice,
+        imageUrl: createFashionArtwork('products', productTitle, productIndex, {
+          subtitle: `${template.brand} · ${template.category}`
+        }),
         brandId: brand.id,
         categoryId: category.id,
         sellerId: seller.id,

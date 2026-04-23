@@ -5,6 +5,7 @@
  */
 
 const models = require('../../../models_sql');
+const { createFashionArtwork } = require('../../utils/image-utils');
 
 async function seedReels() {
   try {
@@ -37,8 +38,8 @@ async function seedReels() {
         user_id: users[0]?.id,
         title: 'Quick Fashion Haul',
         description: 'Check out my latest fashion finds from the new collection!',
-        video_url: 'https://example.com/reel1.mp4',
-        thumbnail_url: 'https://example.com/reel1-thumb.jpg',
+        video_url: '/uploads/reels/sample-reel.mp4',
+        thumbnail_url: '/uploads/reels/sample-thumbnail.jpg',
         duration: 45,
         view_count: 5400,
         like_count: 234,
@@ -49,8 +50,8 @@ async function seedReels() {
         user_id: users[1]?.id,
         title: 'Styling Tips for Summer',
         description: 'Amazing tips to style your summer wardrobe',
-        video_url: 'https://example.com/reel2.mp4',
-        thumbnail_url: 'https://example.com/reel2-thumb.jpg',
+        video_url: '/uploads/reels/default-reel.mp4',
+        thumbnail_url: createFashionArtwork('reels', 'Styling Tips for Summer', 2, { subtitle: 'Video cover' }),
         duration: 60,
         view_count: 8900,
         like_count: 567,
@@ -61,8 +62,8 @@ async function seedReels() {
         user_id: users[2]?.id,
         title: 'Fashion Trends 2026',
         description: 'The hottest fashion trends you need to know about',
-        video_url: 'https://example.com/reel3.mp4',
-        thumbnail_url: 'https://example.com/reel3-thumb.jpg',
+        video_url: '/uploads/reels/sample-reel.mp4',
+        thumbnail_url: createFashionArtwork('reels', 'Fashion Trends 2026', 3, { subtitle: 'Video cover' }),
         duration: 55,
         view_count: 12300,
         like_count: 789,
@@ -73,8 +74,8 @@ async function seedReels() {
         user_id: users[3]?.id,
         title: 'DIY Fashion: Clothes Makeover',
         description: 'Transform old clothes into trendy new pieces',
-        video_url: 'https://example.com/reel4.mp4',
-        thumbnail_url: 'https://example.com/reel4-thumb.jpg',
+        video_url: '/uploads/reels/default-reel.mp4',
+        thumbnail_url: createFashionArtwork('reels', 'DIY Fashion', 4, { subtitle: 'Video cover' }),
         duration: 90,
         view_count: 15600,
         like_count: 1023,
@@ -85,8 +86,8 @@ async function seedReels() {
         user_id: users[4]?.id,
         title: 'Minimalist Fashion Guide',
         description: 'Build the perfect minimalist wardrobe',
-        video_url: 'https://example.com/reel5.mp4',
-        thumbnail_url: 'https://example.com/reel5-thumb.jpg',
+        video_url: '/uploads/reels/sample-reel.mp4',
+        thumbnail_url: createFashionArtwork('reels', 'Minimalist Fashion Guide', 5, { subtitle: 'Video cover' }),
         duration: 75,
         view_count: 9800,
         like_count: 654,

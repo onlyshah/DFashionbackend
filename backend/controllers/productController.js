@@ -6,11 +6,87 @@
  * Database: PostgreSQL/MongoDB via unified models
  */
 
-const dbType = process.env.DB_TYPE || 'mongodb';
+const dbType = process.env.DB_TYPE || 'postgres';
 const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 const ApiResponse = require('../utils/ApiResponse');
 const { validatePagination } = require('../utils/validation');
 const { formatPaginatedResponse, formatSingleResponse, validateFK, validateMultipleFK } = require('../utils/fkResponseFormatter');
+const { createFashionArtwork, slugify } = require('../dbseeder/utils/image-utils');
+
+const DEFAULT_PRODUCT_IMAGE = '/uploads/default-product.svg';
+
+const toPlainProduct = (product) => {
+  const item = product?.toJSON ? product.toJSON() : product;
+  if (!item) return null;
+  return {
+    ...item,
+    _id: item.id || item._id
+  };
+};
+
+const buildProductImages = (product, index = 0) => {
+  const item = toPlainProduct(product);
+  if (!item) return [];
+
+  const existingImages = Array.isArray(item.images) ? item.images.filter(Boolean) : [];
+  if (existingImages.length > 0 && existingImages[0]?.url) {
+    return existingImages.map((image, imageIndex) => ({
+      url: image.url || DEFAULT_PRODUCT_IMAGE,
+      alt: image.alt || item.name || item.title || `Product ${index + 1}`,
+      isPrimary: imageIndex === 0 || !!image.isPrimary
+    }));
+  }
+
+  if (item.imageUrl) {
+    return [{
+      url: item.imageUrl,
+      alt: item.name || item.title || `Product ${index + 1}`,
+      isPrimary: true
+    }];
+  }
+
+  const baseLabel = item.title || item.name || `product-${index + 1}`;
+  const brandLabel = item.brand?.name || item.brand || 'DFashion';
+  const categoryLabel = item.category?.name || item.category || 'Collection';
+  const slug = slugify(baseLabel);
+
+  return [
+    {
+      url: createFashionArtwork('products', `${slug}`, index + 1, {
+        subtitle: `${brandLabel} · ${categoryLabel}`,
+        width: 900,
+        height: 900
+      }),
+      alt: `${baseLabel} by ${brandLabel}`,
+      isPrimary: true
+    },
+    {
+      url: createFashionArtwork('products', `${slug}-alt`, index + 2, {
+        subtitle: `${categoryLabel} edit`,
+        width: 900,
+        height: 900
+      }),
+      alt: `${baseLabel} alternate view`,
+      isPrimary: false
+    }
+  ];
+};
+
+const attachProductMedia = (product, index = 0) => {
+  const plain = formatSingleResponse(product) || {};
+  const images = buildProductImages(plain, index);
+
+  return {
+    ...plain,
+    id: plain.id || plain._id,
+    _id: plain._id || plain.id,
+    images,
+    image: images[0]?.url || DEFAULT_PRODUCT_IMAGE,
+    mediaUrl: images[0]?.url || DEFAULT_PRODUCT_IMAGE
+  };
+};
+
+const attachProductsMedia = (rows = []) => rows.map((product, index) => attachProductMedia(product, index));
 
 /**
  * Get all products with filtering, sorting, pagination
@@ -103,7 +179,7 @@ exports.getAllProducts = exports.getProducts = async (req, res) => {
     const pagination = { page, limit, total: result.count, totalPages: Math.ceil(result.count / limit) };
 
     // Return raw data - formatter disabled during debugging
-    return ApiResponse.paginated(res, result.rows, pagination, 'Products retrieved successfully');
+    return ApiResponse.paginated(res, attachProductsMedia(result.rows), pagination, 'Products retrieved successfully');
   } catch (error) {
     console.error('❌ getProducts error:', error);
     return ApiResponse.serverError(res, error);
@@ -119,7 +195,6 @@ exports.getProductById = async (req, res) => {
 
     let product;
     if (models.isPostgres) {
-      // PostgreSQL with includes
       const includeClause = [
         { model: models.Brand._model, as: 'brand', attributes: ['id', 'name'] },
         { model: models.Category._model, as: 'category', attributes: ['id', 'name'] },
@@ -154,7 +229,7 @@ exports.getProductById = async (req, res) => {
     }
 
     // Format response - removes raw FK IDs, includes nested objects
-    const response = formatSingleResponse(product);
+    const response = attachProductMedia(product);
 
     return ApiResponse.success(res, {
       ...response,
@@ -217,7 +292,7 @@ exports.searchProducts = async (req, res) => {
 
     const pagination = { page, limit, total: result.count, totalPages: Math.ceil(result.count / limit) };
 
-    return ApiResponse.paginated(res, result.rows, pagination, 'Search completed successfully');
+    return ApiResponse.paginated(res, attachProductsMedia(result.rows), pagination, 'Search completed successfully');
   } catch (error) {
     console.error('❌ searchProducts error:', error);
     return ApiResponse.serverError(res, error);
@@ -299,7 +374,7 @@ exports.filterProducts = async (req, res) => {
 
     const pagination = { page, limit, total: result.count, totalPages: Math.ceil(result.count / limit) };
 
-    return ApiResponse.paginated(res, result.rows, pagination, 'Products filtered successfully');
+    return ApiResponse.paginated(res, attachProductsMedia(result.rows), pagination, 'Products filtered successfully');
   } catch (error) {
     console.error('❌ filterProducts error:', error);
     return ApiResponse.serverError(res, error);
@@ -354,7 +429,7 @@ exports.getProductsByCategory = async (req, res) => {
 
     const pagination = { page, limit, total: result.count, totalPages: Math.ceil(result.count / limit) };
 
-    return ApiResponse.paginated(res, result.rows, pagination, 'Category products retrieved successfully');
+    return ApiResponse.paginated(res, attachProductsMedia(result.rows), pagination, 'Category products retrieved successfully');
   } catch (error) {
     console.error('❌ getProductsByCategory error:', error);
     return ApiResponse.serverError(res, error);
@@ -594,7 +669,7 @@ exports.createProduct = async (req, res) => {
         .populate('inventory', 'id quantity warehouseId');
     }
 
-    return ApiResponse.created(res, formatSingleResponse(result), 'Product created successfully');
+    return ApiResponse.created(res, attachProductMedia(result), 'Product created successfully');
   } catch (error) {
     console.error('❌ createProduct error:', error);
     return ApiResponse.serverError(res, error);
@@ -658,7 +733,7 @@ exports.updateProduct = async (req, res) => {
         .populate('inventory', 'id quantity warehouseId');
     }
 
-    return ApiResponse.success(res, formatSingleResponse(result), 'Product updated successfully');
+    return ApiResponse.success(res, attachProductMedia(result), 'Product updated successfully');
   } catch (error) {
     console.error('❌ updateProduct error:', error);
     return ApiResponse.serverError(res, error);
@@ -747,7 +822,7 @@ exports.getRecommendations = async (req, res) => {
       order: [['views_count', 'DESC']]
     });
 
-    return ApiResponse.success(res, recommendations, 'Recommendations retrieved successfully');
+    return ApiResponse.success(res, attachProductsMedia(recommendations), 'Recommendations retrieved successfully');
   } catch (error) {
     console.error('❌ getRecommendations error:', error);
     return ApiResponse.serverError(res, error);

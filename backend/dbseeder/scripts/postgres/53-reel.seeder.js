@@ -5,6 +5,7 @@
 
 const models = require('../../../models_sql');
 const { v4: uuidv4 } = require('uuid');
+const { createFashionArtwork } = require('../../utils/image-utils');
 
 async function seedReels() {
   try {
@@ -51,9 +52,9 @@ async function seedReels() {
       user_id: creator.id,
       title: `Fashion Reel ${idx + 1}`,
       description: 'Short video showcasing latest fashion trends',
-      videoUrl: `/videos/reel_${idx + 1}.mp4`,
-      video_url: `/videos/reel_${idx + 1}.mp4`,
-      thumbnailUrl: `/images/reel_${idx + 1}.jpg`,
+      videoUrl: idx % 2 === 0 ? '/uploads/reels/sample-reel.mp4' : '/uploads/reels/default-reel.mp4',
+      video_url: idx % 2 === 0 ? '/uploads/reels/sample-reel.mp4' : '/uploads/reels/default-reel.mp4',
+      thumbnailUrl: createFashionArtwork('reels', `Fashion Reel ${idx + 1}`, idx + 1, { subtitle: 'Short video' }),
       duration: Math.floor(Math.random() * 60) + 15,
       views: Math.floor(Math.random() * 10000),
       likes: Math.floor(Math.random() * 5000),

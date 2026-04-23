@@ -7,6 +7,7 @@
  */
 
 const dbType = process.env.DB_TYPE || 'mongodb';
+const { randomUUID } = require('crypto');
 const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 const ApiResponse = require('../utils/ApiResponse');
 const { validatePagination } = require('../utils/validation');
@@ -29,36 +30,85 @@ const TAX_RATE = 0.18; // 18% GST
 const FREE_SHIPPING_THRESHOLD = 500;
 const STANDARD_SHIPPING = 100;
 
+const hasTable = async (sequelize, tableName) => {
+  const result = await sequelize.query(
+    'SELECT to_regclass(:tableName) as table_name',
+    { replacements: { tableName: `public.${tableName}` }, type: sequelize.QueryTypes.SELECT }
+  );
+  return !!result[0]?.table_name;
+};
+
+const buildImagesSelectClause = (hasProductImagesTable) => {
+  if (!hasProductImagesTable) {
+    return "'[]'::json as images";
+  }
+
+  return `COALESCE(
+            (
+              SELECT json_agg(pi.url ORDER BY pi.is_primary DESC, pi.sort_order ASC, pi.created_at ASC)
+              FROM product_images pi
+              WHERE pi.product_id = p.id
+            ),
+            '[]'::json
+          ) as images`;
+};
+
+const formatCartItems = (cartItems) => {
+  let subtotal = 0;
+  const formattedItems = cartItems.map(item => {
+    const itemPrice = item.price || item.product_price || 0;
+    const itemSubtotal = itemPrice * item.quantity;
+    subtotal += itemSubtotal;
+
+    return {
+      id: item.id,
+      product: item.product_id ? {
+        id: item.product_id,
+        name: item.name,
+        price: item.product_price,
+        images: item.images
+      } : null,
+      quantity: item.quantity,
+      price: itemPrice,
+      selectedColor: item.selected_color,
+      selectedSize: item.selected_size,
+      subtotal: itemSubtotal
+    };
+  });
+
+  return { formattedItems, subtotal };
+};
+
+const loadLegacyCartItems = async (sequelize, userId, hasProductImagesTable) => {
+  return sequelize.query(
+    `SELECT c.id, c.quantity, c.price, c.product_id,
+            p.id as product_id, p.name, p.price as product_price,
+            ${buildImagesSelectClause(hasProductImagesTable)}
+     FROM carts c
+     LEFT JOIN products p ON c.product_id = p.id
+     WHERE c.user_id = :userId AND c.product_id IS NOT NULL`,
+    { replacements: { userId }, type: sequelize.QueryTypes.SELECT }
+  );
+};
+
+const extractItemId = (req) => req.params.itemId || req.params.item_id || req.body.itemId || req.body.item_id;
+
 /**
  * Get user's cart with items and calculations
  */
 exports.getCart = async (req, res) => {
   try {
     const userId = req.user.id;
-    
-    // Get all cart items for this user
-    const cartItems = await models.CartItem.findAll({
-      where: { 
-        // Get cart_items through their cart_id where cart.user_id = userId
-      },
-      include: [
-        {
-          model: models.Cart,
-          required: true,
-          where: { userId: userId },
-          attributes: ['id']
-        },
-        {
-          model: models.Product,
-          as: 'product',
-          required: false,
-          attributes: ['id', 'title', 'price', 'stock', 'avatarUrl']
-        }
-      ]
-    });
+    const sequelize = require('../models_sql').sequelize;
+    const hasProductImagesTable = await hasTable(sequelize, 'product_images');
 
-    // If no items, return empty cart
-    if (!cartItems || cartItems.length === 0) {
+    // Get cart ID using raw query
+    const cartResult = await sequelize.query(
+      'SELECT id FROM carts WHERE user_id = :userId',
+      { replacements: { userId }, type: sequelize.QueryTypes.SELECT }
+    );
+
+    if (!cartResult || cartResult.length === 0) {
       return ApiResponse.success(res, {
         cartId: null,
         items: [],
@@ -72,28 +122,63 @@ exports.getCart = async (req, res) => {
       }, 'Cart is empty');
     }
 
+    const cartId = cartResult[0].id;
+
+    // Get cart items with products using raw query
+    const cartItems = await sequelize.query(
+      `SELECT ci.id, ci.quantity, ci.price, ci.product_id,
+              ci.selected_color, ci.selected_size,
+              p.id as product_id, p.name, p.price as product_price,
+              ${buildImagesSelectClause(hasProductImagesTable)}
+       FROM cart_items ci
+       LEFT JOIN products p ON ci.product_id = p.id
+       WHERE ci.cart_id = :cartId`,
+      { replacements: { cartId }, type: sequelize.QueryTypes.SELECT }
+    );
+
+    if (!cartItems || cartItems.length === 0) {
+      const legacyItems = await loadLegacyCartItems(sequelize, userId, hasProductImagesTable);
+      if (legacyItems && legacyItems.length > 0) {
+        const { formattedItems, subtotal } = formatCartItems(legacyItems);
+        const taxAmount = subtotal * TAX_RATE;
+        const shippingCost = subtotal > FREE_SHIPPING_THRESHOLD ? 0 : STANDARD_SHIPPING;
+        const totalAmount = subtotal + taxAmount + shippingCost;
+
+        return ApiResponse.success(res, {
+          cartId: cartId,
+          items: formattedItems,
+          summary: {
+            itemsCount: formattedItems.length,
+            subtotal: parseFloat(subtotal.toFixed(2)),
+            taxAmount: parseFloat(taxAmount.toFixed(2)),
+            shippingCost,
+            totalAmount: parseFloat(totalAmount.toFixed(2))
+          }
+        }, 'Cart retrieved successfully');
+      }
+
+      return ApiResponse.success(res, {
+        cartId: cartId,
+        items: [],
+        summary: {
+          itemsCount: 0,
+          subtotal: 0,
+          taxAmount: 0,
+          shippingCost: STANDARD_SHIPPING,
+          totalAmount: STANDARD_SHIPPING
+        }
+      }, 'Cart is empty');
+    }
+
     // Calculate totals
-    let subtotal = 0;
-    const formattedItems = cartItems.map(item => {
-      const itemSubtotal = (item.price || (item.product?.price || 0)) * item.quantity;
-      subtotal += itemSubtotal;
-      return {
-        id: item.id,
-        product: item.product ? formatSingleResponse(item.product) : null,
-        quantity: item.quantity,
-        price: item.price || item.product?.price || 0,
-        selectedColor: item.selectedColor,
-        selectedSize: item.selectedSize,
-        subtotal: itemSubtotal
-      };
-    });
+    const { formattedItems, subtotal } = formatCartItems(cartItems);
 
     const taxAmount = subtotal * TAX_RATE;
     const shippingCost = subtotal > FREE_SHIPPING_THRESHOLD ? 0 : STANDARD_SHIPPING;
     const totalAmount = subtotal + taxAmount + shippingCost;
 
     return ApiResponse.success(res, {
-      cartId: cartItems[0]?.Cart?.id || null,
+      cartId: cartId,
       items: formattedItems,
       summary: {
         itemsCount: formattedItems.length,
@@ -114,87 +199,117 @@ exports.getCart = async (req, res) => {
  */
 exports.addToCart = async (req, res) => {
   try {
-    const { product_id, quantity = 1 } = req.body;
+    // Accept both productId and product_id for flexibility
+    const productId = req.body.product_id || req.body.productId;
+    const quantity = req.body.quantity || 1;
 
-    if (!product_id || quantity < 1) {
+    if (!productId || quantity < 1) {
       return ApiResponse.error(res, 'Invalid product ID or quantity', 422);
     }
 
-    // Ensure models are ready before use
-    await ensureModelsReady();
-
-    // VALIDATE foreign keys exist
-    const validation = await validateMultipleFK([
-      { model: 'User', id: req.user.id },
-      { model: 'Product', id: product_id }
-    ]);
-
-    if (!validation.isValid) {
-      return ApiResponse.error(res, validation.errors.join('; '), 400);
-    }
-
-    const product = await models.Product.findByPk(product_id);
-    if (!product) {
+    // Bypass wrapper/association issues - use raw Sequelize directly
+    const sequelize = require('../models_sql').sequelize;
+    const hasProductImagesTable = await hasTable(sequelize, 'product_images');
+    
+    // Validate product exists using raw query (avoids model/wrapper issues)
+    const product = await sequelize.query(
+      'SELECT id, price, stock FROM products WHERE id = :productId',
+      { replacements: { productId }, type: sequelize.QueryTypes.SELECT }
+    );
+    
+    if (!product || product.length === 0) {
       return ApiResponse.notFound(res, 'Product');
     }
-
-    if (product.stock < quantity) {
+    
+    const prod = product[0];
+    if (prod.stock < quantity) {
       return ApiResponse.error(res, 'Insufficient stock available', 409);
     }
 
-    let cart = await models.Cart.findOne({
-      where: { userId: req.user.id }
-    });
-
-    if (!cart) {
-      cart = await models.Cart.create({
-        userId: req.user.id
-      });
+    // Get or create cart using raw queries
+    let cartResult = await sequelize.query(
+      'SELECT id FROM carts WHERE user_id = :userId',
+      { replacements: { userId: req.user.id }, type: sequelize.QueryTypes.SELECT }
+    );
+    
+    let cartId;
+    if (cartResult.length > 0) {
+      cartId = cartResult[0].id;
+    } else {
+      const newCart = await sequelize.query(
+        'INSERT INTO carts (user_id, created_at, updated_at) VALUES (:userId, NOW(), NOW()) RETURNING id',
+        { replacements: { userId: req.user.id }, type: sequelize.QueryTypes.INSERT }
+      );
+      cartId = newCart[0][0]?.id || newCart[0]?.id;
     }
 
-    const existingItem = await models.CartItem.findOne({
-      where: {
-        cartId: cart.id,
-        productId: product_id
-      }
-    });
+    if (!cartId) {
+      return ApiResponse.error(res, 'Failed to create/find cart', 500);
+    }
 
-    if (existingItem) {
-      const new_quantity = existingItem.quantity + quantity;
-      if (new_quantity > product.stock) {
+    // Check for existing item
+    const existingItemResult = await sequelize.query(
+      'SELECT id, quantity FROM cart_items WHERE cart_id = :cartId AND product_id = :productId',
+      { replacements: { cartId, productId }, type: sequelize.QueryTypes.SELECT }
+    );
+
+    if (existingItemResult.length > 0) {
+      const newQty = existingItemResult[0].quantity + quantity;
+      if (newQty > prod.stock) {
         return ApiResponse.error(res, 'Quantity exceeds available stock', 409);
       }
-      await existingItem.update({ quantity: new_quantity });
+      await sequelize.query(
+        'UPDATE cart_items SET quantity = :quantity, updated_at = NOW() WHERE id = :itemId',
+        { replacements: { quantity: newQty, itemId: existingItemResult[0].id } }
+      );
     } else {
-      await models.CartItem.create({
-        cartId: cart.id,
-        productId: product_id,
-        quantity,
-        price: product.price || 0
-      });
+      await sequelize.query(
+        'INSERT INTO cart_items (id, cart_id, product_id, quantity, price, added_at, updated_at) VALUES (:id, :cartId, :productId, :quantity, :price, NOW(), NOW())',
+        { replacements: { id: randomUUID(), cartId, productId, quantity, price: prod.price } }
+      );
     }
 
-    const updated_cart = await models.Cart.findByPk(cart.id, {
-      include: {
-        model: models.CartItem,
-        as: 'items',
-        include: {
-          model: models.Product,
-          include: buildIncludeClause('Product')  // ← Full product with relationships
-        }
-      }
+    // Get cart items with products using raw query
+    const cartItems = await sequelize.query(
+      `SELECT ci.id, ci.quantity, ci.price, ci.product_id,
+              ci.selected_color, ci.selected_size,
+              p.id as product_id, p.name, p.price as product_price,
+              ${buildImagesSelectClause(hasProductImagesTable)}
+       FROM cart_items ci
+       LEFT JOIN products p ON ci.product_id = p.id
+       WHERE ci.cart_id = :cartId`,
+      { replacements: { cartId }, type: sequelize.QueryTypes.SELECT }
+    );
+
+    let subtotal = 0;
+    const formattedItems = cartItems.map(item => {
+      const itemPrice = item.price || item.product_price || 0;
+      const itemSubtotal = itemPrice * item.quantity;
+      subtotal += itemSubtotal;
+      
+      return {
+        id: item.id,
+        product: item.product_id ? {
+          id: item.product_id,
+          name: item.name,
+          price: item.product_price,
+          images: item.images
+        } : null,
+        quantity: item.quantity,
+        price: itemPrice,
+        subtotal: itemSubtotal
+      };
     });
 
-    // Format response
-    const formattedItems = (updated_cart.items || []).map(item => ({
-      id: item.id,
-      product: formatSingleResponse(item.Product),
-      quantity: item.quantity
-    }));
-
     return ApiResponse.success(res, {
-      cartId: updated_cart.id,
-      items: formattedItems
+      cartId,
+      items: formattedItems,
+      summary: {
+        subtotal,
+        tax: subtotal * TAX_RATE,
+        shipping: subtotal > FREE_SHIPPING_THRESHOLD ? 0 : STANDARD_SHIPPING,
+        total: subtotal + (subtotal * TAX_RATE) + (subtotal > FREE_SHIPPING_THRESHOLD ? 0 : STANDARD_SHIPPING)
+      }
     }, 'Item added to cart');
   } catch (error) {
     console.error('❌ addToCart error:', error);
@@ -207,52 +322,114 @@ exports.addToCart = async (req, res) => {
  */
 exports.updateCartItem = async (req, res) => {
   try {
-    const { item_id } = req.params;
+    const item_id = extractItemId(req);
     const { quantity } = req.body;
 
+    console.log('🔄 UPDATE CART ITEM REQUEST:', {
+      itemId: item_id,
+      quantity,
+      userId: req.user?.id,
+      userEmail: req.user?.email
+    });
+
     if (!item_id || quantity === undefined || quantity < 0) {
+      console.warn('❌ Invalid parameters:', { item_id, quantity });
       return ApiResponse.error(res, 'Invalid item ID or quantity', 422);
     }
 
-    const cartItem = await models.CartItem.findByPk(item_id, {
-      include: [
-        { model: models.Cart, attributes: ['userId'] },
-        { model: models.Product, attributes: ['stock'] }
-      ]
-    });
+    const sequelize = require('../models_sql').sequelize;
+    const hasProductImagesTable = await hasTable(sequelize, 'product_images');
+    
+    // Fetch cart item with full context
+    const cartItemResult = await sequelize.query(
+      `SELECT ci.id, ci.cart_id, ci.product_id, c.user_id, p.stock
+       FROM cart_items ci
+       INNER JOIN carts c ON ci.cart_id = c.id
+       LEFT JOIN products p ON ci.product_id = p.id
+       WHERE ci.id = :itemId`,
+      { replacements: { itemId: item_id }, type: sequelize.QueryTypes.SELECT }
+    );
 
-    if (!cartItem) {
+    if (!cartItemResult.length) {
+      console.warn('❌ Cart item not found:', item_id);
       return ApiResponse.notFound(res, 'Cart item');
     }
 
+    const cartItem = cartItemResult[0];
+    console.log('✅ Cart item found:', {
+      cartItemId: cartItem.id,
+      productId: cartItem.product_id,
+      cartId: cartItem.cart_id,
+      stock: cartItem.stock
+    });
+
     // Verify ownership
-    if (cartItem.Cart.userId !== req.user.id) {
+    if (cartItem.user_id !== req.user.id) {
+      console.warn('❌ Unauthorized: User cannot modify cart', {
+        requestUserId: req.user.id,
+        cartUserId: cartItem.user_id
+      });
       return ApiResponse.forbidden(res, 'You can only update your own cart');
     }
 
     // Verify stock
-    if (cartItem.Product.stock < quantity) {
+    if ((cartItem.stock || 0) < quantity) {
+      console.warn('❌ Insufficient stock:', {
+        requestQuantity: quantity,
+        availableStock: cartItem.stock
+      });
       return ApiResponse.error(res, 'Quantity exceeds available stock', 409);
     }
 
     if (quantity === 0) {
-      // Delete item
-      await cartItem.destroy();
+      console.log('🗑️ Deleting cart item (quantity = 0):', item_id);
+      await sequelize.query(
+        'DELETE FROM cart_items WHERE id = :itemId',
+        { replacements: { itemId: item_id } }
+      );
     } else {
-      await cartItem.update({ quantity });
+      console.log('✏️ Updating cart item quantity:', {
+        itemId: item_id,
+        newQuantity: quantity
+      });
+      await sequelize.query(
+        'UPDATE cart_items SET quantity = :quantity, updated_at = NOW() WHERE id = :itemId',
+        { replacements: { quantity, itemId: item_id } }
+      );
     }
 
-    const cart = await models.Cart.findByPk(cartItem.cartId, {
-      include: {
-        model: models.CartItem,
-        as: 'items',
-        include: { model: models.Product, attributes: ['id', 'name', 'price', 'images'] }
-      }
+    // Fetch updated cart state
+    const cartItems = await sequelize.query(
+      `SELECT ci.id, ci.quantity, ci.price, ci.product_id,
+              ci.selected_color, ci.selected_size,
+              p.id as product_id, p.name, p.price as product_price,
+              ${buildImagesSelectClause(hasProductImagesTable)}
+       FROM cart_items ci
+       LEFT JOIN products p ON ci.product_id = p.id
+       WHERE ci.cart_id = :cartId`,
+      { replacements: { cartId: cartItem.cart_id }, type: sequelize.QueryTypes.SELECT }
+    );
+
+    const { formattedItems, subtotal } = formatCartItems(cartItems);
+    console.log('✅ Cart updated successfully:', {
+      itemsCount: formattedItems.length,
+      subtotal,
+      updatedItemId: item_id
     });
 
-    return ApiResponse.success(res, cart, 'Cart item updated');
+    return ApiResponse.success(res, {
+      cartId: cartItem.cart_id,
+      items: formattedItems,
+      summary: {
+        itemCount: formattedItems.length,
+        totalQuantity: formattedItems.reduce((sum, item) => sum + item.quantity, 0),
+        subtotal,
+        discount: 0,
+        total: subtotal
+      }
+    }, 'Cart item updated');
   } catch (error) {
-    console.error('❌ updateCartItem error:', error);
+    console.error('❌ updateCartItem error:', error.message, error.stack);
     return ApiResponse.serverError(res, error);
   }
 };
@@ -262,34 +439,99 @@ exports.updateCartItem = async (req, res) => {
  */
 exports.removeFromCart = async (req, res) => {
   try {
-    const { item_id } = req.params;
+    const item_id = extractItemId(req);
+    const productId = req.body.product_id || req.body.productId;
+    const sequelize = require('../models_sql').sequelize;
+    const hasProductImagesTable = await hasTable(sequelize, 'product_images');
 
-    const cartItem = await models.CartItem.findByPk(item_id, {
-      include: { model: models.Cart, attributes: ['userId'] }
+    console.log('🗑️ REMOVE FROM CART REQUEST:', {
+      itemId: item_id,
+      productId,
+      userId: req.user?.id,
+      userEmail: req.user?.email
     });
 
-    if (!cartItem) {
+    let cartItemResult = [];
+    if (item_id) {
+      cartItemResult = await sequelize.query(
+        `SELECT ci.id, ci.cart_id, ci.product_id, c.user_id
+         FROM cart_items ci
+         INNER JOIN carts c ON ci.cart_id = c.id
+         WHERE ci.id = :itemId`,
+        { replacements: { itemId: item_id }, type: sequelize.QueryTypes.SELECT }
+      );
+    } else if (productId) {
+      cartItemResult = await sequelize.query(
+        `SELECT ci.id, ci.cart_id, ci.product_id, c.user_id
+         FROM cart_items ci
+         INNER JOIN carts c ON ci.cart_id = c.id
+         WHERE c.user_id = :userId AND ci.product_id = :productId
+         LIMIT 1`,
+        { replacements: { userId: req.user.id, productId }, type: sequelize.QueryTypes.SELECT }
+      );
+    } else {
+      console.warn('❌ Neither item ID nor product ID provided');
+      return ApiResponse.error(res, 'Item ID or product ID is required', 422);
+    }
+
+    if (!cartItemResult.length) {
+      console.warn('❌ Cart item not found');
       return ApiResponse.notFound(res, 'Cart item');
     }
 
-    if (cartItem.Cart.userId !== req.user.id) {
+    const cartItem = cartItemResult[0];
+    console.log('✅ Cart item found:', {
+      cartItemId: cartItem.id,
+      productId: cartItem.product_id,
+      cartId: cartItem.cart_id
+    });
+
+    if (cartItem.user_id !== req.user.id) {
+      console.warn('❌ Unauthorized cart removal');
       return ApiResponse.forbidden(res, 'You can only remove from your own cart');
     }
 
-    const cartId = cartItem.cartId;
-    await cartItem.destroy();
+    const cartId = cartItem.cart_id;
+    console.log('🗑️ Deleting cart item:', cartItem.id);
+    
+    await sequelize.query(
+      'DELETE FROM cart_items WHERE id = :itemId',
+      { replacements: { itemId: cartItem.id } }
+    );
 
-    const cart = await models.Cart.findByPk(cartId, {
-      include: {
-        model: models.CartItem,
-        as: 'items',
-        include: { model: models.Product, attributes: ['id', 'name', 'price', 'images'] }
-      }
+    console.log('✅ Cart item deleted, fetching updated cart...');
+
+    const cartItems = await sequelize.query(
+      `SELECT ci.id, ci.quantity, ci.price, ci.product_id,
+              ci.selected_color, ci.selected_size,
+              p.id as product_id, p.name, p.price as product_price,
+              ${buildImagesSelectClause(hasProductImagesTable)}
+       FROM cart_items ci
+       LEFT JOIN products p ON ci.product_id = p.id
+       WHERE ci.cart_id = :cartId`,
+      { replacements: { cartId }, type: sequelize.QueryTypes.SELECT }
+    );
+
+    const { formattedItems, subtotal } = formatCartItems(cartItems);
+    console.log('✅ Cart updated after removal:', {
+      itemsCount: formattedItems.length,
+      subtotal,
+      removedItemId: item_id
     });
 
-    return ApiResponse.success(res, cart, 'Item removed from cart');
+    return ApiResponse.success(res, {
+      cartId,
+      items: formattedItems,
+      summary: {
+        itemCount: formattedItems.length,
+        totalQuantity: formattedItems.reduce((sum, item) => sum + item.quantity, 0),
+        subtotal,
+        discount: 0,
+        total: subtotal
+      }
+    }, 'Item removed from cart');
   } catch (error) {
-    console.error('❌ removeFromCart error:', error);
+    console.error('❌ removeFromCart error:', error.message, error.stack);
     return ApiResponse.serverError(res, error);
   }
 };
@@ -299,21 +541,22 @@ exports.removeFromCart = async (req, res) => {
  */
 exports.clearCart = async (req, res) => {
   try {
-    const cart = await models.Cart.findOne({
-      where: { userId: req.user.id }
-    });
+    const sequelize = require('../models_sql').sequelize;
+    const cart = await sequelize.query(
+      'SELECT id FROM carts WHERE user_id = :userId LIMIT 1',
+      { replacements: { userId: req.user.id }, type: sequelize.QueryTypes.SELECT }
+    );
 
-    if (!cart) {
+    if (!cart.length) {
       return ApiResponse.notFound(res, 'Cart');
     }
 
-    await models.CartItem.destroy({
-      where: { cartId: cart.id }
-    });
+    await sequelize.query(
+      'DELETE FROM cart_items WHERE cart_id = :cartId',
+      { replacements: { cartId: cart[0].id } }
+    );
 
-    const updated_cart = await models.Cart.findByPk(cart.id);
-    
-    return ApiResponse.success(res, updated_cart, 'Cart cleared');
+    return ApiResponse.success(res, { cartId: cart[0].id, items: [] }, 'Cart cleared');
   } catch (error) {
     console.error('❌ clearCart error:', error);
     return ApiResponse.serverError(res, error);
@@ -325,13 +568,25 @@ exports.clearCart = async (req, res) => {
  */
 exports.getCartCount = async (req, res) => {
   try {
-    const count = await models.CartItem.count({
-      include: {
-        model: models.Cart,
-        where: { userId: req.user.id },
-        attributes: []
-      }
-    });
+    const sequelize = require('../models_sql').sequelize;
+    const cartCountResult = await sequelize.query(
+      `SELECT COUNT(*)::int as count
+       FROM cart_items ci
+       INNER JOIN carts c ON ci.cart_id = c.id
+       WHERE c.user_id = :userId`,
+      { replacements: { userId: req.user.id }, type: sequelize.QueryTypes.SELECT }
+    );
+
+    let count = cartCountResult[0]?.count || 0;
+    if (count === 0) {
+      const legacyCountResult = await sequelize.query(
+        `SELECT COUNT(*)::int as count
+         FROM carts
+         WHERE user_id = :userId AND product_id IS NOT NULL`,
+        { replacements: { userId: req.user.id }, type: sequelize.QueryTypes.SELECT }
+      );
+      count = legacyCountResult[0]?.count || 0;
+    }
 
     return ApiResponse.success(res, { count }, 'Cart count retrieved');
   } catch (error) {
@@ -342,18 +597,43 @@ exports.getCartCount = async (req, res) => {
 
 exports.getCartTotalCount = async (req, res) => {
   try {
-    const cart = await models.Cart.findOne({
-      where: { userId: req.user.id },
-      include: {
-        model: models.CartItem,
-        as: 'items'
-      }
-    });
+    const sequelize = require('../models_sql').sequelize;
+    const hasWishlistsTable = await hasTable(sequelize, 'wishlists');
+    let cartItems = await sequelize.query(
+      `SELECT ci.id, ci.quantity, ci.price, ci.product_id,
+              p.price as product_price
+       FROM cart_items ci
+       INNER JOIN carts c ON ci.cart_id = c.id
+       LEFT JOIN products p ON ci.product_id = p.id
+       WHERE c.user_id = :userId`,
+      { replacements: { userId: req.user.id }, type: sequelize.QueryTypes.SELECT }
+    );
 
-    const cartItems = cart?.items || [];
+    if (!cartItems || cartItems.length === 0) {
+      cartItems = await sequelize.query(
+        `SELECT c.id, c.quantity, c.price, c.product_id,
+                p.price as product_price
+         FROM carts c
+         LEFT JOIN products p ON c.product_id = p.id
+         WHERE c.user_id = :userId AND c.product_id IS NOT NULL`,
+        { replacements: { userId: req.user.id }, type: sequelize.QueryTypes.SELECT }
+      );
+    }
+
     const itemCount = cartItems.length;
     const quantityTotal = cartItems.reduce((sum, item) => sum + (item.quantity || 0), 0);
-    const totalAmount = cartItems.reduce((sum, item) => sum + ((item.Product?.price || 0) * (item.quantity || 0)), 0);
+    const totalAmount = cartItems.reduce((sum, item) => sum + (((item.product_price || item.price) || 0) * (item.quantity || 0)), 0);
+    let wishlistItemCount = 0;
+
+    if (hasWishlistsTable) {
+      const wishlistCountResult = await sequelize.query(
+        `SELECT COUNT(*)::int as count
+         FROM wishlists
+         WHERE user_id = :userId`,
+        { replacements: { userId: req.user.id }, type: sequelize.QueryTypes.SELECT }
+      );
+      wishlistItemCount = wishlistCountResult[0]?.count || 0;
+    }
 
     const data = {
       cart: {
@@ -362,9 +642,9 @@ exports.getCartTotalCount = async (req, res) => {
         totalAmount
       },
       wishlist: {
-        itemCount: 0
+        itemCount: wishlistItemCount
       },
-      totalCount: quantityTotal,
+      totalCount: quantityTotal + wishlistItemCount,
       showCartTotalPrice: true
     };
 
@@ -399,43 +679,50 @@ exports.debugCart = async (req, res) => {
 
 exports.bulkRemoveItems = async (req, res) => {
   try {
-    const { item_ids } = req.body;
+    const item_ids = req.body.item_ids || req.body.itemIds;
+
+    console.log('🗑️ BULK REMOVE REQUEST:', {
+      itemIds: item_ids,
+      count: item_ids?.length,
+      userId: req.user?.id,
+      userEmail: req.user?.email
+    });
 
     if (!Array.isArray(item_ids) || item_ids.length === 0) {
+      console.warn('❌ Invalid item IDs array');
       return ApiResponse.error(res, 'Item IDs array is required', 422);
     }
 
-    // Verify all items belong to user
-    const items = await models.CartItem.findAll({
-      where: { id: item_ids },
-      include: [{ model: models.Cart, attributes: ['userId'] }, { model: models.Product, attributes: ['id', 'name', 'price'] }]
-    });
+    const sequelize = require('../models_sql').sequelize;
+    const items = await sequelize.query(
+      `SELECT ci.id, c.user_id
+       FROM cart_items ci
+       INNER JOIN carts c ON ci.cart_id = c.id
+       WHERE ci.id IN (:itemIds)`,
+      { replacements: { itemIds: item_ids }, type: sequelize.QueryTypes.SELECT }
+    );
 
-    for (const item of items) {
-      if (item.Cart.userId !== req.user.id) {
-        return ApiResponse.forbidden(res, 'You can only modify your own cart');
-      }
+    console.log('✅ Found items to delete:', items.length);
+
+    if (items.some(item => item.user_id !== req.user.id)) {
+      console.warn('❌ Unauthorized bulk removal');
+      return ApiResponse.forbidden(res, 'You can only modify your own cart');
     }
 
-    const removed_count = await models.CartItem.destroy({
-      where: { id: item_ids }
-    });
+    console.log('🗑️ Deleting cart items:', item_ids);
+    
+    await sequelize.query(
+      'DELETE FROM cart_items WHERE id IN (:itemIds)',
+      { replacements: { itemIds: item_ids } }
+    );
 
-    const cart = await models.Cart.findOne({
-      where: { userId: req.user.id },
-      include: {
-        model: models.CartItem,
-        as: 'items',
-        include: { model: models.Product, attributes: ['id', 'name', 'price', 'images'] }
-      }
-    });
+    console.log('✅ Bulk removal completed:', items.length, 'items deleted');
 
     return ApiResponse.success(res, {
-      removed_count,
-      cart
-    }, `${removed_count} item(s) removed from cart`);
+      removedCount: items.length
+    }, `${items.length} item(s) removed from cart`);
   } catch (error) {
-    console.error('❌ bulkRemoveItems error:', error);
+    console.error('❌ bulkRemoveItems error:', error.message, error.stack);
     return ApiResponse.serverError(res, error);
   }
 };

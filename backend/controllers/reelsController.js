@@ -11,6 +11,69 @@ const models = dbType.includes('postgres') ? require('../models_sql') : require(
 const ApiResponse = require('../utils/ApiResponse');
 const { validatePagination } = require('../utils/validation');
 const { Op } = require('sequelize');
+const { createFashionArtwork, slugify } = require('../dbseeder/utils/image-utils');
+
+const DEFAULT_PRODUCT_IMAGE = '/uploads/default-product.svg';
+
+const getTaggedProductIds = (item) => {
+  const rawIds = item?.productIds || item?.product_ids || [];
+  return Array.isArray(rawIds) ? rawIds.filter(Boolean) : [];
+};
+
+const buildProductPreviewMap = async (productIds = []) => {
+  const uniqueIds = [...new Set(productIds.filter(Boolean))];
+  if (!uniqueIds.length) {
+    return new Map();
+  }
+
+  const products = await models.Product.findAll({
+    where: { id: uniqueIds },
+    attributes: ['id', 'name', 'title', 'price', 'imageUrl']
+  });
+
+  return new Map(products.map((product) => {
+    const item = product.toJSON ? product.toJSON() : product;
+    const fallbackImage = item.imageUrl || createFashionArtwork('products', slugify(item.title || item.name || item.id), 0, { subtitle: 'Tagged product' });
+    return [item.id, {
+      _id: item.id,
+      id: item.id,
+      name: item.name || item.title || 'Product',
+      price: Number(item.price || 0),
+      images: [{ url: fallbackImage || DEFAULT_PRODUCT_IMAGE, isPrimary: true }],
+      image: fallbackImage || DEFAULT_PRODUCT_IMAGE,
+      brand: ''
+    }];
+  }));
+};
+
+const formatReelForClient = (reel, productPreviewMap) => {
+  const item = reel.toJSON ? reel.toJSON() : reel;
+  const creator = item.creator || item.author || null;
+
+  return {
+    ...item,
+    _id: item.id || item._id,
+    products: getTaggedProductIds(item).map((productId) => ({
+      _id: productId,
+      product: productPreviewMap.get(productId) || {
+        _id: productId,
+        id: productId,
+        name: 'Product',
+        price: 0,
+        images: [{ url: DEFAULT_PRODUCT_IMAGE, isPrimary: true }],
+        brand: ''
+      }
+    })),
+    user: creator ? {
+      _id: creator.id || creator._id,
+      id: creator.id || creator._id,
+      username: creator.username,
+      fullName: creator.full_name || creator.fullName || creator.username,
+      avatar: creator.avatar_url || creator.avatar || '',
+      isVerified: !!creator.is_verified
+    } : null
+  };
+};
 
 /**
  * Get reels feed (For You Page)
@@ -48,7 +111,16 @@ exports.getReelsFeed = async (req, res) => {
       totalPages: Math.ceil(count / limit)
     };
 
-    return ApiResponse.paginated(res, rows, pagination, 'Reels feed retrieved successfully');
+    const productPreviewMap = await buildProductPreviewMap(
+      rows.flatMap((reel) => getTaggedProductIds(reel.toJSON ? reel.toJSON() : reel))
+    );
+
+    return ApiResponse.paginated(
+      res,
+      rows.map((reel) => formatReelForClient(reel, productPreviewMap)),
+      pagination,
+      'Reels feed retrieved successfully'
+    );
   } catch (error) {
     console.error('❌ getReelsFeed error:', error);
     return ApiResponse.serverError(res, error);
@@ -83,7 +155,16 @@ exports.getTrendingReels = async (req, res) => {
       totalPages: Math.ceil(count / limit)
     };
 
-    return ApiResponse.paginated(res, rows, pagination, 'Trending reels retrieved successfully');
+    const productPreviewMap = await buildProductPreviewMap(
+      rows.flatMap((reel) => getTaggedProductIds(reel.toJSON ? reel.toJSON() : reel))
+    );
+
+    return ApiResponse.paginated(
+      res,
+      rows.map((reel) => formatReelForClient(reel, productPreviewMap)),
+      pagination,
+      'Trending reels retrieved successfully'
+    );
   } catch (error) {
     console.error('❌ getTrendingReels error:', error);
     return ApiResponse.serverError(res, error);
@@ -120,7 +201,8 @@ exports.getReelById = async (req, res) => {
     // Increment views
     await reel.increment('views_count');
 
-    return ApiResponse.success(res, reel, 'Reel retrieved successfully');
+    const productPreviewMap = await buildProductPreviewMap(getTaggedProductIds(reel.toJSON ? reel.toJSON() : reel));
+    return ApiResponse.success(res, formatReelForClient(reel, productPreviewMap), 'Reel retrieved successfully');
   } catch (error) {
     console.error('❌ getReelById error:', error);
     return ApiResponse.serverError(res, error);

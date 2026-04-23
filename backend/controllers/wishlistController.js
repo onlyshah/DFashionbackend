@@ -4,8 +4,7 @@
  * Model → Controller → Routes pattern
  */
 
-const dbType = process.env.DB_TYPE || 'mongodb';
-const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
+const models = require('../models_sql');
 
 // Helper to ensure models are initialized before use
 const ensureModelsReady = async () => {
@@ -25,130 +24,106 @@ const ensureModelsReady = async () => {
  */
 exports.getWishlist = async (req, res) => {
   try {
-    // If no user (optional auth), return empty wishlist
     if (!req.user) {
       return res.json({
         success: true,
-        wishlist: {
+        data: {
           items: [],
-          itemCount: 0
+          summary: {
+            totalItems: 0,
+            totalValue: 0,
+            totalSavings: 0,
+            itemCount: 0
+          },
+          pagination: {
+            currentPage: 1,
+            totalPages: 0,
+            totalItems: 0,
+            hasNextPage: false,
+            hasPrevPage: false
+          }
         },
-        summary: {
-          totalItems: 0,
-          totalValue: 0,
-          totalSavings: 0,
-          itemCount: 0
-        },
-        pagination: {
-          page: 1,
-          limit: 12,
-          total: 0,
-          totalPages: 0
+        message: 'Wishlist retrieved successfully'
+      });
+    }
+
+    await ensureModelsReady();
+
+    const Wishlist = models._raw?.Wishlist || models.Wishlist;
+    const Product = models._raw?.Product || models.Product;
+
+    if (!Wishlist || !Product) {
+      return res.status(500).json({
+        success: false,
+        message: 'Models not initialized',
+        data: null
+      });
+    }
+
+    const parsedPage = Number.parseInt(req.query.page, 10) || 1;
+    const parsedLimit = Number.parseInt(req.query.limit, 10) || 12;
+    const offset = (parsedPage - 1) * parsedLimit;
+
+    const result = await Wishlist.findAndCountAll({
+      where: { userId: req.user.id },
+      offset,
+      limit: parsedLimit,
+      order: [['addedAt', 'DESC']],
+      include: [
+        {
+          model: Product,
+          as: 'product',
+          required: false,
+          attributes: ['id', 'name', 'title', 'price', 'discountPrice', 'stock', 'isActive', 'ratings', 'reviews']
         }
-      });
-    }
-
-    // Get lazy-loaded models
-    const Wishlist = models.Wishlist;
-    const Product = models.Product;
-
-    if (!Wishlist) {
-      console.error('[wishlistController] Wishlist model not available');
-      return res.status(500).json({
-        success: false,
-        message: 'Models not initialized - Wishlist unavailable',
-        data: null
-      });
-    }
-
-    if (!Product) {
-      console.error('[wishlistController] Product model not available');
-      return res.status(500).json({
-        success: false,
-        message: 'Models not initialized - Product unavailable',
-        data: null
-      });
-    }
-
-    const { page = 1, limit = 12 } = req.query;
-    const offset = (page - 1) * limit;
-
-    let wishlistItems;
-    let total;
-
-    if (models.isPostgres) {
-      // PostgreSQL implementation
-      const result = await Wishlist.findAndCountAll({
-        where: { userId: req.user.id },
-        offset,
-        limit: parseInt(limit),
-        order: [['addedAt', 'DESC']],
-        attributes: ['id', 'productId', 'addedAt']
-      });
-
-      wishlistItems = result.rows;
-      total = result.count;
-    } else {
-      // MongoDB implementation
-      const result = await Wishlist.findAndCountAll({
-        userId: req.user.id,
-        skip: offset,
-        limit: parseInt(limit),
-        sort: { addedAt: -1 }
-      });
-
-      wishlistItems = result.rows;
-      total = result.count;
-    }
-
-    // Get product details
-    const productIds = wishlistItems.map(item => item.productId || item.product_id);
-    let products = [];
-
-    if (productIds.length > 0) {
-      if (models.isPostgres) {
-        products = await Product.findAll({
-          where: { id: productIds },
-          attributes: ['id', 'name', 'price', 'images', 'brand', 'category', 'stock', 'rating']
-        });
-      } else {
-        products = await Product.findAll({
-          _id: { $in: productIds }
-        });
-      }
-    }
-
-    // Map wishlist items with product details
-    const items = wishlistItems.map(item => {
-      const productId = item.productId || item.product_id;
-      const product = products.find(p => (p.id || p._id) === productId);
-      return {
-        id: item.id || item._id,
-        productId: productId,
-        addedAt: item.addedAt || item.added_at,
-        product: product || null
-      };
+      ]
     });
 
-    // Calculate summary
-    const totalValue = items.reduce((sum, item) => sum + (item.product?.price || 0), 0);
-    const summary = {
-      totalItems: total,
-      totalValue: totalValue,
-      totalSavings: 0, // Calculate if original prices available
-      itemCount: total
-    };
+    const items = result.rows.map((item) => ({
+      id: item.id,
+      productId: item.productId,
+      addedAt: item.addedAt,
+      product: item.product ? {
+        id: item.product.id,
+        name: item.product.name || item.product.title || '',
+        price: Number(item.product.price || 0),
+        originalPrice: item.product.discountPrice ? Number(item.product.discountPrice) : undefined,
+        images: [],
+        brand: '',
+        discount: 0,
+        rating: {
+          average: Number(item.product.ratings || 0),
+          count: Number(item.product.reviews || 0)
+        },
+        analytics: {
+          views: 0,
+          likes: 0
+        },
+        isActive: !!item.product.isActive
+      } : null
+    })).filter((item) => !!item.product);
 
-    res.json({
+    const totalValue = items.reduce((sum, item) => sum + (item.product?.price || 0), 0);
+
+    return res.json({
       success: true,
-      wishlist: { items, itemCount: total },
-      summary: summary,
-      pagination: {
-        page: parseInt(page),
-        limit: parseInt(limit),
-        total: total,
-        totalPages: Math.ceil(total / limit)
-      }
+      data: {
+        items,
+        summary: {
+          totalItems: result.count,
+          totalValue,
+          totalSavings: 0,
+          itemCount: result.count
+        },
+        pagination: {
+          currentPage: parsedPage,
+          totalPages: Math.ceil(result.count / parsedLimit),
+          totalItems: result.count,
+          hasNextPage: (parsedPage * parsedLimit) < result.count,
+          hasPrevPage: parsedPage > 1
+        }
+      },
+      message: 'Wishlist retrieved successfully'
     });
   } catch (error) {
     console.error('Get wishlist error:', error.message, error.stack);
@@ -168,9 +143,9 @@ exports.addToWishlist = async (req, res) => {
     // Ensure models are ready before use
     await ensureModelsReady();
 
-    // Get lazy-loaded models
-    const Wishlist = models.Wishlist;
-    const Product = models.Product;
+    // Get actual Sequelize models from _raw
+    const Wishlist = models._raw?.Wishlist || models.Wishlist;
+    const Product = models._raw?.Product || models.Product;
 
     if (!Wishlist || !Product) {
       return res.status(500).json({
@@ -180,12 +155,14 @@ exports.addToWishlist = async (req, res) => {
       });
     }
 
-    const { productId } = req.body;
+    // Accept both productId and product_id
+    const productId = req.body.productId || req.body.product_id;
 
     if (!productId) {
       return res.status(400).json({
         success: false,
-        message: 'Product ID is required'
+        message: 'Product ID is required',
+        statusCode: 400
       });
     }
 
@@ -204,9 +181,15 @@ exports.addToWishlist = async (req, res) => {
     });
 
     if (exists) {
-      return res.status(400).json({
+      return res.status(409).json({
         success: false,
-        message: 'Product already in wishlist'
+        message: 'Already in wishlist',
+        data: {
+          id: exists.id,
+          productId: exists.productId,
+          addedAt: exists.addedAt
+        },
+        statusCode: 409
       });
     }
 
@@ -217,14 +200,15 @@ exports.addToWishlist = async (req, res) => {
       addedAt: new Date()
     });
 
-    res.json({
+    return res.status(201).json({
       success: true,
-      message: 'Product added to wishlist',
+      message: 'Added to wishlist',
       data: { 
         id: wishlistItem.id,
         productId: wishlistItem.productId,
         addedAt: wishlistItem.addedAt
-      }
+      },
+      statusCode: 201
     });
   } catch (error) {
     console.error('Add to wishlist error:', error.message, error.stack);
@@ -241,8 +225,9 @@ exports.addToWishlist = async (req, res) => {
  */
 exports.removeFromWishlist = async (req, res) => {
   try {
-    // Get lazy-loaded models
-    const Wishlist = models.Wishlist;
+    await ensureModelsReady();
+
+    const Wishlist = models._raw?.Wishlist || models.Wishlist;
 
     if (!Wishlist) {
       return res.status(500).json({
@@ -252,28 +237,28 @@ exports.removeFromWishlist = async (req, res) => {
       });
     }
 
-    const { itemId } = req.params;
+    const itemId = req.params.itemId || req.body.itemId || req.body.item_id;
+    const productId = req.body.productId || req.body.product_id || req.params.productId;
 
-    if (!itemId) {
+    if (!itemId && !productId) {
       return res.status(400).json({
         success: false,
-        message: 'Item ID is required'
+        message: 'Product ID is required'
       });
     }
 
-    const wishlistItem = await Wishlist.findByPk(itemId);
+    const where = { userId: req.user.id };
+    if (itemId) {
+      where.id = itemId;
+    } else {
+      where.productId = productId;
+    }
+
+    const wishlistItem = await Wishlist.findOne({ where });
     if (!wishlistItem) {
-      return res.status(404).json({
-        success: false,
-        message: 'Wishlist item not found'
-      });
-    }
-
-    // Verify ownership
-    if (wishlistItem.userId !== req.user.id) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized'
+      return res.status(200).json({
+        success: true,
+        message: 'Removed from wishlist'
       });
     }
 
@@ -281,7 +266,7 @@ exports.removeFromWishlist = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Product removed from wishlist'
+      message: 'Removed from wishlist'
     });
   } catch (error) {
     console.error('Remove from wishlist error:', error.message, error.stack);

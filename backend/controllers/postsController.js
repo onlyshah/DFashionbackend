@@ -12,6 +12,80 @@ const models = dbType.includes('postgres') ? require('../models_sql') : require(
 const ApiResponse = require('../utils/ApiResponse');
 const { validatePostsRequest, validatePagination } = require('../utils/validation');
 const { Op, QueryTypes } = require('sequelize');
+const { createFashionArtwork, slugify } = require('../dbseeder/utils/image-utils');
+
+const DEFAULT_PRODUCT_IMAGE = '/uploads/default-product.svg';
+
+const getTaggedProductIds = (item) => {
+  const rawIds = item?.productIds || item?.product_ids || [];
+  if (Array.isArray(rawIds)) {
+    return rawIds.filter(Boolean);
+  }
+  return [];
+};
+
+const buildProductPreviewMap = async (productIds = []) => {
+  const uniqueIds = [...new Set(productIds.filter(Boolean))];
+  if (!uniqueIds.length) {
+    return new Map();
+  }
+
+  const products = await models.Product.findAll({
+    where: { id: uniqueIds },
+    attributes: ['id', 'name', 'title', 'price', 'imageUrl']
+  });
+
+  return new Map(products.map((product) => {
+    const item = product.toJSON ? product.toJSON() : product;
+    const fallbackImage = item.imageUrl || createFashionArtwork('products', slugify(item.title || item.name || item.id), 0, { subtitle: 'Tagged product' });
+    return [item.id, {
+      _id: item.id,
+      id: item.id,
+      name: item.name || item.title || 'Product',
+      price: Number(item.price || 0),
+      images: [{ url: fallbackImage || DEFAULT_PRODUCT_IMAGE, isPrimary: true }],
+      image: fallbackImage || DEFAULT_PRODUCT_IMAGE,
+      brand: ''
+    }];
+  }));
+};
+
+const mapTaggedProducts = (item, productPreviewMap) => {
+  return getTaggedProductIds(item).map((productId) => ({
+    _id: productId,
+    product: productPreviewMap.get(productId) || {
+      _id: productId,
+      id: productId,
+      name: 'Product',
+      price: 0,
+      images: [{ url: DEFAULT_PRODUCT_IMAGE, isPrimary: true }],
+      brand: ''
+    },
+    position: { x: 0.5, y: 0.5 }
+  }));
+};
+
+const formatPostForClient = (post, productPreviewMap) => {
+  const item = post.toJSON ? post.toJSON() : post;
+  const mediaUrl = item.mediaUrl || item.media_url || null;
+  const author = item.author || item.creator || item.user || null;
+
+  return {
+    ...item,
+    _id: item.id || item._id,
+    caption: item.caption || item.title || item.content || '',
+    media: mediaUrl ? [{ type: 'image', url: mediaUrl, alt: item.title || 'Post media' }] : [],
+    products: mapTaggedProducts(item, productPreviewMap),
+    user: author ? {
+      _id: author.id || author._id,
+      id: author.id || author._id,
+      username: author.username,
+      fullName: author.full_name || author.fullName || author.username,
+      avatar: author.avatar_url || author.avatar || '',
+      isVerified: !!author.is_verified
+    } : null
+  };
+};
 
 /**
  * Get all posts (feed) - Public feed
@@ -105,11 +179,10 @@ exports.getPostsFeed = async (req, res) => {
       hasPrev: page > 1
     };
 
-    const posts = rows.map(post => {
-      const item = post.toJSON ? post.toJSON() : post;
-      const user = item.author || item.creator || null;
-      return { ...item, user };
-    });
+    const productPreviewMap = await buildProductPreviewMap(
+      rows.flatMap((post) => getTaggedProductIds(post.toJSON ? post.toJSON() : post))
+    );
+    const posts = rows.map((post) => formatPostForClient(post, productPreviewMap));
 
     return res.status(200).json({
       success: true,
@@ -158,7 +231,8 @@ exports.getPostById = async (req, res) => {
       return ApiResponse.notFound(res, 'Post');
     }
 
-    return ApiResponse.success(res, post, 'Post retrieved successfully');
+    const productPreviewMap = await buildProductPreviewMap(getTaggedProductIds(post.toJSON ? post.toJSON() : post));
+    return ApiResponse.success(res, formatPostForClient(post, productPreviewMap), 'Post retrieved successfully');
   } catch (error) {
     console.error('❌ getPostById error:', error);
     return ApiResponse.serverError(res, error);

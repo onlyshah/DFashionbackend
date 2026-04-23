@@ -51,8 +51,17 @@ class AdapterInitializer {
 
       // Verify connection
       console.log('🔗 Verifying database connection...');
-      const connection = await db.getSequelize().authenticate();
-      console.log('✅ Database connection verified');
+      const sequelizeInstance = db.getSequelize();
+      if (sequelizeInstance && sequelizeInstance.authenticate) {
+        try {
+          await sequelizeInstance.authenticate();
+          console.log('✅ Database connection verified');
+        } catch (err) {
+          console.warn('⚠️  Could not authenticate connection:', err.message);
+        }
+      } else {
+        console.log('✅ Sequelize instance available (authentication skipped)');
+      }
 
       // Count models
       const modelCount = Object.keys(db._raw || {}).length;

@@ -5,23 +5,29 @@
  */
 
 const models = require('../../../models_sql');
+const { createFashionArtwork } = require('../../utils/image-utils');
 
 const brandData = [
-  { name: 'Nike', logoUrl: '/uploads/brands/nike.png', description: 'Athletic and sports brand' },
-  { name: 'Adidas', logoUrl: '/uploads/brands/adidas.png', description: 'Sports equipment and apparel' },
-  { name: 'Puma', logoUrl: '/uploads/brands/puma.png', description: 'Sports lifestyle brand' },
-  { name: 'Tommy Hilfiger', logoUrl: '/uploads/brands/tommy-hilfiger.png', description: 'Premium fashion brand' },
-  { name: 'Ralph Lauren', logoUrl: '/uploads/brands/ralph-lauren.png', description: 'Luxury brand' },
-  { name: 'Calvin Klein', logoUrl: '/uploads/brands/calvin-klein.png', description: 'Designer brand' },
-  { name: 'H&M', logoUrl: '/uploads/brands/hm.png', description: 'Fast fashion retailer' },
-  { name: 'Zara', logoUrl: '/uploads/brands/zara.png', description: 'Fashion brand' },
-  { name: 'Forever 21', logoUrl: '/uploads/brands/forever21.png', description: 'Affordable fashion' },
-  { name: 'Gucci', logoUrl: '/uploads/brands/gucci.png', description: 'Luxury brand' },
-  { name: 'Louis Vuitton', logoUrl: '/uploads/brands/louis-vuitton.png', description: 'Premium luxury brand' },
-  { name: 'Versace', logoUrl: '/uploads/brands/versace.png', description: 'Italian luxury brand' },
-  { name: 'Chanel', logoUrl: '/uploads/brands/chanel.png', description: 'French luxury brand' },
-  { name: 'Dior', logoUrl: '/uploads/brands/dior.png', description: 'French fashion house' },
-  { name: 'Prada', logoUrl: '/uploads/brands/prada.png', description: 'Italian luxury brand' }
+  ['Nike', 'Athletic and sports brand'],
+  ['Adidas', 'Sports equipment and apparel'],
+  ['Puma', 'Sports lifestyle brand'],
+  ['Tommy Hilfiger', 'Premium fashion brand'],
+  ['Ralph Lauren', 'Luxury brand'],
+  ['Calvin Klein', 'Designer brand'],
+  ['H&M', 'Fast fashion retailer'],
+  ['Zara', 'Fashion brand'],
+  ['Forever 21', 'Affordable fashion'],
+  ['Gucci', 'Luxury brand'],
+  ['Louis Vuitton', 'Premium luxury brand'],
+  ['Versace', 'Italian luxury brand'],
+  ['Chanel', 'French luxury brand'],
+  ['Dior', 'French fashion house'],
+  ['Prada', 'Italian luxury brand']
+].map(([name, description]) => ({
+  name,
+  description,
+  logoUrl: createFashionArtwork('brands', name, 1, { subtitle: 'Fashion brand', width: 720, height: 720 })
+}));
 ];
 
 async function seedBrands() {

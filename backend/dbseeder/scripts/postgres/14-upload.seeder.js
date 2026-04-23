@@ -5,23 +5,30 @@
  */
 
 const models = require('../../../models_sql');
+const path = require('path');
+const { createFashionArtwork } = require('../../utils/image-utils');
+
+const logoUploadPath = createFashionArtwork('brands', 'DFashion logo', 1, { subtitle: 'Fashion marketplace' });
+const bannerUploadPath = createFashionArtwork('posts', 'Homepage banner', 1, { subtitle: 'Fresh fashion drops' });
 
 const uploadData = [
   {
-    fileName: 'logo.png',
-    fileUrl: 'https://cdn.example.com/uploads/logo.png',
-    fileType: 'image/png',
-    fileSize: 102400,
-    uploadedBy: 'system',
-    isPublic: true
+    uploadPath: logoUploadPath,
+    fileName: path.basename(logoUploadPath),
+    fileType: 'image/svg+xml',
+    fileSize: 18432,
+    uploadStatus: 'completed',
+    uploadedAt: new Date(),
+    isActive: true
   },
   {
-    fileName: 'banner.jpg',
-    fileUrl: 'https://cdn.example.com/uploads/banner.jpg',
-    fileType: 'image/jpeg',
-    fileSize: 256000,
-    uploadedBy: 'system',
-    isPublic: true
+    uploadPath: bannerUploadPath,
+    fileName: path.basename(bannerUploadPath),
+    fileType: 'image/svg+xml',
+    fileSize: 24810,
+    uploadStatus: 'completed',
+    uploadedAt: new Date(),
+    isActive: true
   }
 ];
 

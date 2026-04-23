@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { auth, requireRole, optionalAuth } = require('../middleware/auth');
+const { auth, optionalAuth } = require('../middleware/auth');
 const wishlistController = require('../controllers/wishlistController');
 
 // ==================== WISHLIST ENDPOINTS ====================
@@ -15,9 +15,10 @@ router.get('/', optionalAuth, wishlistController.getWishlist);
 // @access  Private
 router.post('/add', auth, wishlistController.addToWishlist);
 
-// @route   DELETE /api/wishlist/remove/:itemId
+// @route   DELETE /api/wishlist/remove
 // @desc    Remove product from wishlist
 // @access  Private
+router.delete('/remove', auth, wishlistController.removeFromWishlist);
 router.delete('/remove/:itemId', auth, wishlistController.removeFromWishlist);
 
 // @route   POST /api/wishlist/move-to-cart

@@ -7,6 +7,7 @@ router.get('/', optionalAuth, storiesController.getAllStories);
 router.get('/preview', optionalAuth, storiesController.getStoriesPreview);
 router.post('/', auth, storiesController.createStory);
 router.get('/:storyId', optionalAuth, storiesController.getStoryById);
+router.get('/:storyId/viewers', auth, storiesController.getStoryViewers);
 router.put('/:storyId', auth, storiesController.updateStory);
 router.delete('/:storyId', auth, storiesController.deleteStory);
 router.post('/:storyId/view', auth, storiesController.recordStoryView);

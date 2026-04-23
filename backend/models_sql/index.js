@@ -976,7 +976,9 @@ const reinitializeModels = async () => {
 };
 
 module.exports = {
-  sequelize,
+  get sequelize() {
+    return postgresModule.sequelizeInstance();
+  },
   Sequelize,
   Role: wrappedRole,
   Department: wrappedDepartment,

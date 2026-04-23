@@ -80,7 +80,7 @@ const corsOptions = {
 app.use(cors(corsOptions)); // apply CORS globally
 
 // -------- Static file serving --------
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 app.use('/assets', express.static(path.join(__dirname, 'assets')));
 app.use('/public', express.static(path.join(__dirname, 'public')));
 
@@ -117,6 +117,7 @@ app.options('*', (req, res) => {
 // -------- Static file serving (centralized in backend) --------
 const uploadsPath = path.join(__dirname, 'uploads');
 const publicPath = path.join(__dirname, 'public');
+const publicUploadsPath = path.join(publicPath, 'uploads');
 
 // Middleware to set permissive CORS headers for static files (allows frontend to load images)
 const setStaticFileHeaders = (res, filePath) => {
@@ -133,6 +134,7 @@ const setStaticFileHeaders = (res, filePath) => {
 };
 
 // Main upload directories with subdirectories
+app.use('/uploads', express.static(publicUploadsPath, { setHeaders: setStaticFileHeaders }));
 app.use('/uploads', express.static(uploadsPath, { setHeaders: setStaticFileHeaders }));
 app.use('/assets', express.static(path.join(publicPath, 'assets'), { setHeaders: setStaticFileHeaders }));
 
@@ -189,9 +191,21 @@ app.use('/uploads', serveDefaultImage);
 
 // Ensure critical paths exist and are accessible
 [
+  path.join(publicUploadsPath, 'products'),
+  path.join(publicUploadsPath, 'posts'),
+  path.join(publicUploadsPath, 'reels'),
+  path.join(publicUploadsPath, 'stories'),
+  path.join(publicUploadsPath, 'users'),
+  path.join(publicUploadsPath, 'brands'),
   path.join(uploadsPath, 'logo'),
   path.join(uploadsPath, 'faces'),
   path.join(uploadsPath, 'brands'),
+  path.join(uploadsPath, 'products'),
+  path.join(uploadsPath, 'posts'),
+  path.join(uploadsPath, 'reels'),
+  path.join(uploadsPath, 'stories'),
+  path.join(uploadsPath, 'users'),
+  path.join(uploadsPath, 'avatars'),
   path.join(publicPath, 'assets', 'images', 'default')
 ].forEach(dir => {
   if (!fs.existsSync(dir)) {
@@ -277,6 +291,14 @@ app.get('/api/collections', (req, res) => {
 // ⚠️ ALL DEMO/MOCK ENDPOINTS REMOVED - PRODUCTION ONLY
 // All components must now call real API endpoints from /admin routes
 // Frontend fallbacks to empty data on API errors - NO MOCK DATA FALLBACKS
+
+app.get('/api/images', (req, res) => {
+  res.json({
+    success: true,
+    images: [],
+    message: 'No curated login images configured'
+  });
+});
 
 app.post('/api/seed', async (req, res) => {
   try {

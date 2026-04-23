@@ -1,5 +1,95 @@
 const dbType = process.env.DB_TYPE || 'mongodb';
 const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
+const { createFashionArtwork, slugify } = require('../dbseeder/utils/image-utils');
+
+const DEFAULT_PRODUCT_IMAGE = '/uploads/default-product.svg';
+const DEFAULT_BRAND_LOGO = '/uploads/brands/default-brand.png';
+const DEFAULT_AVATAR = '/uploads/avatars/default-avatar.svg';
+
+const asPlain = (item) => (item?.toJSON ? item.toJSON() : item) || null;
+
+const attachProductImages = (product, index = 0) => {
+  const item = asPlain(product);
+  if (!item) return item;
+
+  const title = item.title || item.name || `Product ${index + 1}`;
+  const slug = slugify(title);
+  const existing = Array.isArray(item.images) && item.images.length > 0 ? item.images : [];
+  const images = existing.length > 0
+    ? existing
+    : item.imageUrl
+      ? [{
+          url: item.imageUrl,
+          alt: title,
+          isPrimary: true
+        }]
+    : [{
+        url: createFashionArtwork('products', slug, index + 1, { subtitle: 'New collection' }),
+        alt: title,
+        isPrimary: true
+      }];
+
+  return {
+    ...item,
+    id: item.id || item._id,
+    _id: item._id || item.id,
+    images: images.map((image, imageIndex) => ({
+      url: image.url || DEFAULT_PRODUCT_IMAGE,
+      alt: image.alt || title,
+      isPrimary: imageIndex === 0 || !!image.isPrimary
+    })),
+    image: images[0]?.url || DEFAULT_PRODUCT_IMAGE
+  };
+};
+
+const attachBrandLogo = (brand, index = 0) => {
+  const item = asPlain(brand);
+  if (!item) return item;
+
+  const name = item.name || `Brand ${index + 1}`;
+  return {
+    ...item,
+    id: item.id || item._id,
+    _id: item._id || item.id,
+    logo: item.logo || item.logoUrl || createFashionArtwork('brands', slugify(name), index + 1, {
+      subtitle: 'Featured brand',
+      width: 720,
+      height: 720
+    }),
+    description: item.description || 'Featured fashion brand',
+    isPopular: true
+  };
+};
+
+const attachCategoryArtwork = (category, index = 0) => {
+  const item = asPlain(category);
+  if (!item) return item;
+
+  const name = item.name || `Category ${index + 1}`;
+  return {
+    ...item,
+    id: item.id || item._id,
+    _id: item._id || item.id,
+    image: item.image || createFashionArtwork('categories', item.slug || slugify(name), index + 1, {
+      subtitle: name,
+      width: 760,
+      height: 760
+    })
+  };
+};
+
+const attachInfluencerAvatar = (user, index = 0) => {
+  const item = asPlain(user);
+  if (!item) return item;
+
+  return {
+    ...item,
+    id: item.id || item._id,
+    _id: item._id || item.id,
+    avatar: item.avatar || item.avatar_url || DEFAULT_AVATAR,
+    fullName: item.fullName || item.full_name || item.username || `Influencer ${index + 1}`
+  };
+};
 
 exports.getTrending = async (req, res) => {
   try {
@@ -17,7 +107,7 @@ exports.getTrending = async (req, res) => {
         order: [['createdAt', 'DESC']]
       });
 
-      products = result.rows;
+      products = result.rows.map((product, index) => attachProductImages(product, index));
       total = result.count;
     } else {
       const result = await models.Product.findAndCountAll({
@@ -28,7 +118,7 @@ exports.getTrending = async (req, res) => {
         sort: { createdAt: -1 }
       });
 
-      products = result.rows;
+      products = result.rows.map((product, index) => attachProductImages(product, index));
       total = result.count;
     }
 
@@ -75,12 +165,7 @@ exports.getFeaturedBrands = async (req, res) => {
     }
 
     // Transform to match frontend expectations
-    const transformedBrands = brands.map(brand => ({
-      id: brand.id || brand._id,
-      name: brand.name,
-      logo: '/uploads/brands/default-brand.png',
-      isPopular: true
-    }));
+    const transformedBrands = brands.map((brand, index) => attachBrandLogo(brand, index));
 
     res.json({
       success: true,
@@ -109,7 +194,7 @@ exports.getNewArrivals = async (req, res) => {
         order: [['createdAt', 'DESC']]
       });
 
-      products = result.rows;
+      products = result.rows.map((product, index) => attachProductImages(product, index));
       total = result.count;
     } else {
       const result = await models.Product.findAndCountAll({
@@ -119,7 +204,7 @@ exports.getNewArrivals = async (req, res) => {
         sort: { createdAt: -1 }
       });
 
-      products = result.rows;
+      products = result.rows.map((product, index) => attachProductImages(product, index));
       total = result.count;
     }
 
@@ -150,7 +235,7 @@ exports.getSuggested = async (req, res) => {
         order: [['ratings', 'DESC'], ['createdAt', 'DESC']]
       });
 
-      products = result.rows;
+      products = result.rows.map((product, index) => attachProductImages(product, index));
       total = result.count;
     } else {
       const result = await models.Product.findAndCountAll({
@@ -160,7 +245,7 @@ exports.getSuggested = async (req, res) => {
         sort: { ratings: -1, createdAt: -1 }
       });
 
-      products = result.rows;
+      products = result.rows.map((product, index) => attachProductImages(product, index));
       total = result.count;
     }
 
@@ -191,7 +276,7 @@ exports.getInfluencers = async (req, res) => {
 
     res.json({
       success: true,
-      data: result.rows,
+      data: result.rows.map((user, index) => attachInfluencerAvatar(user, index)),
       pagination: { page: +page, limit: +limit, total: result.count, pages: Math.ceil(result.count / limit) }
     });
   } catch (error) {
@@ -222,7 +307,7 @@ exports.getCategories = async (req, res) => {
         }]
       });
 
-      categories = result.rows;
+      categories = result.rows.map((category, index) => attachCategoryArtwork(category, index));
       total = result.count;
     } else {
       const result = await models.Category.findAndCountAll({
@@ -236,7 +321,7 @@ exports.getCategories = async (req, res) => {
         }]
       });
 
-      categories = result.rows;
+      categories = result.rows.map((category, index) => attachCategoryArtwork(category, index));
       total = result.count;
     }
 
@@ -246,6 +331,7 @@ exports.getCategories = async (req, res) => {
         id: cat.id || cat._id,
         name: cat.name,
         description: cat.description,
+        image: cat.image || createFashionArtwork('categories', cat.slug || slugify(cat.name), 0, { subtitle: cat.name, width: 760, height: 760 }),
         subCategories: cat.SubCategories || cat.subcategories || []
       })),
       pagination: {

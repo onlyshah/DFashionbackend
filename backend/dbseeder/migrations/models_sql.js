@@ -62,6 +62,7 @@ const defineProduct = require('../models_sql/Product');
 const defineProductComment = require('../models_sql/ProductComment');
 const definePost = require('../models_sql/Post');
 const defineStory = require('../models_sql/Story');
+const defineStoryView = require('../models_sql/StoryView');
 const defineReel = require('../models_sql/Reel');
 const defineUserBehavior = require('../models_sql/UserBehavior');
 const definePermission = require('../models_sql/Permission');
@@ -129,6 +130,7 @@ const Product = defineModelSafely(defineProduct, 'Product') || createNullStub('P
 const ProductComment = defineModelSafely(defineProductComment, 'ProductComment') || createNullStub('ProductComment');
 const Post = defineModelSafely(definePost, 'Post') || createNullStub('Post');
 const Story = defineModelSafely(defineStory, 'Story') || createNullStub('Story');
+const StoryView = defineModelSafely(defineStoryView, 'StoryView') || createNullStub('StoryView');
 const Reel = defineModelSafely(defineReel, 'Reel') || createNullStub('Reel');
 const UserBehavior = defineModelSafely(defineUserBehavior, 'UserBehavior') || createNullStub('UserBehavior');
 const Permission = defineModelSafely(definePermission, 'Permission') || createNullStub('Permission');
@@ -411,6 +413,7 @@ const wrappedProduct = createMongooseLikeWrapper(Product, defineProduct, 'Produc
 const wrappedUser = createMongooseLikeWrapper(User, defineUser, 'User');
 const wrappedPost = createMongooseLikeWrapper(Post, definePost, 'Post');
 const wrappedStory = createMongooseLikeWrapper(Story, defineStory, 'Story');
+const wrappedStoryView = createMongooseLikeWrapper(StoryView, defineStoryView, 'StoryView');
 const wrappedBrand = createMongooseLikeWrapper(Brand, defineBrand, 'Brand');
 const wrappedCategory = createMongooseLikeWrapper(Category, defineCategory, 'Category');
 const wrappedRole = createMongooseLikeWrapper(Role, defineRole, 'Role');
@@ -469,6 +472,13 @@ if (Category && Category.hasMany && SubCategory && SubCategory.belongsTo) {
   SubCategory.belongsTo(Category, { foreignKey: 'categoryId', as: 'Category' });
 }
 
+if (Story && User && Story.hasMany && StoryView && StoryView.belongsTo) {
+  Story.belongsTo(User, { foreignKey: 'user_id', as: 'author' });
+  Story.hasMany(StoryView, { foreignKey: 'story_id', as: 'views' });
+  StoryView.belongsTo(User, { foreignKey: 'user_id', as: 'viewer' });
+  StoryView.belongsTo(Story, { foreignKey: 'story_id', as: 'story' });
+}
+
 // NOTE: Other associations disabled to avoid naming collisions with existing attributes
 // These can be re-enabled if attribute names are changed to avoid conflicts
 /*
@@ -500,6 +510,7 @@ const reinitializeModels = async () => {
       const ProductComment_new = defineProductComment(instance, DataTypes);
       const Post_new = definePost(instance, DataTypes);
       const Story_new = defineStory(instance, DataTypes);
+      const StoryView_new = defineStoryView(instance, DataTypes);
       const Reel_new = defineReel(instance, DataTypes);
       const UserBehavior_new = defineUserBehavior(instance, DataTypes);
       const Permission_new = definePermission(instance, DataTypes);
@@ -541,6 +552,18 @@ const reinitializeModels = async () => {
       const Inventory_new = defineInventory(instance, DataTypes);
       const InventoryAlert_new = defineInventoryAlert(instance, DataTypes);
       const InventoryHistory_new = defineInventoryHistory(instance, DataTypes);
+
+      if (Category_new && Category_new.hasMany && SubCategory_new && SubCategory_new.belongsTo) {
+        Category_new.hasMany(SubCategory_new, { foreignKey: 'categoryId', as: 'SubCategories' });
+        SubCategory_new.belongsTo(Category_new, { foreignKey: 'categoryId', as: 'Category' });
+      }
+
+      if (Story_new && User_new && Story_new.hasMany && StoryView_new && StoryView_new.belongsTo) {
+        Story_new.belongsTo(User_new, { foreignKey: 'user_id', as: 'author' });
+        Story_new.hasMany(StoryView_new, { foreignKey: 'story_id', as: 'views' });
+        StoryView_new.belongsTo(User_new, { foreignKey: 'user_id', as: 'viewer' });
+        StoryView_new.belongsTo(Story_new, { foreignKey: 'story_id', as: 'story' });
+      }
       
       // Directly update all models in the _raw export
       module.exports._raw = {
@@ -554,6 +577,7 @@ const reinitializeModels = async () => {
         ProductComment: ProductComment_new,
         Post: Post_new,
         Story: Story_new,
+        StoryView: StoryView_new,
         Reel: Reel_new,
         UserBehavior: UserBehavior_new,
         Permission: Permission_new,
@@ -597,7 +621,7 @@ const reinitializeModels = async () => {
         InventoryHistory: InventoryHistory_new
       };
 
-      console.log('[models_sql] ✅ All 53 models reinitialized with active Sequelize connection');
+      console.log('[models_sql] ✅ All 54 models reinitialized with active Sequelize connection');
       return true;
     } catch (redefErr) {
       console.error('[models_sql] Error redefining models:', redefErr.message);
@@ -622,6 +646,7 @@ module.exports = {
   ProductComment: wrappedProductComment,
   Post: wrappedPost,
   Story: wrappedStory,
+  StoryView: wrappedStoryView,
   Reel: wrappedReel,
   UserBehavior: wrappedUserBehavior,
   Permission: wrappedPermission,
@@ -675,6 +700,7 @@ module.exports = {
     ProductComment,
     Post,
     Story,
+    StoryView,
     Reel,
     UserBehavior,
     Permission,

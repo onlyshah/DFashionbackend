@@ -8,6 +8,7 @@ router.get('/', auth, requireRole(['end_user']), cartController.getCart);
 router.post('/', auth, requireRole(['end_user']), cartController.addToCart);
 router.post('/add', auth, requireRole(['end_user']), cartController.addToCart);
 router.put('/update/:itemId', auth, requireRole(['end_user']), cartController.updateCartItem);
+router.delete('/remove', auth, requireRole(['end_user']), cartController.removeFromCart);
 router.delete('/remove/:itemId', auth, requireRole(['end_user']), cartController.removeFromCart);
 router.delete('/bulk-remove', auth, requireRole(['end_user']), cartController.bulkRemoveItems);
 router.delete('/clear', auth, requireRole(['end_user']), cartController.clearCart);

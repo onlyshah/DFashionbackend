@@ -4,6 +4,7 @@
  */
 
 const models = require('../../../models_sql');
+const { createFashionArtwork } = require('../../utils/image-utils');
 
 async function seedStories() {
   try {
@@ -29,32 +30,35 @@ async function seedStories() {
     if (!seller) throw new Error('Seller user not found');
 
     const storyImages = [
-      'https://images.unsplash.com/photo-1505252585461-04db1267ae5b?w=500',
-      'https://images.unsplash.com/photo-1551028719-00167b16ebc5?w=500',
-      'https://images.unsplash.com/photo-1564466809058-bf4114d55352?w=500',
-      'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=500',
-      'https://images.unsplash.com/photo-1509631179647-0177331693ae?w=500',
-      'https://images.unsplash.com/photo-1502920917128-1aa500764cbd?w=500',
-      'https://images.unsplash.com/photo-1490562967822-a91fb1ded89c?w=500',
-      'https://images.unsplash.com/photo-1552062407-c582193db9ef?w=500'
+      createFashionArtwork('stories', 'Summer Collection', 1, { subtitle: 'Outfit showcase' }),
+      createFashionArtwork('stories', 'Beach Getaway', 2, { subtitle: 'Resort edit' }),
+      createFashionArtwork('stories', 'Casual Friday', 3, { subtitle: 'Everyday style' }),
+      createFashionArtwork('stories', 'Formal Events', 4, { subtitle: 'Evening wear' }),
+      createFashionArtwork('stories', 'Street Style', 5, { subtitle: 'Creator pick' }),
+      createFashionArtwork('stories', 'Oversized Blazers', 6, { subtitle: 'Trending now' }),
+      createFashionArtwork('stories', 'Denim Edition', 7, { subtitle: 'Classic denim' }),
+      createFashionArtwork('stories', 'Monochrome Magic', 8, { subtitle: 'Timeless looks' })
     ];
+
+    const Product = models._raw?.Product || models.Product;
+    const sampleProducts = Product ? await Product.findAll({ limit: 4, order: [['created_at', 'ASC']] }) : [];
 
     const stories = [
       // Outfit Showcase
-      { userId: seller.id, mediaUrl: storyImages[0], mediaType: 'image', caption: '✨ NEW COLLECTION ALERT! 🚀 Swipe to see our latest launches', contentType: 'outfit_showcase' },
-      { userId: seller.id, mediaUrl: storyImages[1], mediaType: 'image', caption: '👗 Summer Vibes Are Here! Perfect for beach getaways 🏖️', contentType: 'outfit_showcase' },
-      { userId: seller.id, mediaUrl: storyImages[2], mediaType: 'image', caption: 'Casual Friday Fit 💁‍♀️ Link in bio to shop', contentType: 'outfit_showcase' },
-      { userId: seller.id, mediaUrl: storyImages[3], mediaType: 'image', caption: 'Formal Events Sorted! 🎩 Get the full look now', contentType: 'outfit_showcase' },
+      { userId: seller.id, mediaUrl: storyImages[0], mediaType: 'image', caption: '✨ NEW COLLECTION ALERT! 🚀 Swipe to see our latest launches', productIds: sampleProducts[0] ? [sampleProducts[0].id] : [], contentType: 'outfit_showcase' },
+      { userId: seller.id, mediaUrl: storyImages[1], mediaType: 'image', caption: '👗 Summer Vibes Are Here! Perfect for beach getaways 🏖️', productIds: sampleProducts[1] ? [sampleProducts[1].id] : [], contentType: 'outfit_showcase' },
+      { userId: seller.id, mediaUrl: storyImages[2], mediaType: 'image', caption: 'Casual Friday Fit 💁‍♀️ Link in bio to shop', productIds: sampleProducts[2] ? [sampleProducts[2].id] : [], contentType: 'outfit_showcase' },
+      { userId: seller.id, mediaUrl: storyImages[3], mediaType: 'image', caption: 'Formal Events Sorted! 🎩 Get the full look now', productIds: sampleProducts[3] ? [sampleProducts[3].id] : [], contentType: 'outfit_showcase' },
       { userId: seller.id, mediaUrl: storyImages[4], mediaType: 'image', caption: 'Street Style Inspiration 🛍️ Which one is your fav?', contentType: 'outfit_showcase' },
       { userId: seller.id, mediaUrl: storyImages[5], mediaType: 'image', caption: 'Trending Now: Oversized Blazers 💼 Smart & Chic', contentType: 'outfit_showcase' },
       { userId: seller.id, mediaUrl: storyImages[6], mediaType: 'image', caption: 'Denim Edition 👖 Classic meets Modern', contentType: 'outfit_showcase' },
       { userId: seller.id, mediaUrl: storyImages[7], mediaType: 'image', caption: 'Monochrome Magic ⚫⚪ Timeless elegance', contentType: 'outfit_showcase' },
 
       // Product Feature
-      { userId: seller.id, mediaUrl: storyImages[0], mediaType: 'image', caption: '🌟 Product Spotlight: Premium Cotton Tees NOW 50% OFF! Limited stock 🔥', contentType: 'product_feature' },
-      { userId: seller.id, mediaUrl: storyImages[1], mediaType: 'image', caption: '👜 NEW: Summer Collection Handbags | Eco-friendly materials ♻️', contentType: 'product_feature' },
-      { userId: seller.id, mediaUrl: storyImages[2], mediaType: 'image', caption: '⌚ Luxury Watches | Premium quality at best prices ✨', contentType: 'product_feature' },
-      { userId: seller.id, mediaUrl: storyImages[3], mediaType: 'image', caption: '👠 Exclusive Footwear Collection | Comfort meets Style 👣', contentType: 'product_feature' },
+      { userId: seller.id, mediaUrl: storyImages[0], mediaType: 'image', caption: '🌟 Product Spotlight: Premium Cotton Tees NOW 50% OFF! Limited stock 🔥', productIds: sampleProducts[0] ? [sampleProducts[0].id] : [], contentType: 'product_feature' },
+      { userId: seller.id, mediaUrl: storyImages[1], mediaType: 'image', caption: '👜 NEW: Summer Collection Handbags | Eco-friendly materials ♻️', productIds: sampleProducts[1] ? [sampleProducts[1].id] : [], contentType: 'product_feature' },
+      { userId: seller.id, mediaUrl: storyImages[2], mediaType: 'image', caption: '⌚ Luxury Watches | Premium quality at best prices ✨', productIds: sampleProducts[2] ? [sampleProducts[2].id] : [], contentType: 'product_feature' },
+      { userId: seller.id, mediaUrl: storyImages[3], mediaType: 'image', caption: '👠 Exclusive Footwear Collection | Comfort meets Style 👣', productIds: sampleProducts[3] ? [sampleProducts[3].id] : [], contentType: 'product_feature' },
       { userId: seller.id, mediaUrl: storyImages[4], mediaType: 'image', caption: '🧣 Premium Scarves | Perfect for every season 🎀', contentType: 'product_feature' },
       { userId: seller.id, mediaUrl: storyImages[5], mediaType: 'image', caption: '💍 Accessories Galore | Elevate your look instantly ✨', contentType: 'product_feature' },
 
