@@ -2,6 +2,9 @@ const dbType = process.env.DB_TYPE || 'mongodb';
 const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 const { createFashionArtwork, slugify } = require('../dbseeder/utils/image-utils');
 
+// Determine if using PostgreSQL
+const isPostgres = dbType.includes('postgres');
+
 const DEFAULT_PRODUCT_IMAGE = '/uploads/default-product.svg';
 const DEFAULT_BRAND_LOGO = '/uploads/brands/default-brand.png';
 const DEFAULT_AVATAR = '/uploads/avatars/default-avatar.svg';
@@ -99,12 +102,12 @@ exports.getTrending = async (req, res) => {
     let products;
     let total;
 
-    if (models.isPostgres) {
+    if (isPostgres) {
       const result = await models.Product.findAndCountAll({
-        where: { isActive: true, isFeatured: true },
+        where: { isActive: true },
         limit: +limit,
         offset: +offset,
-        order: [['createdAt', 'DESC']]
+        order: [['ratings', 'DESC']]
       });
 
       products = result.rows.map((product, index) => attachProductImages(product, index));
@@ -112,10 +115,9 @@ exports.getTrending = async (req, res) => {
     } else {
       const result = await models.Product.findAndCountAll({
         isActive: true,
-        isFeatured: true,
         skip: offset,
         limit: +limit,
-        sort: { createdAt: -1 }
+        sort: { ratings: -1, createdAt: -1 }
       });
 
       products = result.rows.map((product, index) => attachProductImages(product, index));
@@ -141,17 +143,27 @@ exports.getFeaturedBrands = async (req, res) => {
     let brands;
     let total;
 
-    if (models.isPostgres) {
+    if (isPostgres) {
       // PostgreSQL: Get all brands
-      const result = await models.Brand.findAndCountAll({
-        limit: +limit,
-        offset: +offset,
-        attributes: ['id', 'name', 'description'],
-        order: [['name', 'ASC']]
-      });
+      try {
+        const result = await models.Brand.findAndCountAll({
+          limit: +limit,
+          offset: +offset,
+          order: [['name', 'ASC']]
+        });
 
-      brands = result.rows;
-      total = result.count;
+        brands = result.rows || [];
+        total = result.count || 0;
+      } catch (pgError) {
+        // Fallback: try simpler query
+        console.warn('[getFeaturedBrands] findAndCountAll failed, trying findAll:', pgError.message);
+        brands = await models.Brand.findAll({
+          limit: +limit,
+          offset: +offset,
+          order: [['name', 'ASC']]
+        }) || [];
+        total = await models.Brand.count();
+      }
     } else {
       // MongoDB: Get all brands
       const result = await models.Brand.findAndCountAll({
@@ -160,8 +172,8 @@ exports.getFeaturedBrands = async (req, res) => {
         sort: { name: 1 }
       });
 
-      brands = result.rows;
-      total = result.count;
+      brands = result.rows || [];
+      total = result.count || 0;
     }
 
     // Transform to match frontend expectations
@@ -186,12 +198,11 @@ exports.getNewArrivals = async (req, res) => {
     let products;
     let total;
 
-    if (models.isPostgres) {
+    if (isPostgres) {
       const result = await models.Product.findAndCountAll({
         where: { isActive: true },
         limit: +limit,
-        offset: +offset,
-        order: [['createdAt', 'DESC']]
+        offset: +offset
       });
 
       products = result.rows.map((product, index) => attachProductImages(product, index));
@@ -200,8 +211,7 @@ exports.getNewArrivals = async (req, res) => {
       const result = await models.Product.findAndCountAll({
         isActive: true,
         skip: offset,
-        limit: +limit,
-        sort: { createdAt: -1 }
+        limit: +limit
       });
 
       products = result.rows.map((product, index) => attachProductImages(product, index));
@@ -227,12 +237,12 @@ exports.getSuggested = async (req, res) => {
     let products;
     let total;
 
-    if (models.isPostgres) {
+    if (isPostgres) {
       const result = await models.Product.findAndCountAll({
         where: { isActive: true },
         limit: +limit,
         offset: +offset,
-        order: [['ratings', 'DESC'], ['createdAt', 'DESC']]
+        order: [['ratings', 'DESC']]
       });
 
       products = result.rows.map((product, index) => attachProductImages(product, index));
@@ -267,18 +277,34 @@ exports.getInfluencers = async (req, res) => {
 
     const User = models._raw?.User || models.User;
 
-    const result = await User.findAndCountAll({
-      where: { isInfluencer: true, isActive: true },
-      limit: +limit,
-      offset: +offset,
-      order: [['created_at', 'DESC']]
-    });
+    if (isPostgres) {
+      const result = await User.findAndCountAll({
+        where: { isInfluencer: true, isActive: true },
+        limit: +limit,
+        offset: +offset,
+        order: [['followersCount', 'DESC']]
+      });
 
-    res.json({
-      success: true,
-      data: result.rows.map((user, index) => attachInfluencerAvatar(user, index)),
-      pagination: { page: +page, limit: +limit, total: result.count, pages: Math.ceil(result.count / limit) }
-    });
+      res.json({
+        success: true,
+        data: result.rows.map((user, index) => attachInfluencerAvatar(user, index)),
+        pagination: { page: +page, limit: +limit, total: result.count, pages: Math.ceil(result.count / limit) }
+      });
+    } else {
+      const result = await User.findAndCountAll({
+        isInfluencer: true,
+        isActive: true,
+        skip: offset,
+        limit: +limit,
+        sort: { followersCount: -1 }
+      });
+
+      res.json({
+        success: true,
+        data: result.rows.map((user, index) => attachInfluencerAvatar(user, index)),
+        pagination: { page: +page, limit: +limit, total: result.count, pages: Math.ceil(result.count / limit) }
+      });
+    }
   } catch (error) {
     console.error('[getInfluencers] Error:', error.message);
     res.status(500).json({ success: false, error: error.message });
@@ -291,49 +317,53 @@ exports.getCategories = async (req, res) => {
     const { page = 1, limit = 20 } = req.query;
     const offset = (page - 1) * limit;
 
-    let categories;
-    let total;
+    let categories = [];
+    let total = 0;
 
-    if (models.isPostgres) {
-      const result = await models.Category.findAndCountAll({
+    if (isPostgres) {
+      console.log('[getCategories] Querying PostgreSQL...');
+      // Use _raw model directly instead of wrapper to bypass the problematic findAndCountAll
+      const Category = models._raw?.Category || models.Category;
+      if (!Category || !Category.findAll) {
+        throw new Error('Category model not available');
+      }
+      
+      // Fetch categories directly without include
+      categories = await Category.findAll({
         limit: +limit,
         offset: +offset,
         order: [['name', 'ASC']],
-        include: [{
-          model: models.SubCategory._model,
-          as: 'SubCategories',
-          attributes: ['id', 'name'],
-          required: false
-        }]
+        raw: true
       });
 
-      categories = result.rows.map((category, index) => attachCategoryArtwork(category, index));
-      total = result.count;
+      // Count separately
+      total = await Category.count();
+      console.log('[getCategories] Found ' + categories.length + ' categories, total: ' + total);
     } else {
       const result = await models.Category.findAndCountAll({
         skip: offset,
         limit: +limit,
-        sort: { name: 1 },
-        populate: [{
-          path: 'subcategories',
-          select: 'id name',
-          options: { required: false }
-        }]
+        sort: { name: 1 }
       });
-
-      categories = result.rows.map((category, index) => attachCategoryArtwork(category, index));
+      categories = result.rows || [];
       total = result.count;
     }
 
+    // Map to plain objects for response
+    const data = categories.map(cat => ({
+      id: cat.id || cat._id,
+      name: cat.name,
+      description: cat.description,
+      image: cat.image,
+      slug: cat.slug,
+      isActive: cat.isActive || cat.is_active
+    }));
+
+    console.log('[getCategories] Returning ' + data.length + ' categories');
+
     return res.json({
       success: true,
-      data: categories.map(cat => ({
-        id: cat.id || cat._id,
-        name: cat.name,
-        description: cat.description,
-        image: cat.image || createFashionArtwork('categories', cat.slug || slugify(cat.name), 0, { subtitle: cat.name, width: 760, height: 760 }),
-        subCategories: cat.SubCategories || cat.subcategories || []
-      })),
+      data: data,
       pagination: {
         total: total,
         page: +page,
@@ -359,7 +389,7 @@ exports.getStyleInspiration = async (req, res) => {
     let inspirations;
     let total;
 
-    if (models.isPostgres) {
+    if (isPostgres) {
       const result = await models.StyleInspiration.findAndCountAll({
         limit: +limit,
         offset: +offset,

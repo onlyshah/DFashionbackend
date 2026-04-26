@@ -42,6 +42,7 @@ const notificationRoutes = require('./notifications');
 const productCommentsRoutes = require('./productComments');
 const productSharesRoutes = require('./productShares');
 const ecommerceAPIRoutes = require('./ecommerceAPI');
+const contentRoutes = require('./content');
 const categoriesRoutes = require('./categories');
 const brandsRoutes = require('./brands');
 const analyticsRoutes = require('./analytics');
@@ -85,6 +86,7 @@ router.use(`/follows`, followsRoutes);
 router.use(`/product-comments`, productCommentsRoutes);
 router.use(`/product-shares`, productSharesRoutes);
 router.use(`/ecommerce`, ecommerceAPIRoutes);
+router.use(`/content`, contentRoutes);
 // Note: `/user` compatibility endpoints are implemented inside the canonical
 // wishlist and cart routers where necessary. No separate userWishlistCart router.
 router.use(`/categories`, categoriesRoutes);

@@ -434,7 +434,14 @@ const createMongooseLikeWrapper = (sequelizeModel, defineFunc, modelName) => {
     // Sequelize-style findAndCountAll() - used by admin controllers
     findAndCountAll: async (options = {}) => {
       try {
-        const normalizedOptions = normalizeOptions(options);
+        let normalizedOptions = normalizeOptions(options);
+        
+        // Strip include from Category queries to avoid SubCategory association errors
+        if (modelName === 'Category' && normalizedOptions.include) {
+          console.log(`[WRAPPER] Category: Removing problematic include:`, normalizedOptions.include);
+          delete normalizedOptions.include;
+        }
+        
         console.log(`[WRAPPER] findAndCountAll called on ${modelName} with options:`, JSON.stringify(normalizedOptions));
         const model = await getActualModel();
         if (model.findAndCountAll && typeof model.findAndCountAll === 'function') {

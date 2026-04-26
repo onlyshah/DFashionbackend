@@ -449,16 +449,14 @@ safeMount('/api/alerts', './routes/alerts');
 // Returns management
 safeMount('/api/returns', './routes/returns');
 
-// -------- Mount the aggregated /api index as a fallback (DISABLED) --------
-// All routes are now mounted via safeMount() above, so this fallback is no longer needed
-// Attempting to mount it causes conflicts and duplicate route warnings
-// try {
-//   const apiIndex = require('./routes/index');
-//   app.use('/api', apiIndex);
-//   console.log('✅ /api -> ./routes/index mounted as fallback');
-// } catch (err) {
-//   console.error('❌ Failed to mount /api index:', err.message);
-// }
+// -------- Mount the aggregated /api index as a fallback --------
+try {
+  const apiIndex = require('./routes/index');
+  app.use('/api', apiIndex);
+  console.log('✅ /api -> ./routes/index mounted as fallback');
+} catch (err) {
+  console.error('❌ Failed to mount /api index:', err.message);
+}
 
 // -------- Error handling --------
 // 404 handler (standardized)

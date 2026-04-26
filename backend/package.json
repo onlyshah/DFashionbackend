@@ -6,8 +6,10 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "seed": "node scripts/seedComplete.js",
-    "seed:complete": "node scripts/seedComplete.js",
+    "seed": "node scripts/seedPostgres.js",
+    "seed:postgres": "node scripts/seedPostgres.js",
+    "seed:check": "node scripts/checkAndSeedData.js",
+    "seed:complete": "node scripts/seedPostgres.js",
     "seed:real": "node scripts/seedRealData.js",
     "seed:admin": "node scripts/createAdminUsers.js",
     "seed:stories": "node scripts/seedStories.js",
