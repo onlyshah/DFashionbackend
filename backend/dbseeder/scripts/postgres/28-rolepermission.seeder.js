@@ -4,7 +4,7 @@
  * Maps permissions to roles
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 // Permission mappings by role
 const rolePermissionMappings = {

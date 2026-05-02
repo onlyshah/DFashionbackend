@@ -3,9 +3,9 @@
  * Handles all comment operations - create, read, update, delete, reply
  */
 
-const Comment = require('../../models/Comment');
-const Post = require('../../models/Post');
-const User = require('../../models/User');
+const Comment = require('../models/Comment');
+const Post = require('../models/Post');
+const User = require('../models/User');
 
 exports.createComment = async (req, res) => {
   try {

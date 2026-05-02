@@ -3,7 +3,7 @@
  * Seeds short video content
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 const { v4: uuidv4 } = require('uuid');
 const { createFashionArtwork } = require('../../utils/image-utils');
 

@@ -5,7 +5,7 @@
  */
 
 const { v4: uuidv4 } = require('uuid');
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 async function seedPosts() {
   try {

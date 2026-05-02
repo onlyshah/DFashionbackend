@@ -4,7 +4,7 @@
  * No dependencies
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 const trendingSearchData = [
   { query: 'summer collection', searchCount: 5000 },

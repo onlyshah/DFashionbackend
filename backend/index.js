@@ -1,574 +1,166 @@
-// server.js
 'use strict';
 
 console.log('🚀 Starting DFashion Backend...');
+
+require('dotenv').config();
 
 const path = require('path');
 const express = require('express');
 const cors = require('cors');
 const http = require('http');
-const mongoose = require('mongoose');
 const fs = require('fs');
-require('dotenv').config({ path: path.join(__dirname, '.env') });
 
-// Local modules
-const ServiceLoader = require('./services/ServiceLoader');
-const socketService = require('./services/utils/socketService');
+// utils
+const socketService = require('./utils/socketService');
+const dataProvider = require('./utils/dataProvider');
+
+// middleware
 const BasicSecurity = require('./middleware/basicSecurity');
-const { connectDB } = require('./config/database');
-const { connectPostgres } = require('./config/postgres');
-const dataProvider = require('./services/utils/dataProvider');
 const dbHealth = require('./middleware/dbHealth');
-const centralizedErrorHandler = require('./middleware/errorHandler');
+const errorHandler = require('./middleware/errorHandler');
 
-// -------- Basic sanity checks --------
+// DB
+const { connectDB } = require('./config/database'); // Mongo (optional)
+const { connectPostgres } = require('./config/postgres');
+
+// routes
+const apiRoutes = require('./routes/routerindex');
+
+const app = express();
+app.set('trust proxy', 1);
+
+/* ================= ENV ================= */
 if (!process.env.JWT_SECRET && process.env.NODE_ENV === 'production') {
-  console.error('❌ JWT_SECRET missing in production environment. Aborting startup.');
+  console.error('❌ JWT_SECRET missing');
   process.exit(1);
 }
-console.log('🔐 JWT_SECRET loaded:', !!process.env.JWT_SECRET);
 
-// -------- App setup --------
-const app = express();
-app.set('trust proxy', 1); // if behind proxy/load balancer
-
-// -------- Allowed origins --------
+/* ================= CORS ================= */
 const allowedOrigins = [
   'http://localhost:4200',
-  'http://127.0.0.1:4200',
-  'http://localhost:8100',
-  'http://127.0.0.1:8100',
   'http://localhost:3000',
-  'http://localhost:5000',
-  'capacitor://localhost',
-  'ionic://localhost',
-  'https://onlyshah.github.io'
+  'http://127.0.0.1:4200',
+  'http://127.0.0.1:3000'
 ];
 
-// -------- CORS --------
-const corsOptions = {
-  origin: function (origin, callback) {
-    if (!origin) return callback(null, true); // Postman / mobile / server-to-server
-
-    if (
-      allowedOrigins.includes(origin) ||
-      origin.includes('localhost') ||
-      origin.includes('127.0.0.1')
-    ) {
-      return callback(null, true);
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin) return cb(null, true);
+    if (allowedOrigins.includes(origin) || origin.includes('localhost')) {
+      return cb(null, true);
     }
-
-    return callback(new Error('The CORS policy does not allow access from this origin.'), false);
+    return cb(new Error('Not allowed by CORS'));
   },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: [
-    'Origin',
-    'X-Requested-With',
-    'Content-Type',
-    'Accept',
-    'Authorization',
-    'Cache-Control',
-    'Pragma',
-    'X-CSRF-Token',
-    'X-Request-ID'
-  ],
-  exposedHeaders: ['Content-Range', 'X-Content-Range', 'X-Request-ID'],
-  optionsSuccessStatus: 200
-};
+  credentials: true
+}));
 
-app.use(cors(corsOptions)); // apply CORS globally
-
-// -------- Static file serving --------
-app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
-app.use('/assets', express.static(path.join(__dirname, 'assets')));
-app.use('/public', express.static(path.join(__dirname, 'public')));
-
-// -------- Request body parsing --------
-app.use(express.urlencoded({ extended: false, limit: '10mb' }));
+/* ================= BODY ================= */
 app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: false }));
 
-// -------- Basic security middleware --------
-console.log('🔒 Applying basic security middleware...');
+/* ================= SECURITY ================= */
 app.use(BasicSecurity.securityHeaders);
 app.use(BasicSecurity.helmet);
 app.use(BasicSecurity.requestLogger);
 app.use(BasicSecurity.sanitizeInput);
 app.use(BasicSecurity.validateInput);
 
-// Rate limiting (applied per route group)
 app.use('/api/auth', BasicSecurity.authLimiter);
 app.use('/api', BasicSecurity.generalLimiter);
 
-// Enforce database health for all /api routes early
-app.use('/api', (req, res, next) => {
-  // allow health endpoint to run even if DB down
-  if (req.path === '/health' || req.path === '/csrf-token') return next();
-  return dbHealth(req, res, next);
-});
-
-console.log('✅ Basic security middleware applied successfully');
-
-// -------- CORS preflight shortcut --------
-app.options('*', (req, res) => {
-  res.sendStatus(200);
-});
-
-// -------- Static file serving (centralized in backend) --------
+/* ================= STATIC ================= */
 const uploadsPath = path.join(__dirname, 'uploads');
-const publicPath = path.join(__dirname, 'public');
-const publicUploadsPath = path.join(publicPath, 'uploads');
+const publicUploadsPath = path.join(__dirname, 'public', 'uploads');
 
-// Middleware to set permissive CORS headers for static files (allows frontend to load images)
-const setStaticFileHeaders = (res, filePath) => {
-  // Use the incoming Origin header when present to avoid hardcoding a single origin
-  const origin = (res && res.req && res.req.get && res.req.get('Origin')) || '*';
-  res.setHeader('Access-Control-Allow-Origin', origin || '*');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-  // Allow cross-origin resource embedding for images used by the frontend (prevents NotSameOrigin blocking)
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  // Add cache control for better performance
-  res.setHeader('Cache-Control', 'public, max-age=3600');
-};
-
-// Main upload directories with subdirectories
-app.use('/uploads', express.static(publicUploadsPath, { setHeaders: setStaticFileHeaders }));
-app.use('/uploads', express.static(uploadsPath, { setHeaders: setStaticFileHeaders }));
-app.use('/assets', express.static(path.join(publicPath, 'assets'), { setHeaders: setStaticFileHeaders }));
-
-// Ensure CORS headers are present even for missing static files (preflight and 404 responses)
-const ensureStaticCors = (req, res, next) => {
-  const origin = req.get('Origin') || '*';
-  res.setHeader('Access-Control-Allow-Origin', origin);
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
-  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  next();
-};
-
-app.use('/uploads', ensureStaticCors);
-app.use('/assets', ensureStaticCors);
-
-// -------- Middleware to serve default images when files are missing --------
-const serveDefaultImage = (req, res, next) => {
-  const filePath = path.join(uploadsPath, req.path);
-  
-  // Check if file exists
-  if (fs.existsSync(filePath)) {
-    return next(); // File exists, let it be served
-  }
-  
-  // Determine which default image to serve based on path
-  let defaultFile = null;
-  
-  if (req.path.includes('/avatars/') || req.path.includes('/avatar')) {
-    defaultFile = path.join(uploadsPath, 'avatars', 'default-avatar.svg');
-  } else if (req.path.includes('/products/') || req.path.includes('/product')) {
-    defaultFile = path.join(uploadsPath, 'default-product.svg');
-  } else if (req.path.includes('/stories/') || req.path.includes('/story')) {
-    defaultFile = path.join(uploadsPath, 'default-story.svg');
-  } else if (req.path.includes('/posts/') || req.path.includes('/post')) {
-    defaultFile = path.join(uploadsPath, 'default-post.svg');
-  } else if (req.path.includes('/brands/')) {
-    defaultFile = path.join(uploadsPath, 'default-product.svg');
-  }
-  
-  // Serve default image if found
-  if (defaultFile && fs.existsSync(defaultFile)) {
-    console.log(`[Uploads] Serving default image for missing: ${req.path}`);
-    setStaticFileHeaders(res);
-    return res.sendFile(defaultFile);
-  }
-  
-  // No default found, continue to 404
-  next();
-};
-
-app.use('/uploads', serveDefaultImage);
-
-// Ensure critical paths exist and are accessible
+// Ensure folders exist
 [
+  uploadsPath,
+  publicUploadsPath,
   path.join(publicUploadsPath, 'products'),
   path.join(publicUploadsPath, 'posts'),
   path.join(publicUploadsPath, 'reels'),
   path.join(publicUploadsPath, 'stories'),
-  path.join(publicUploadsPath, 'users'),
-  path.join(publicUploadsPath, 'brands'),
-  path.join(uploadsPath, 'logo'),
-  path.join(uploadsPath, 'faces'),
-  path.join(uploadsPath, 'brands'),
-  path.join(uploadsPath, 'products'),
-  path.join(uploadsPath, 'posts'),
-  path.join(uploadsPath, 'reels'),
-  path.join(uploadsPath, 'stories'),
-  path.join(uploadsPath, 'users'),
-  path.join(uploadsPath, 'avatars'),
-  path.join(publicPath, 'assets', 'images', 'default')
+  path.join(publicUploadsPath, 'users')
 ].forEach(dir => {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
-    console.log(`Created directory: ${dir}`);
+    console.log(`📁 Created: ${dir}`);
   }
 });
 
-// -------- Convenience redirects --------
-app.get('/me', (req, res) => res.redirect(301, '/api/auth/me'));
-app.get('/api/me', (req, res) => res.redirect(301, '/api/auth/me'));
-app.post('/login', (req, res) => res.redirect(307, '/api/auth/login'));
-app.post('/api/login', (req, res) => res.redirect(307, '/api/auth/login'));
-app.post('/admin/login', (req, res) => res.redirect(307, '/api/auth/admin/login'));
+// Static serving
+app.use('/uploads', express.static(publicUploadsPath));
+app.use('/uploads', express.static(uploadsPath));
 
-// -------- Utility endpoints --------
-app.get('/api/health', async (req, res) => {
-  try {
-    const dbType = process.env.DB_TYPE || 'mongodb';
-    let databaseStatus = 'Unknown';
+/* ================= DB HEALTH ================= */
+app.use('/api', (req, res, next) => {
+  if (req.path === '/health') return next();
+  return dbHealth(req, res, next);
+});
 
-    if (dbType.includes('postgres')) {
-      // Check PostgreSQL connection
-      const postgresModule = require('./config/postgres');
-      const sequelize = await postgresModule.getPostgresConnection();
-      databaseStatus = sequelize ? 'Connected' : 'Disconnected';
-    } else {
-      // Check MongoDB connection
-      databaseStatus = mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected';
-    }
+/* ================= ROUTES ================= */
+app.use('/api', apiRoutes);
 
-    res.json({
-      status: 'OK',
-      timestamp: new Date().toISOString(),
-      message: 'DFashion API Server Running',
-      database: databaseStatus,
-      dbType: dbType
-    });
-  } catch (error) {
-    res.json({
-      status: 'OK',
-      timestamp: new Date().toISOString(),
-      message: 'DFashion API Server Running',
-      database: 'Error checking connection',
-      dbType: process.env.DB_TYPE || 'mongodb'
-    });
-  }
+/* ================= UTIL ROUTES ================= */
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'OK',
+    postgres: true,
+    mongo: false,
+    timestamp: new Date().toISOString()
+  });
 });
 
 app.get('/', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: 'DFashion Backend is running. Use /api/health for status.'
-  });
-});
-
-app.get('/api/csrf-token', (req, res) => {
   res.json({
     success: true,
-    token: Date.now().toString(36) + Math.random().toString(36).slice(2),
-    message: 'CSRF token generated'
+    message: 'DFashion Backend Running'
   });
 });
 
-app.get('/api/collections', (req, res) => {
-  res.json({
-    success: true,
-    message: 'Collections endpoint working',
-    database: mongoose.connection.name || 'dfashion',
-    expectedCollections: [
-      'users',
-      'products',
-      'categories',
-      'posts',
-      'stories',
-      'roles',
-      'orders'
-    ],
-    note: 'Collections should be populated after running seeder'
+/* ================= 404 ================= */
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: 'Endpoint not found'
   });
 });
 
-// ⚠️ ALL DEMO/MOCK ENDPOINTS REMOVED - PRODUCTION ONLY
-// All components must now call real API endpoints from /admin routes
-// Frontend fallbacks to empty data on API errors - NO MOCK DATA FALLBACKS
+/* ================= ERROR ================= */
+app.use(errorHandler);
 
-app.get('/api/images', (req, res) => {
-  res.json({
-    success: true,
-    images: [],
-    message: 'No curated login images configured'
-  });
-});
-
-app.post('/api/seed', async (req, res) => {
-  try {
-    console.log('🌱 Starting database seeding...');
-    const seedingPath = require('path').join(__dirname, 'dbseeder/scripts/postgres/master.seeder.js');
-    const masterSeeder = require(seedingPath);
-    
-    // Get the seeding function from master.seeder.js
-    const seedFunctionName = Object.keys(masterSeeder)[0];
-    if (!seedFunctionName) {
-      throw new Error('No seeding function found in master.seeder.js');
-    }
-    
-    const seedFunction = masterSeeder[seedFunctionName];
-    await seedFunction();
-    
-    res.json({
-      success: true,
-      message: 'Database seeded successfully',
-      timestamp: new Date().toISOString()
-    });
-  } catch (error) {
-    console.error('Seeding error:', error);
-    res.status(500).json({ success: false, message: 'Failed to seed database', error: error.message });
-  }
-});
-
-// -------- Load models (informational) --------
-try {
-  require('./models/User');
-  console.log('✅ User model loaded');
-  require('./models/Product');
-  console.log('✅ Product model loaded');
-  require('./models/Order');
-  console.log('✅ Order model loaded');
-} catch (err) {
-  console.warn('⚠️ Some models could not be loaded during startup:', err.message);
-}
-
-// -------- Safe mount helper (keeps server resilient) --------
-const safeMount = (mountPath, routePath) => {
-  try {
-    const resolvedPath = require.resolve(routePath, { paths: [__dirname] });
-    console.log(`[safeMount] Attempting to mount ${mountPath} from ${resolvedPath}`);
-    const router = require(resolvedPath);
-    
-    // Validate that the loaded module is an Express Router
-    // Express Router instances are functions with a .stack property
-    if (!router || typeof router !== 'function' || !router.stack) {
-      console.error(`❌ Error loading ${mountPath} from ${routePath}: Module did not export an Express Router. Received: ${typeof router}`);
-      return;
-    }
-    
-    if (!Array.isArray(router.stack)) {
-      console.error(`❌ Error loading ${mountPath} from ${routePath}: Router.stack is not an array`);
-      return;
-    }
-    
-    if (router.stack.length === 0) {
-      console.warn(`⚠️  Router for ${mountPath} is empty (no routes defined).`);
-    } else {
-      console.log(`[safeMount] Router for ${mountPath} has ${router.stack.length} routes.`);
-    }
-    
-    app.use(mountPath, router);
-    console.log(`✅ ${mountPath} -> ${routePath} loaded`);
-  } catch (err) {
-    console.error(`❌ Error loading ${mountPath} from ${routePath}:`, err.message);
-    if (err.stack) {
-      console.error('Stack:', err.stack);
-    }
-  }
-};
-
-// -------- Mount specific route files (unique, no duplicates) --------
-// Core auth - mount for both /api/auth and direct /admin paths
-safeMount('/api/auth', './routes/auth');
-safeMount('/admin', './routes/auth');
-
-// Features & content
-safeMount('/api/stories', './routes/stories');
-safeMount('/api/posts', './routes/posts');
-// Historic support for `/cart` endpoint path used by some frontend code
-safeMount('/cart', './routes/cart');
-safeMount('/api/cart', './routes/cart');
-// New path for cart module
-safeMount('/api/cart-new', './routes/cart');
-safeMount('/api/products', './routes/products');
-safeMount('/api/users', './routes/users');
-safeMount('/api/cart-new', './routes/cart');
-safeMount('/api/wishlist', './routes/wishlist');
-safeMount('/api/wishlist-new', './routes/wishlist');
-safeMount('/api/orders', './routes/orders');
-safeMount('/api/payments', './routes/payments');
-safeMount('/api/checkout', './routes/checkout');
-safeMount('/api/vendor', './routes/vendor');
-safeMount('/api/notifications', './routes/notifications');
-
-// Admin / role / modules
-// IMPORTANT: Mount specific /api/admin/* routes BEFORE the general /api/admin route
-// Otherwise the general /api/admin will catch all requests and return 404
-safeMount('/api/admin/users', './routes/usersAdmin'); // admin users management
-safeMount('/api/admin/social', './routes/socialAdmin'); // admin social management
-safeMount('/api/admin/inventory', './routes/inventory'); // admin inventory management
-safeMount('/api/admin/categories', './routes/admin-categories'); // admin categories & sub-categories management
-safeMount('/api/admin/cms', './routes/cms'); // admin cms management (pages, banners, faqs, media)
-safeMount('/api/admin/content', './routes/admin-content'); // admin content management (blogs, articles)
-safeMount('/api/admin/marketing', './routes/marketing'); // admin marketing management
-
-safeMount('/api/admin', './routes/admin'); // admin routes (dashboard, roles, permissions, etc) - MUST be last!
-safeMount('/api/role-management', './routes/roleManagement');
-safeMount('/api/modules', './routes/moduleManagement');
-safeMount('/api/vendor-verification', './routes/vendorVerification');
-
-// Collections & search
-safeMount('/api/product-comments', './routes/productComments');
-safeMount('/api/product-shares', './routes/productShares');
-safeMount('/api/user', './routes/wishlist');
-safeMount('/api/categories', './routes/categories');
-safeMount('/api/brands', './routes/brands');
-safeMount('/api/search', './routes/search');
-
-// Analytics, recommendations & content
-safeMount('/api/analytics', './routes/analytics');
-safeMount('/api/analytics/overview', './routes/analyticsOverview');
-safeMount('/api/recommendations', './routes/recommendations');
-safeMount('/api/content', './routes/content');
-
-// Rewards & style inspiration
-safeMount('/api/rewards', './routes/rewardRoutes');
-safeMount('/api/style-inspiration', './routes/styleInspiration');
-
-// Smart collections & plugins
-safeMount('/api/smart-collections', './routes/smartCollections');
-
-// Live commerce
-safeMount('/api/live', './routes/live');
-
-// Creators & influencers
-safeMount('/api/creators', './routes/creators');
-
-// Support tickets
-safeMount('/api/support', './routes/support');
-
-// Alerts & notifications
-safeMount('/api/alerts', './routes/alerts');
-
-// Returns management
-safeMount('/api/returns', './routes/returns');
-
-// -------- Mount the aggregated /api index as a fallback --------
-try {
-  const apiIndex = require('./routes/index');
-  app.use('/api', apiIndex);
-  console.log('✅ /api -> ./routes/index mounted as fallback');
-} catch (err) {
-  console.error('❌ Failed to mount /api index:', err.message);
-}
-
-// -------- Error handling --------
-// 404 handler (standardized)
-app.use((req, res, next) => {
-  res.status(404).json({ success: false, message: 'Endpoint not found', data: null });
-});
-
-// Centralized error handler (returns standardized error payloads)
-app.use(centralizedErrorHandler);
-
-// catch unhandled rejections
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
-// -------- Start server --------
+/* ================= SERVER ================= */
 const startServer = async () => {
   try {
-    // Initialize databases based on DB_TYPE env var
-    // Accept values like 'postgres', 'postgres_only', 'mongo', 'both'
     const dbType = (process.env.DB_TYPE || 'postgres').toLowerCase();
 
     if (dbType.includes('postgres')) {
-      try {
-        console.log('🔌 Attempting to connect to PostgreSQL...');
-        const pg = await connectPostgres();
-        if (!pg) throw new Error('Postgres connection returned null');
-        // Reinitialize models with active connection (use models_sql for PostgreSQL)
-        const models = require('./models_sql');
-        if (models.reinitializeModels) {
-          await models.reinitializeModels();
-        }
-        console.log('✅ PostgreSQL (Sequelize) connected successfully');
-
-        // Initialize Adapter Layer
-        console.log('\n🔧 Initializing Database Adapter Layer...');
-        const adapterInit = require('./services/adapters/init');
-        await adapterInit.initialize();
-        console.log('✅ Database Adapter Layer initialized\n');
-
-        // Mark DB available for metrics
-        dataProvider.enableDb();
-      } catch (err) {
-        console.error('⚠️  PostgreSQL connection failed:', err.message);
-        if (dbType.includes('postgres') && !dbType.includes('both')) {
-          // If Postgres is required and fails, fail startup
-          throw err;
-        }
-        // If both databases are enabled, continue with MongoDB
-      }
+      await connectPostgres();
+      console.log('✅ PostgreSQL connected');
+      dataProvider.enableDb();
     }
 
     if (dbType.includes('mongo')) {
-      try {
-        console.log('🔌 Attempting to connect to MongoDB...');
-        await connectDB();
-        // Mark DB available for metrics
-        dataProvider.enableDb();
-      } catch (err) {
-        console.error('⚠️  MongoDB connection failed:', err.message);
-        if (dbType.includes('mongo') && !dbType.includes('both')) {
-          // If Mongo is required and fails, fail startup
-          throw err;
-        }
-        // If both databases are enabled, continue with Postgres
-      }
-    } else {
-      console.log('ℹ️ Skipping MongoDB connection (DB_TYPE=' + dbType + ')');
+      await connectDB();
+      console.log('✅ MongoDB connected');
+      dataProvider.enableDb();
     }
 
     const PORT = process.env.PORT || 3000;
     const server = http.createServer(app);
 
-    // Initialize Socket.IO
     socketService.initialize(server);
 
-    server.listen(PORT, '0.0.0.0', () => {
-      console.log('========================================');
-      console.log('🚀 DFashion Backend Server Running!');
-      console.log('========================================');
-      console.log(`📡 Server: http://localhost:${PORT}`);
-      console.log(`📱 Mobile Access: http://10.0.2.2:${PORT}`);
-      console.log(`🔌 Socket.IO: Real-time notifications enabled`);
-      console.log(`🛡️ Admin Dashboard: http://localhost:4200/admin`);
-      console.log(`🌐 Health Check: http://localhost:${PORT}/api/health`);
-      console.log(
-        `📊 Database: ${
-          mongoose.connection.readyState === 1 ? 'Connected' : 'Connecting...'
-        }`
-      );
-      console.log('========================================');
+    server.listen(PORT, () => {
+      console.log('====================================');
+      console.log(`🚀 Server: http://localhost:${PORT}`);
+      console.log(`🌐 API: http://localhost:${PORT}/api`);
+      console.log(`❤️ Health: http://localhost:${PORT}/api/health`);
+      console.log('====================================');
     });
 
-    const shutdown = async (signal) => {
-      console.log(`\n⚠️  Received ${signal}. Shutting down gracefully...`);
-      server.close(() => {
-        console.log('HTTP server closed.');
-        mongoose.connection.close(false);
-        console.log('MongoDB connection closed.');
-        process.exit(0);
-      });
-
-      setTimeout(() => {
-        console.error('Forcing shutdown after timeout');
-        process.exit(1);
-      }, 10000).unref();
-    };
-
-    process.on('SIGINT', () => shutdown('SIGINT'));
-    process.on('SIGTERM', () => shutdown('SIGTERM'));
-  } catch (error) {
-    console.error('❌ Failed to start server:', error && error.stack ? error.stack : error);
+  } catch (err) {
+    console.error('❌ Startup failed:', err);
     process.exit(1);
   }
 };

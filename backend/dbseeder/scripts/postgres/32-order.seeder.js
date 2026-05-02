@@ -4,7 +4,7 @@
  * Creates sample orders
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 async function seedOrders() {
   try {

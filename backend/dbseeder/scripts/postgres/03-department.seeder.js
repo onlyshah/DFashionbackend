@@ -4,7 +4,7 @@
  * No dependencies
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 const departmentData = [
   { name: 'Engineering', description: 'Product development and technical team' },

@@ -5,7 +5,7 @@
  */
 
 const bcrypt = require('bcryptjs');
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 async function seedUsers() {
   try {

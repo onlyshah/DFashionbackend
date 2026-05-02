@@ -113,6 +113,28 @@ class UnifiedDatabase {
     // Setup associations
     await this.setupPostgresAssociations();
 
+    // Initialize Cart smart switcher for PostgreSQL
+    try {
+      console.log('🔄 [DEBUG] Attempting to initialize Cart switcher...');
+      console.log('🔄 [DEBUG] this.models.Cart exists:', !!this.models.Cart);
+      console.log('🔄 [DEBUG] this.models.Cart type:', typeof this.models.Cart);
+      console.log('🔄 [DEBUG] this.models.Cart.getCartByUserId exists:', !!this.models.Cart?.getCartByUserId);
+      
+      const CartSwitcher = require('../models/Cart');
+      console.log('🔄 [DEBUG] CartSwitcher loaded:', !!CartSwitcher);
+      console.log('🔄 [DEBUG] CartSwitcher._setPostgresModel exists:', !!CartSwitcher._setPostgresModel);
+      
+      if (CartSwitcher._setPostgresModel) {
+        CartSwitcher._setPostgresModel(this.models.Cart);
+        console.log('✅ Cart smart switcher initialized with PostgreSQL model');
+      } else {
+        console.warn('⚠️  CartSwitcher._setPostgresModel not found');
+      }
+    } catch (err) {
+      console.warn('⚠️  Could not initialize Cart smart switcher:', err.message);
+      console.error('Stack:', err.stack);
+    }
+
     // Wrap models with unified interface
     for (const name in this.models) {
       if (this.models[name] && typeof this.models[name] === 'function') {
@@ -297,6 +319,18 @@ class UnifiedDatabase {
       _model: model
     };
 
+    // Preserve custom static methods from the model
+    if (model) {
+      for (const key of Object.getOwnPropertyNames(model)) {
+        // Skip standard Sequelize methods and reserved words
+        if (!['findAll', 'findOne', 'findByPk', 'findAndCountAll', 'create', 'update', 'destroy', 'count', 'dataTypes', 'sequelize', 'options', 'name', 'associations', 'rawAttributes', '_attributes'].includes(key)) {
+          if (typeof model[key] === 'function') {
+            wrapper[key] = model[key].bind(model);
+          }
+        }
+      }
+    }
+
     if (dbType === 'postgres') {
       // Sequelize wrapper
       wrapper.findAll = async (options = {}) => {
@@ -381,6 +415,18 @@ class UnifiedDatabase {
 
     } else if (dbType === 'mongo') {
       // Mongoose wrapper
+      // Preserve custom methods from Mongoose models
+      if (model && typeof model === 'object') {
+        // Copy custom methods from model
+        for (const key in model) {
+          if (!['find', 'findOne', 'findById', 'findAll', 'findAndCountAll', 'create', 'updateOne', 'updateMany', 'deleteOne', 'deleteMany', 'countDocuments', 'count', 'collection', 'schema', 'db', 'base', 'modelName', 'constructor', 'prototype'].includes(key)) {
+            if (typeof model[key] === 'function') {
+              wrapper[key] = model[key].bind(model);
+            }
+          }
+        }
+      }
+
       wrapper.find = async (query = {}) => {
         try {
           const result = await model.find(query);

@@ -7,7 +7,7 @@
 const dbType = (process.env.DB_TYPE || '').toLowerCase();
 const models = dbType === 'postgres' ? require('../models_sql') : require('../models');
 const { Product, SearchHistory, TrendingSearch } = models;
-const searchEngine = require('../services/utils/searchEngine');
+const searchEngine = require('../utils/searchEngine');
 
 // ==================== BASIC SEARCH ====================
 

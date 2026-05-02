@@ -1,4 +1,4 @@
-const ServiceLoader = require('../services/ServiceLoader');
+const ServiceLoader = require('../utils/ServiceLoader');
 const rewardService = ServiceLoader.loadService('rewardService');
 
 class RewardController {
@@ -519,8 +519,8 @@ const generateReferralCode = async (req, res) => {
     }
     
     // Generate new referral code
-    const ServiceLoader = require('../services/ServiceLoader');
-    const DataValidationService = require('../services/utils/dataValidationService');
+    const ServiceLoader = require('../utils/ServiceLoader');
+    const DataValidationService = require('../utils/dataValidationService');
     const referralCode = await DataValidationService.generateUniqueReferralCode(user.username);
     
     if (!referralCode) {

@@ -497,6 +497,74 @@ exports.getOrderStats = async (req, res) => {
 };
 
 /**
+ * Get total items purchased by user
+ */
+exports.getTotalItemsPurchased = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    if (!userId) {
+      return ApiResponse.error(res, 'User not authenticated', 401);
+    }
+
+    let totalQuantity = 0;
+    let totalSpent = 0;
+    let orderCount = 0;
+
+    if (models.isPostgres) {
+      // PostgreSQL query
+      const result = await models.sequelize.query(
+        `SELECT 
+           COALESCE(SUM(oi.quantity), 0) as total_quantity,
+           COALESCE(SUM(o.total_amount), 0) as total_spent,
+           COUNT(DISTINCT o.id) as order_count
+         FROM orders o
+         LEFT JOIN order_items oi ON o.id = oi.order_id
+         WHERE o.user_id = :userId AND o.status != 'cancelled'`,
+        {
+          replacements: { userId },
+          type: models.sequelize.QueryTypes.SELECT
+        }
+      );
+
+      if (result && result.length > 0) {
+        totalQuantity = parseInt(result[0].total_quantity || 0);
+        totalSpent = parseFloat(result[0].total_spent || 0);
+        orderCount = parseInt(result[0].order_count || 0);
+      }
+    } else {
+      // MongoDB aggregation
+      const result = await models.Order.aggregate([
+        { $match: { userId, status: { $ne: 'cancelled' } } },
+        {
+          $group: {
+            _id: null,
+            totalQuantity: { $sum: { $sum: '$items.quantity' } },
+            totalSpent: { $sum: '$totalAmount' },
+            orderCount: { $sum: 1 }
+          }
+        }
+      ]);
+
+      if (result && result.length > 0) {
+        totalQuantity = result[0].totalQuantity || 0;
+        totalSpent = result[0].totalSpent || 0;
+        orderCount = result[0].orderCount || 0;
+      }
+    }
+
+    return ApiResponse.success(res, {
+      totalItemsPurchased: totalQuantity,
+      totalSpent,
+      totalOrders: orderCount
+    }, 'User purchase statistics retrieved successfully');
+  } catch (error) {
+    console.error('❌ getTotalItemsPurchased error:', error);
+    return ApiResponse.serverError(res, error);
+  }
+};
+
+/**
  * Generate invoice for order
  */
 exports.generateInvoice = async (req, res) => {

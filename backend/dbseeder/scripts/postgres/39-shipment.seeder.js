@@ -3,7 +3,7 @@
  * Depends on: Order, Courier
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 async function seedShipments() {
   try {

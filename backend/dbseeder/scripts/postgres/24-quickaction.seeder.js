@@ -4,7 +4,7 @@
  * No dependencies
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 const quickActionData = [
   { name: 'View Cart', url: '/cart', icon: 'shopping-cart', position: 1, isActive: true },

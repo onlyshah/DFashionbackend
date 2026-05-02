@@ -4,7 +4,7 @@
  * No dependencies
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 const pageData = [
   { title: 'About Us', slug: 'about-us', content: 'About our company...', isPublished: true },

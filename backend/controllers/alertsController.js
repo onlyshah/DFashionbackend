@@ -1,4 +1,4 @@
-const ServiceLoader = require('../services/ServiceLoader');
+const ServiceLoader = require('../utils/ServiceLoader');
 const alertService = ServiceLoader.loadService('alertService');
 
 const { sendResponse, sendError } = require('../utils/response');

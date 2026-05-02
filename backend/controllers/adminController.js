@@ -109,8 +109,8 @@ exports.getDashboardStatsFromDB = async (req, res) => {
       });
     }
 
-    const ServiceLoader = require('../services/ServiceLoader');
-    const dataProvider = require('../services/utils/dataProvider');
+    const ServiceLoader = require('../utils/ServiceLoader');
+    const dataProvider = require('../utils/dataProvider');
     const models = require('../models_sql');
     let UserRaw = null; // For postgres, no raw models
 

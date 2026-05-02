@@ -4,7 +4,7 @@
  * No dependencies
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 const searchSuggestionData = [
   { keyword: 't-shirt', searches: 500, category: 'clothing', isActive: true },

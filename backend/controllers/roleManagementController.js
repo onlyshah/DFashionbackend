@@ -1,4 +1,4 @@
-const ServiceLoader = require('../services/ServiceLoader');
+const ServiceLoader = require('../utils/ServiceLoader');
 const roleManagementService = ServiceLoader.loadService('roleManagementService');
 
 

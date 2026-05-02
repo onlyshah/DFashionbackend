@@ -5,7 +5,7 @@
  * Combines previous 30- and 48‑version logic.
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 async function seedInventory() {
   try {

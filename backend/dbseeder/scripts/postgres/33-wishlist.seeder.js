@@ -4,7 +4,7 @@
  * Creates wish lists for customers
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 async function seedWishlists() {
   try {

@@ -4,7 +4,7 @@
  * Creates short-form video content
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 const { createFashionArtwork } = require('../../utils/image-utils');
 
 async function seedReels() {

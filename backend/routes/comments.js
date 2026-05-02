@@ -5,8 +5,8 @@
 
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const commentController = require('../../controllers/commentController');
-const { protect, optionalAuth } = require('../../middleware/auth');
+const commentController = require('../controllers/commentController');
+const { protect, optionalAuth } = require('../middleware/auth');
 
 // @route   POST /api/posts/:postId/comments
 // @desc    Create a comment on a post

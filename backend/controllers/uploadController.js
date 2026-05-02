@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const models = require('../models_sql');
-const uploadService = require('../services/utils/uploadService');
+const uploadService = require('../utils/uploadService');
 const { sendResponse, sendError } = require('../utils/response');
 
 const uploadsRoot = path.join(__dirname, '..', 'uploads');

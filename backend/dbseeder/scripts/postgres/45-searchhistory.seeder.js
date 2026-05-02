@@ -3,7 +3,7 @@
  * Depends on: User
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 async function seedSearchHistories() {
   try {

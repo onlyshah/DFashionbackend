@@ -4,7 +4,7 @@
  * No dependencies
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 const path = require('path');
 const { createFashionArtwork } = require('../../utils/image-utils');
 

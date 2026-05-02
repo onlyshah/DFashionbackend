@@ -4,7 +4,7 @@
  * No dependencies
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 const moduleData = [
   { name: 'Dashboard', displayName: 'Dashboard', description: 'Admin dashboard and overview', isActive: true },

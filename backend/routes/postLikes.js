@@ -5,8 +5,8 @@
 
 const express = require('express');
 const router = express.Router({ mergeParams: true });
-const postLikeController = require('../../controllers/postLikeController');
-const { protect } = require('../../middleware/auth');
+const postLikeController = require('../controllers/postLikeController');
+const { protect } = require('../middleware/auth');
 
 // All routes require authentication
 router.use(protect);

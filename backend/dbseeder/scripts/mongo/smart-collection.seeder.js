@@ -4,7 +4,7 @@
 
 require('dotenv').config();
 const { getSequelize } = require('../../../config/sequelize');
-const modelsModule = require('../../../models_sql');
+const modelsModule = require('../../models_sql/');
 
 let sequelize;
 let SmartCollection;

@@ -1,4 +1,4 @@
-const ServiceLoader = require('../services/ServiceLoader');
+const ServiceLoader = require('../utils/ServiceLoader');
 const liveService = ServiceLoader.loadService('liveService');
 
 

@@ -1,6 +1,6 @@
-const ServiceLoader = require('../services/ServiceLoader');
+const ServiceLoader = require('../utils/ServiceLoader');
 const contentService = ServiceLoader.loadService('contentService');
-const DataValidationService = require('../services/utils/dataValidationService');
+const DataValidationService = require('../utils/dataValidationService');
 const RewardService = ServiceLoader.loadService('rewardService');
 
 // Load models with DB type awareness

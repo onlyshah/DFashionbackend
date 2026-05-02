@@ -4,7 +4,7 @@
  * Creates social posts with hashtags and tagged products
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 async function seedPosts() {
   try {

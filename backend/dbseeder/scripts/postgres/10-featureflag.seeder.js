@@ -4,7 +4,7 @@
  * No dependencies
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 const flagData = [
   { name: 'new_checkout', description: 'Enable new checkout flow', isEnabled: true },

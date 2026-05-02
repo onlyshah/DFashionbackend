@@ -4,7 +4,7 @@
  * No dependencies
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 const { createFashionArtwork } = require('../../utils/image-utils');
 
 const brandData = [
@@ -28,7 +28,6 @@ const brandData = [
   description,
   logoUrl: createFashionArtwork('brands', name, 1, { subtitle: 'Fashion brand', width: 720, height: 720 })
 }));
-];
 
 async function seedBrands() {
   try {

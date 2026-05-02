@@ -3,8 +3,8 @@
  * Handles all post like operations - add, remove, get stats
  */
 
-const PostLike = require('../../models/PostLike');
-const Post = require('../../models/Post');
+const PostLike = require('../models/PostLike');
+const Post = require('../models/Post');
 
 exports.likePost = async (req, res) => {
   try {

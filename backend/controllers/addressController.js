@@ -3,7 +3,7 @@
  * Handles user address CRUD operations for checkout and shipping
  */
 
-const models = require('../../models_sql');
+const models = require('../models_sql/');
 
 exports.createAddress = async (req, res) => {
   try {

@@ -3,7 +3,7 @@
  * Seeds customer support tickets
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 const { v4: uuidv4 } = require('uuid');
 
 async function seedTickets() {

@@ -1,5 +1,5 @@
 const bcrypt = require('bcryptjs');
-const ServiceLoader = require('../services/ServiceLoader');
+const ServiceLoader = require('../utils/ServiceLoader');
 const userService = ServiceLoader.loadService('userService');
 const models = require('../models');
 

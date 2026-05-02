@@ -4,7 +4,7 @@
  * No dependencies
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 const categoryData = [
   { name: 'Men', slug: 'men', description: 'Men fashion and apparel', image: '/uploads/categories/men.svg', icon: '👔', sortOrder: 1 },

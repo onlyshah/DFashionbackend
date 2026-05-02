@@ -4,7 +4,7 @@
  * No dependencies
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 const faqData = [
   { question: 'How do I track my order?', answer: 'You can track your order using the order number in your email.' },

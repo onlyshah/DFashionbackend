@@ -5,8 +5,8 @@
 
 const express = require('express');
 const router = express.Router();
-const followController = require('../../controllers/followController');
-const { authenticationMiddleware } = require('../../middleware/auth');
+const followController = require('../controllers/followController');
+const { authenticationMiddleware } = require('../middleware/auth');
 
 // All follow endpoints require authentication
 router.use(authenticationMiddleware);

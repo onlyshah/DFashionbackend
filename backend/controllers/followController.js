@@ -3,8 +3,8 @@
  * Handles follow/unfollow operations and follower/following lists
  */
 
-const Follow = require('../../models/Follow');
-const User = require('../../models/User');
+const Follow = require('../models/Follow');
+const User = require('../models/User');
 
 exports.followUser = async (req, res) => {
   try {

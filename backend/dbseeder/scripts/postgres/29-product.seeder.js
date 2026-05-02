@@ -4,7 +4,7 @@
  * Creates sample fashion products
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 const { createFashionArtwork } = require('../../utils/image-utils');
 
 const productDataTemplates = [

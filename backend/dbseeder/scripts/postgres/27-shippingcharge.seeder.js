@@ -4,7 +4,7 @@
  * Creates shipping charges for different scenarios
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 const shippingChargeData = [
   {

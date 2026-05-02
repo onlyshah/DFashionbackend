@@ -14,9 +14,9 @@ class ServiceLoader {
       // First, try to load database-specific service
       let servicePath;
       if (dbType === 'postgres' || dbType === 'postgresql' || dbType === 'mysql') {
-        servicePath = path.join(__dirname, '../services/postgres/', `${this.toPascalCase(serviceName)}.js`);
+        servicePath = path.join(__dirname, '.../utils/postgres/', `${this.toPascalCase(serviceName)}.js`);
       } else {
-        servicePath = path.join(__dirname, '../services/mongodb/', `${this.toPascalCase(serviceName)}.js`);
+        servicePath = path.join(__dirname, '.../utils/mongodb/', `${this.toPascalCase(serviceName)}.js`);
       }
       
       if (fs.existsSync(servicePath)) {
@@ -25,7 +25,7 @@ class ServiceLoader {
       }
 
       // Fallback: try to load from main services directory
-      const mainServicePath = path.join(__dirname, '../services/', `${this.toPascalCase(serviceName)}.js`);
+      const mainServicePath = path.join(__dirname, '.../utils/', `${this.toPascalCase(serviceName)}.js`);
       if (fs.existsSync(mainServicePath)) {
         console.log(`[ServiceLoader] Loaded main service: ${serviceName}`);
         return require(mainServicePath);

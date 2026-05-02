@@ -4,7 +4,7 @@
  * Creates sub-categories for each main category
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 const subCategoryMapping = {
   'Men': [

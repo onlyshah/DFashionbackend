@@ -13,7 +13,7 @@
 require('dotenv').config();
 const path = require('path');
 const fs = require('fs');
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 const logger = {
   info: (msg) => console.log(`\n📋 ${msg}`),

@@ -4,7 +4,7 @@
  * Creates comments on posts
  */
 
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 async function seedComments() {
   try {

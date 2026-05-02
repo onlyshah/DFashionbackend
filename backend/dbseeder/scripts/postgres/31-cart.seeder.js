@@ -5,7 +5,7 @@
  */
 
 const { randomUUID } = require('crypto');
-const models = require('../../../models_sql');
+const models = require('../../models_sql/');
 
 async function seedCarts() {
   try {
