@@ -62,69 +62,70 @@ function sanitizeRecords(records, options = {}) {
  */
 function buildIncludeClause(modelName) {
   const models = require('../models_sql');
+  const rawModels = models._raw || models;
   
   const includeMap = {
     'Order': [
-      { model: models.User, as: 'customer', attributes: ['id', 'email', 'firstName', 'lastName', 'phone'] },
-      { model: models.Payment, as: 'payments', attributes: ['id', 'status', 'amount', 'paymentMethod'], required: false },
-      { model: models.Shipment, as: 'shipments', attributes: ['id', 'status', 'trackingNumber'], required: false },
-      { model: models.Return, as: 'returns', attributes: ['id', 'status', 'reason'], required: false }
+      { model: rawModels.User, as: 'customer', attributes: ['id', 'email', 'firstName', 'lastName', 'phone'] },
+      { model: rawModels.Payment, as: 'payments', attributes: ['id', 'status', 'amount', 'paymentMethod'], required: false },
+      { model: rawModels.Shipment, as: 'shipments', attributes: ['id', 'status', 'trackingNumber'], required: false },
+      { model: rawModels.Return, as: 'returns', attributes: ['id', 'status', 'reason'], required: false }
     ],
     'Product': [
-      { model: models.Brand, as: 'brand', attributes: ['id', 'name'] },
-      { model: models.Category, as: 'category', attributes: ['id', 'name'] },
-      { model: models.User, as: 'seller', attributes: ['id', 'firstName', 'lastName', 'email'] },
-      { model: models.Inventory, as: 'inventory', attributes: ['id', 'quantity', 'warehouseId'], required: false }
+      { model: rawModels.Brand, as: 'brand', attributes: ['id', 'name'] },
+      { model: rawModels.Category, as: 'category', attributes: ['id', 'name'] },
+      { model: rawModels.User, as: 'seller', attributes: ['id', 'firstName', 'lastName', 'email'] },
+      { model: rawModels.Inventory, as: 'inventory', attributes: ['id', 'quantity', 'warehouseId'], required: false }
     ],
     'Cart': [
-      { model: models.User, as: 'user', attributes: ['id', 'email', 'firstName', 'lastName'], required: false },
-      { model: models.Product, as: 'product', attributes: ['id', 'name', 'price', 'images', 'stock'] }
+      { model: rawModels.User, as: 'user', attributes: ['id', 'email', 'firstName', 'lastName'], required: false },
+      { model: rawModels.Product, as: 'product', attributes: ['id', 'name', 'price', 'images', 'stock'] }
     ],
     'Payment': [
-      { model: models.Order, as: 'order', attributes: ['id', 'orderNumber', 'totalAmount'] }
+      { model: rawModels.Order, as: 'order', attributes: ['id', 'orderNumber', 'totalAmount'] }
     ],
     'Shipment': [
-      { model: models.Order, as: 'order', attributes: ['id', 'orderNumber'] },
-      { model: models.Courier, as: 'courier', attributes: ['id', 'name', 'trackingUrl'] }
+      { model: rawModels.Order, as: 'order', attributes: ['id', 'orderNumber'] },
+      { model: rawModels.Courier, as: 'courier', attributes: ['id', 'name', 'trackingUrl'] }
     ],
     'ProductComment': [
-      { model: models.Product, as: 'product', attributes: ['id', 'name'] },
-      { model: models.User, as: 'author', attributes: ['id', 'firstName', 'lastName', 'avatar'] }
+      { model: rawModels.Product, as: 'product', attributes: ['id', 'name'] },
+      { model: rawModels.User, as: 'author', attributes: ['id', 'firstName', 'lastName', 'avatar'] }
     ],
     'Wishlist': [
-      { model: models.User, as: 'user', attributes: ['id', 'email'], required: false },
-      { model: models.Product, as: 'product', attributes: ['id', 'name', 'price', 'images', 'stock'] }
+      { model: rawModels.User, as: 'user', attributes: ['id', 'email'], required: false },
+      { model: rawModels.Product, as: 'product', attributes: ['id', 'name', 'price', 'images', 'stock'] }
     ],
     'Post': [
-      { model: models.User, as: 'author', attributes: ['id', 'firstName', 'lastName', 'avatar'] }
+      { model: rawModels.User, as: 'author', attributes: ['id', 'firstName', 'lastName', 'avatar'] }
     ],
     'Story': [
-      { model: models.User, as: 'author', attributes: ['id', 'firstName', 'lastName', 'avatar'] }
+      { model: rawModels.User, as: 'author', attributes: ['id', 'firstName', 'lastName', 'avatar'] }
     ],
     'Reel': [
-      { model: models.User, as: 'author', attributes: ['id', 'firstName', 'lastName', 'avatar', 'email'] }
+      { model: rawModels.User, as: 'author', attributes: ['id', 'firstName', 'lastName', 'avatar', 'email'] }
     ],
     'Return': [
-      { model: models.Order, as: 'order', attributes: ['id', 'orderNumber', 'status'], required: false },
-      { model: models.User, as: 'customer', attributes: ['id', 'firstName', 'lastName', 'email'], required: false }
+      { model: rawModels.Order, as: 'order', attributes: ['id', 'orderNumber', 'status'], required: false },
+      { model: rawModels.User, as: 'customer', attributes: ['id', 'firstName', 'lastName', 'email'], required: false }
     ],
     'Inventory': [
-      { model: models.Product, as: 'product', attributes: ['id', 'name', 'price'] },
-      { model: models.Warehouse, as: 'warehouse', attributes: ['id', 'name', 'location'], required: false }
+      { model: rawModels.Product, as: 'product', attributes: ['id', 'name', 'price'] },
+      { model: rawModels.Warehouse, as: 'warehouse', attributes: ['id', 'name', 'location'], required: false }
     ],
     'Ticket': [
-      { model: models.User, as: 'user', attributes: ['id', 'name', 'email'], required: false },
-      { model: models.SupportReply, as: 'replies', attributes: ['id', 'message', 'created_at'], required: false }
+      { model: rawModels.User, as: 'user', attributes: ['id', 'name', 'email'], required: false },
+      { model: rawModels.SupportReply, as: 'replies', attributes: ['id', 'message', 'created_at'], required: false }
     ],
     'Notification': [
-      { model: models.User, as: 'user', attributes: ['id', 'name', 'email'], required: false }
+      { model: rawModels.User, as: 'user', attributes: ['id', 'name', 'email'], required: false }
     ],
     'SellerCommission': [
-      { model: models.User, as: 'seller', attributes: ['id', 'firstName', 'lastName', 'email'], required: false },
-      { model: models.Order, as: 'order', attributes: ['id', 'orderNumber'], required: false }
+      { model: rawModels.User, as: 'seller', attributes: ['id', 'firstName', 'lastName', 'email'], required: false },
+      { model: rawModels.Order, as: 'order', attributes: ['id', 'orderNumber'], required: false }
     ],
     'KYC': [
-      { model: models.User, as: 'user', attributes: ['id', 'firstName', 'lastName', 'email'], required: false }
+      { model: rawModels.User, as: 'user', attributes: ['id', 'firstName', 'lastName', 'email'], required: false }
     ]
   };
 

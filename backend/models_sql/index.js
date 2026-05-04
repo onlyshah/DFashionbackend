@@ -531,6 +531,38 @@ const createMongooseLikeWrapper = (sequelizeModel, defineFunc, modelName) => {
       }
     },
 
+    // 🚀 CRITICAL: Sequelize-style findByPk() - used by many controllers
+    findByPk: async (id, options = {}) => {
+      try {
+        const model = await getActualModel();
+        if (!model || typeof model.findByPk !== 'function') {
+          console.error(`[wrapper] ${modelName}: model does not have findByPk method`);
+          return null;
+        }
+        const normalizedOptions = normalizeOptions(options);
+        const result = await model.findByPk(id, normalizedOptions);
+        return result || null;
+      } catch (err) {
+        console.error(`Error in findByPk for ${modelName}:`, err.message);
+        return null;
+      }
+    },
+
+    // 🚀 Sequelize-style build() - creates instance without saving
+    build: (data, options = {}) => {
+      // This is synchronous in Sequelize, just wrap the call
+      const model = sequelizeModel;
+      if (!model || typeof model.build !== 'function') {
+        console.error(`[wrapper] ${modelName}: model does not have build method`);
+        return null;
+      }
+      return model.build(data, options);
+    },
+
+    // 🚀 Sequelize-style save() - typically called on model instances
+    // Note: This should be called on the instance returned by build/findByPk
+    // Not on the wrapper itself, so this is for reference only
+
     // Direct Sequelize access for complex queries
     _sequelize: sequelizeModel
   };

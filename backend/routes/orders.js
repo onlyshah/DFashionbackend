@@ -7,7 +7,7 @@ const orderController = require('../controllers/orderController');
 router.use(auth);
 
 // Stats routes (must be before :id routes to avoid matching as id param)
-router.get('/stats/total-items-purchased', requireCustomer, orderController.getTotalItemsPurchased);
+router.get('/stats/total-items-purchased',  requireCustomer, orderController.getTotalItemsPurchased);
 
 // Get user's orders
 router.get('/my-orders', requireCustomer, orderController.getUserOrders);

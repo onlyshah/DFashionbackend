@@ -13,6 +13,7 @@ const ApiResponse = require('../utils/ApiResponse');
 const { validatePagination } = require('../utils/validation');
 const { Op } = require('sequelize');
 const { formatSingleResponse, buildIncludeClause, validateMultipleFK } = require('../utils/fkResponseFormatter');
+const console = require('console');
 
 // Helper to ensure models are initialized before use
 const ensureModelsReady = async () => {
@@ -322,118 +323,90 @@ exports.addToCart = async (req, res) => {
  */
 exports.updateCartItem = async (req, res) => {
   try {
-    const item_id = extractItemId(req);
+    const itemId = req.params.itemId; // 🔥 match frontend exactly
     const { quantity } = req.body;
+    const userId = req.user?.id;
 
-    console.log('🔄 UPDATE CART ITEM REQUEST:', {
-      itemId: item_id,
-      quantity,
-      userId: req.user?.id,
-      userEmail: req.user?.email
-    });
+    console.log('🔄 UPDATE CART ITEM REQUEST:', { itemId, quantity, userId });
 
-    if (!item_id || quantity === undefined || quantity < 0) {
-      console.warn('❌ Invalid parameters:', { item_id, quantity });
+    if (!itemId || quantity === undefined || quantity < 0) {
       return ApiResponse.error(res, 'Invalid item ID or quantity', 422);
     }
 
     const sequelize = require('../models_sql').sequelize;
     const hasProductImagesTable = await hasTable(sequelize, 'product_images');
-    
-    // Fetch cart item with full context
+
+    // ✅ Ensure the cart item belongs to the logged-in user
     const cartItemResult = await sequelize.query(
       `SELECT ci.id, ci.cart_id, ci.product_id, c.user_id, p.stock
        FROM cart_items ci
        INNER JOIN carts c ON ci.cart_id = c.id
        LEFT JOIN products p ON ci.product_id = p.id
-       WHERE ci.id = :itemId`,
-      { replacements: { itemId: item_id }, type: sequelize.QueryTypes.SELECT }
+       WHERE ci.id = :itemId AND c.user_id = :userId`,
+      {
+        replacements: { itemId, userId },
+        type: sequelize.QueryTypes.SELECT
+      }
     );
 
     if (!cartItemResult.length) {
-      console.warn('❌ Cart item not found:', item_id);
+      console.warn(`⚠️ Cart item not found for user ${userId}: ${itemId}`);
       return ApiResponse.notFound(res, 'Cart item');
     }
 
     const cartItem = cartItemResult[0];
-    console.log('✅ Cart item found:', {
-      cartItemId: cartItem.id,
-      productId: cartItem.product_id,
-      cartId: cartItem.cart_id,
-      stock: cartItem.stock
-    });
 
-    // Verify ownership
-    if (cartItem.user_id !== req.user.id) {
-      console.warn('❌ Unauthorized: User cannot modify cart', {
-        requestUserId: req.user.id,
-        cartUserId: cartItem.user_id
-      });
-      return ApiResponse.forbidden(res, 'You can only update your own cart');
-    }
-
-    // Verify stock
     if ((cartItem.stock || 0) < quantity) {
-      console.warn('❌ Insufficient stock:', {
-        requestQuantity: quantity,
-        availableStock: cartItem.stock
-      });
       return ApiResponse.error(res, 'Quantity exceeds available stock', 409);
     }
 
+    // ✅ Delete if quantity = 0
     if (quantity === 0) {
-      console.log('🗑️ Deleting cart item (quantity = 0):', item_id);
       await sequelize.query(
         'DELETE FROM cart_items WHERE id = :itemId',
-        { replacements: { itemId: item_id } }
+        { replacements: { itemId } }
       );
     } else {
-      console.log('✏️ Updating cart item quantity:', {
-        itemId: item_id,
-        newQuantity: quantity
-      });
       await sequelize.query(
         'UPDATE cart_items SET quantity = :quantity, updated_at = NOW() WHERE id = :itemId',
-        { replacements: { quantity, itemId: item_id } }
+        { replacements: { quantity, itemId } }
       );
     }
 
-    // Fetch updated cart state
+    // 🔄 Fetch updated cart
     const cartItems = await sequelize.query(
       `SELECT ci.id, ci.quantity, ci.price, ci.product_id,
               ci.selected_color, ci.selected_size,
-              p.id as product_id, p.name, p.price as product_price,
+              p.name, p.price as product_price,
               ${buildImagesSelectClause(hasProductImagesTable)}
        FROM cart_items ci
        LEFT JOIN products p ON ci.product_id = p.id
        WHERE ci.cart_id = :cartId`,
-      { replacements: { cartId: cartItem.cart_id }, type: sequelize.QueryTypes.SELECT }
+      {
+        replacements: { cartId: cartItem.cart_id },
+        type: sequelize.QueryTypes.SELECT
+      }
     );
 
     const { formattedItems, subtotal } = formatCartItems(cartItems);
-    console.log('✅ Cart updated successfully:', {
-      itemsCount: formattedItems.length,
-      subtotal,
-      updatedItemId: item_id
-    });
 
     return ApiResponse.success(res, {
       cartId: cartItem.cart_id,
-      items: formattedItems,
+      items: formattedItems.map(item => ({ ...item, id: item.id })), // ensure frontend matches
       summary: {
         itemCount: formattedItems.length,
-        totalQuantity: formattedItems.reduce((sum, item) => sum + item.quantity, 0),
+        totalQuantity: formattedItems.reduce((sum, i) => sum + i.quantity, 0),
         subtotal,
         discount: 0,
         total: subtotal
       }
     }, 'Cart item updated');
+
   } catch (error) {
-    console.error('❌ updateCartItem error:', error.message, error.stack);
+    console.error('❌ updateCartItem error:', error);
     return ApiResponse.serverError(res, error);
   }
 };
-
 /**
  * Remove item from cart
  */

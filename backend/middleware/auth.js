@@ -288,7 +288,8 @@ const isApprovedVendor = async (req, res, next) => {
 
 // Check if user is customer
 const requireCustomer = (req, res, next) => {
-  if (req.user.role !== 'customer' && req.user.role !== 'admin') {
+  console.log('🔐 requireCustomer middleware - User role:', req.user.role);
+  if (req.user.role !== 'customer' && req.user.role !== 'end_user' && req.user.role !== 'admin') {
     return res.status(403).json({
       success: false,
       message: 'Access denied. Customer role required.'

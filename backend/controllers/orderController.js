@@ -10,7 +10,7 @@ const dbType = process.env.DB_TYPE || 'mongodb';
 const models = dbType.includes('postgres') ? require('../models_sql') : require('../models');
 const ApiResponse = require('../utils/ApiResponse');
 const { validatePagination } = require('../utils/validation');
-const { formatPaginatedResponse, formatSingleResponse, validateMultipleFK } = require('../utils/fkResponseFormatter');
+const { formatPaginatedResponse, formatSingleResponse, validateMultipleFK, buildIncludeClause } = require('../utils/fkResponseFormatter');
 
 /**
  * Create new order from cart
@@ -53,11 +53,18 @@ exports.createOrder = async (req, res) => {
     if (models.isPostgres) {
       cart = await models.Cart.findOne({
         where: { userId: req.user.id },
-        include: {
-          model: models.CartItem._model,
-          as: 'items',
-          include: { model: models.Product._model, attributes: ['id', 'name', 'price', 'stock'] }
-        }
+        include: [
+          {
+            model: models.CartItem,
+            as: 'items',
+            include: [
+              {
+                model: models.Product,
+                attributes: ['id', 'name', 'price', 'stock']
+              }
+            ]
+          }
+        ]
       });
     } else {
       cart = await models.Cart.findOne({ userId: req.user.id })
@@ -425,11 +432,13 @@ exports.trackOrder = async (req, res) => {
     if (models.isPostgres) {
       order = await models.Order.findByPk(id, {
         attributes: ['id', 'orderNumber', 'status', 'createdAt', 'updatedAt', 'shippingCost'],
-        include: {
-          model: models.Address._model,
-          as: 'shippingAddress',
-          attributes: ['street', 'city', 'state', 'postalCode', 'country']
-        }
+        include: [
+          {
+            model: models.Address,
+            as: 'shippingAddress',
+            attributes: ['street', 'city', 'state', 'postalCode', 'country']
+          }
+        ]
       });
     } else {
       order = await models.Order.findById(id)
@@ -501,7 +510,7 @@ exports.getOrderStats = async (req, res) => {
  */
 exports.getTotalItemsPurchased = async (req, res) => {
   try {
-    const userId = req.user.id;
+   const userId = req.user.userId || req.user.id;
 
     if (!userId) {
       return ApiResponse.error(res, 'User not authenticated', 401);
@@ -515,12 +524,12 @@ exports.getTotalItemsPurchased = async (req, res) => {
       // PostgreSQL query
       const result = await models.sequelize.query(
         `SELECT 
-           COALESCE(SUM(oi.quantity), 0) as total_quantity,
-           COALESCE(SUM(o.total_amount), 0) as total_spent,
-           COUNT(DISTINCT o.id) as order_count
-         FROM orders o
-         LEFT JOIN order_items oi ON o.id = oi.order_id
-         WHERE o.user_id = :userId AND o.status != 'cancelled'`,
+  COALESCE(SUM(oi.quantity), 0) as total_quantity,
+  COALESCE(SUM(DISTINCT o.total_amount), 0) as total_spent,
+  COUNT(DISTINCT o.id) as order_count
+FROM orders o
+LEFT JOIN order_items oi ON o.id = oi.order_id
+WHERE o.user_id = :userId AND o.status != 'cancelled'`,
         {
           replacements: { userId },
           type: models.sequelize.QueryTypes.SELECT
@@ -534,17 +543,25 @@ exports.getTotalItemsPurchased = async (req, res) => {
       }
     } else {
       // MongoDB aggregation
-      const result = await models.Order.aggregate([
-        { $match: { userId, status: { $ne: 'cancelled' } } },
-        {
-          $group: {
-            _id: null,
-            totalQuantity: { $sum: { $sum: '$items.quantity' } },
-            totalSpent: { $sum: '$totalAmount' },
-            orderCount: { $sum: 1 }
-          }
-        }
-      ]);
+       const result = await models.Order.aggregate([
+  { $match: { userId, status: { $ne: 'cancelled' } } },
+  { $unwind: '$items' },
+  {
+    $group: {
+      _id: null,
+      totalQuantity: { $sum: '$items.quantity' },
+      totalSpent: { $sum: '$totalAmount' },
+      orderCount: { $addToSet: '$_id' }
+    }
+  },
+  {
+    $project: {
+      totalQuantity: 1,
+      totalSpent: 1,
+      orderCount: { $size: '$orderCount' }
+    }
+  }
+]);
 
       if (result && result.length > 0) {
         totalQuantity = result[0].totalQuantity || 0;
