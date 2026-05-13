@@ -1,0 +1,6 @@
+-- Add missing columns to Users table for admin seeding
+ALTER TABLE "Users"
+ADD COLUMN IF NOT EXISTS role VARCHAR(50),
+ADD COLUMN IF NOT EXISTS "isActive" BOOLEAN DEFAULT TRUE,
+ADD COLUMN IF NOT EXISTS "firstName" VARCHAR(100),
+ADD COLUMN IF NOT EXISTS "lastName" VARCHAR(100);
