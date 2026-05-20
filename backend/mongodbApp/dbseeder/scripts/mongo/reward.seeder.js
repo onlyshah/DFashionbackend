@@ -3,9 +3,9 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const Reward = require('../models/Reward');
-const User = require('../models/User');
-const Order = require('../models/Order');
+const Reward = require('../../../models/Reward');
+const User = require('../../../models/User');
+const Order = require('../../../models/Order');
 
 const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
 if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
@@ -52,3 +52,4 @@ seedRewards().catch(err => {
   console.error('Seeding failed:', err);
   process.exit(1);
 });
+

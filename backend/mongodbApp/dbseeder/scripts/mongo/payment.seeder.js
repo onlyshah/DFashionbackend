@@ -3,9 +3,9 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const Payment = require('../models/Payment');
-const Order = require('../models/Order');
-const User = require('../models/User');
+const Payment = require('../../../models/Payment');
+const Order = require('../../../models/Order');
+const User = require('../../../models/User');
 
 const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
 if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
@@ -51,3 +51,4 @@ seedPayments().catch(err => {
   console.error('Seeding failed:', err);
   process.exit(1);
 });
+

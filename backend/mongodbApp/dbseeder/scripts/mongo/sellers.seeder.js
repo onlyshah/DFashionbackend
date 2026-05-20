@@ -4,10 +4,10 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const User = require('../models/User');
-const KYCDocument = require('../models/KYCDocument');
-const SellerCommission = require('../models/SellerCommission');
-const SellerPerformance = require('../models/SellerPerformance');
+const User = require('../../../models/User');
+const KYCDocument = require('../../../models/KYCDocument');
+const SellerCommission = require('../../../models/SellerCommission');
+const SellerPerformance = require('../../../models/SellerPerformance');
 const bcrypt = require('bcryptjs');
 
 const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
@@ -184,3 +184,4 @@ async function seedSellers() {
 }
 
 seedSellers();
+

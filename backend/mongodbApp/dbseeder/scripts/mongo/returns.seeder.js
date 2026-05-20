@@ -4,9 +4,9 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const Return = require('../models/Return');
-const Order = require('../models/Order');
-const User = require('../models/User');
+const Return = require('../../../models/Return');
+const Order = require('../../../models/Order');
+const User = require('../../../models/User');
 
 const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
 if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
@@ -114,3 +114,4 @@ async function seedReturns() {
 }
 
 seedReturns();
+

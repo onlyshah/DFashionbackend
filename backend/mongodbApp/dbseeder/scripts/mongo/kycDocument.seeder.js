@@ -4,8 +4,8 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const KYCDocument = require('../models/KYCDocument');
-const User = require('../models/User');
+const KYCDocument = require('../../../models/KYCDocument');
+const User = require('../../../models/User');
 
 const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
 if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
@@ -50,3 +50,4 @@ async function seedKYCDocuments() {
 }
 
 seedKYCDocuments();
+

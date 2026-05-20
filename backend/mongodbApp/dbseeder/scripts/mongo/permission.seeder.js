@@ -239,3 +239,4 @@ async function seedPermissions() {
 
 // Run seeder
 seedPermissions();
+

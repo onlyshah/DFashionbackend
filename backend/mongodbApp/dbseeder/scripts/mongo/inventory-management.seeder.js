@@ -58,3 +58,4 @@ async function seedInventoryManagement() {
 }
 
 seedInventoryManagement();
+

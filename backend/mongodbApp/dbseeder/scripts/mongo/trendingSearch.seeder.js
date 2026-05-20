@@ -1,7 +1,7 @@
 // Seeder for TrendingSearch collection
 require('dotenv').config();
 const mongoose = require('mongoose');
-const { TrendingSearch } = require('../models/SearchHistory');
+const { TrendingSearch } = require('../../../models/SearchHistory');
 
 const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
 if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
@@ -45,3 +45,4 @@ seedTrendingSearches().catch(err => {
   console.error('Seeding failed:', err);
   process.exit(1);
 });
+

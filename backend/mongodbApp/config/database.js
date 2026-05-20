@@ -13,18 +13,16 @@ const connectDB = async () => {
       maxPoolSize: 10,
       serverSelectionTimeoutMS: 30000,
       socketTimeoutMS: 45000,
-      bufferCommands: false,
-      bufferMaxEntries: 0
+      connectTimeoutMS: 30000,
+      retryWrites: true,
+      w: 'majority'
     });
 
     console.log(`✅ MongoDB connected: ${conn.connection.host}`);
     return conn;
   } catch (error) {
     console.error('❌ MongoDB connection failed:', error.message);
-    if (process.env.DB_TYPE === 'postgres') {
-      console.log('ℹ️  Falling back to PostgreSQL...');
-      return null;
-    }
+    console.error('Stack:', error.stack);
     process.exit(1);
   }
 };

@@ -3,9 +3,9 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const Wishlist = require('../models/Wishlist');
-const User = require('../models/User');
-const Product = require('../models/Product');
+const Wishlist = require('../../../models/Wishlist');
+const User = require('../../../models/User');
+const Product = require('../../../models/Product');
 
 const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
 if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
@@ -67,3 +67,4 @@ seedWishlists().catch(err => {
   console.error('Seeding failed:', err);
   process.exit(1);
 });
+

@@ -1,13 +1,13 @@
 const express = require('express');
 const router = express.Router();
 const productController = require('../controllers/productController');
-const { auth, optionalAuth, isApprovedVendor, allowResourceOwnerOrRoles } = require('../middleware/auth');
+const { auth, optionalAuth, isApprovedVendor, allowResourceOwnerOrRoles, requireRole } = require('../middleware/auth');
 
 // Public routes
 router.get('/trending', productController.getTrendingProducts);
 router.get('/new-arrivals', productController.getNewArrivals);
 router.get('/featured-brands', optionalAuth, productController.getFeaturedBrands);
-router.get('/brands', optionalAuth, productController.getFeaturedBrands); // Alias for featured-brands
+router.get('/brands', optionalAuth, productController.getFeaturedBrands);
 router.get('/suggested', optionalAuth, productController.getSuggestedProducts);
 router.get('/', optionalAuth, productController.getAllProducts);
 router.get('/search/suggestions', optionalAuth, productController.getSearchSuggestions);
@@ -20,10 +20,10 @@ router.get('/filters', productController.getFilters);
 router.get('/category/:category_id', productController.getProductsByCategory);
 router.get('/:id', optionalAuth, productController.getProductById);
 
-// Admin/Vendor routes
+// Vendor/Admin routes
 router.post('/', auth, isApprovedVendor, productController.createProduct);
 router.put('/:id', auth, allowResourceOwnerOrRoles('Product', 'id', 'vendor', ['admin', 'super_admin']), productController.updateProduct);
-router.delete('/:id', auth, allowResourceOwnerOrRoles('Product', 'id', 'vendor', ['admin', 'super_admin']), isApprovedVendor, productController.deleteProduct);
+router.delete('/:id', auth, allowResourceOwnerOrRoles('Product', 'id', 'vendor', ['admin', 'super_admin']), productController.deleteProduct);
 router.post('/:id/review', auth, productController.addReview);
 
 module.exports = router;

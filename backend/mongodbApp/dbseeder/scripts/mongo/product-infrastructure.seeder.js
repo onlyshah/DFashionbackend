@@ -63,3 +63,4 @@ async function seedProductInfrastructure() {
 }
 
 seedProductInfrastructure();
+

@@ -1,16 +1,8 @@
 // User Seeder Script
 // Usage: node scripts/user.seeder.js
 
-require('dotenv').config();
 const mongoose = require('mongoose');
-const models = require('../models');
-const User = models.User;
-
-const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
-if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
-  console.log('⏭️  Skipping user.seeder - MongoDB disabled (DB_MODE=' + DB_MODE + ')');
-  process.exit(0);
-}
+const User = require('../../../models/User');
 
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/dfashion';
 const DEFAULT_AVATAR = '/uploads/avatars/default-avatar.svg';
@@ -87,16 +79,12 @@ function validateAvatarPath(avatarPath) {
   if (!avatarPath) return DEFAULT_AVATAR;
   // Strip any leading slashes/backslashes so join resolves under backend root
   const rel = avatarPath.replace(/^[/\\]+/, '');
-  const absPath = path.join(__dirname, '..', rel);
+  const absPath = path.join(__dirname, '../../..', rel);
   if (fs.existsSync(absPath)) {
     // Return a normalized web-friendly path with a leading slash
     return '/' + rel.replace(/\\/g, '/');
   }
-  // Fallback to default avatar (also ensure it exists under backend)
-  const defRel = DEFAULT_AVATAR.replace(/^[/\\]+/, '');
-  const defAbs = path.join(__dirname, '..', defRel);
-  if (fs.existsSync(defAbs)) return '/' + defRel.replace(/\\/g, '/');
-  // As a last resort, return the DEFAULT_AVATAR value
+  // Fallback to default avatar
   return DEFAULT_AVATAR;
 }
 
@@ -105,23 +93,49 @@ users.forEach(user => {
 });
 
 async function seedUsers() {
-  await mongoose.connect(MONGO_URI);
-  console.log('Connected to MongoDB');
+  console.log('📝 Seeding users...');
+  
   // Clean slate to avoid duplicates
-  await User.deleteMany({});
+  const deletedCount = await User.deleteMany({});
+  console.log(`   Cleared ${deletedCount.deletedCount} existing users`);
+  
   // Hash passwords before insertMany
   const hashedUsers = await Promise.all(users.map(async user => {
     const hashed = { ...user };
-    const salt = await bcrypt.genSalt(12);
+    const salt = await bcrypt.genSalt(10);
     hashed.password = await bcrypt.hash(user.password, salt);
     return hashed;
   }));
-  await User.insertMany(hashedUsers);
-  console.log('Users seeded successfully!');
-  await mongoose.disconnect();
+  
+  const result = await User.insertMany(hashedUsers);
+  console.log(`   ✅ Created ${result.length} users`);
+  console.log(`      - 1 Super Admin: superadmin@dfashion.com`);
+  console.log(`      - 5 Admins: admin1-5@dfashion.com`);
+  console.log(`      - 5 Vendors: vendor1-5@dfashion.com`);
+  console.log(`      - 10 Customers: customer1-10@dfashion.com`);
+  console.log(`      - 10 Influencers: influencer1-10@dfashion.com`);
+  console.log(`   🔑 Test Login: superadmin@dfashion.com / SuperAdmin123!`);
+  
+  return result;
 }
 
-seedUsers().catch(err => {
-  console.error('Seeding failed:', err);
-  process.exit(1);
-});
+// Export for master seeder
+module.exports = seedUsers;
+
+// Allow direct execution
+if (require.main === module) {
+  (async () => {
+    try {
+      await mongoose.connect(MONGO_URI);
+      console.log('Connected to MongoDB');
+      await seedUsers();
+      console.log('Users seeded successfully!');
+      await mongoose.disconnect();
+      process.exit(0);
+    } catch (err) {
+      console.error('Seeding failed:', err);
+      process.exit(1);
+    }
+  })();
+}
+

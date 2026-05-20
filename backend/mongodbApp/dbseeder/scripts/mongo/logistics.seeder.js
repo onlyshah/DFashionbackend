@@ -4,10 +4,10 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const Courier = require('../models/Courier');
-const Shipment = require('../models/Shipment');
-const ShippingCharge = require('../models/ShippingCharge');
-const Order = require('../models/Order');
+const Courier = require('../../../models/Courier');
+const Shipment = require('../../../models/Shipment');
+const ShippingCharge = require('../../../models/ShippingCharge');
+const Order = require('../../../models/Order');
 
 const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
 if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
@@ -218,3 +218,4 @@ async function seedLogistics() {
 }
 
 seedLogistics();
+

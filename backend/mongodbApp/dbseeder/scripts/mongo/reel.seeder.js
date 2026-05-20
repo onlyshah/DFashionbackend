@@ -3,9 +3,9 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const Reel = require('../models/Reel');
-const User = require('../models/User');
-const Product = require('../models/Product');
+const Reel = require('../../../models/Reel');
+const User = require('../../../models/User');
+const Product = require('../../../models/Product');
 const fs = require('fs');
 const path = require('path');
 
@@ -65,3 +65,4 @@ seedReels().catch(err => {
   console.error('Seeding failed:', err);
   process.exit(1);
 });
+

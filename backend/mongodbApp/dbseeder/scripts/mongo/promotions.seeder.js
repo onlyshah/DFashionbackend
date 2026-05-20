@@ -4,11 +4,11 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const Coupon = require('../models/Coupon');
-const FlashSale = require('../models/FlashSale');
-const Product = require('../models/Product');
-const Category = require('../models/Category');
-const Campaign = require('../models/Campaign');
+const Coupon = require('../../../models/Coupon');
+const FlashSale = require('../../../models/FlashSale');
+const Product = require('../../../models/Product');
+const Category = require('../../../models/Category');
+const Campaign = require('../../../models/Campaign');
 
 const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
 if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
@@ -157,3 +157,4 @@ async function seedPromotions() {
 }
 
 seedPromotions();
+

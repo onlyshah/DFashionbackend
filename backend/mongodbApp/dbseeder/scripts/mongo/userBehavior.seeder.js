@@ -3,8 +3,8 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const UserBehavior = require('../models/UserBehavior');
-const User = require('../models/User');
+const UserBehavior = require('../../../models/UserBehavior');
+const User = require('../../../models/User');
 
 const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
 if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
@@ -67,3 +67,4 @@ seedUserBehaviors().catch(err => {
   console.error('Seeding failed:', err);
   process.exit(1);
 });
+

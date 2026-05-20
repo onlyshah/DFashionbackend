@@ -1,8 +1,8 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
-const Role = require('../models/Role');
-const Permission = require('../models/Permission');
-const RolePermission = require('../models/RolePermission');
+const Role = require('../../../models/Role');
+const Permission = require('../../../models/Permission');
+const RolePermission = require('../../../models/RolePermission');
 
 const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
 if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
@@ -70,3 +70,4 @@ async function seed() {
 }
 
 seed().catch(console.error);
+

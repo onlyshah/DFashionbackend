@@ -6,9 +6,9 @@ require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const mongoose = require('mongoose');
-const Page = require('../models/Page');
-const Banner = require('../models/Banner');
-const FAQ = require('../models/FAQ');
+const Page = require('../../../models/Page');
+const Banner = require('../../../models/Banner');
+const FAQ = require('../../../models/FAQ');
 
 const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
 if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
@@ -205,3 +205,4 @@ async function seedCMS() {
 }
 
 seedCMS();
+

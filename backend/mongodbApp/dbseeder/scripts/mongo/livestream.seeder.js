@@ -1,8 +1,8 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
-const LiveStream = require('../models/LiveStream');
-const User = require('../models/User');
-const Product = require('../models/Product');
+const LiveStream = require('../../../models/LiveStream');
+const User = require('../../../models/User');
+const Product = require('../../../models/Product');
 
 const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
 if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
@@ -109,3 +109,4 @@ const liveStreamSeeder = async () => {
 };
 
 module.exports = liveStreamSeeder;
+

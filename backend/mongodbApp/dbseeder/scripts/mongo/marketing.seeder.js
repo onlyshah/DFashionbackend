@@ -1,10 +1,10 @@
 require('dotenv').config();
 const mongoose = require('mongoose');
-const Campaign = require('../models/Campaign');
-const Coupon = require('../models/Coupon');
-const FlashSale = require('../models/FlashSale');
-const User = require('../models/User');
-const Product = require('../models/Product');
+const Campaign = require('../../../models/Campaign');
+const Coupon = require('../../../models/Coupon');
+const FlashSale = require('../../../models/FlashSale');
+const User = require('../../../models/User');
+const Product = require('../../../models/Product');
 
 const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
 if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
@@ -203,3 +203,4 @@ const marketingSeeder = async () => {
 };
 
 module.exports = marketingSeeder;
+

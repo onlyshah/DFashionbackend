@@ -1,8 +1,8 @@
 // Seeder for SearchSuggestion collection
 require('dotenv').config();
 const mongoose = require('mongoose');
-const { SearchSuggestion } = require('../models/SearchHistory');
-const Product = require('../models/Product');
+const { SearchSuggestion } = require('../../../models/SearchHistory');
+const Product = require('../../../models/Product');
 
 const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
 if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
@@ -40,3 +40,4 @@ seedSearchSuggestions().catch(err => {
   console.error('Seeding failed:', err);
   process.exit(1);
 });
+

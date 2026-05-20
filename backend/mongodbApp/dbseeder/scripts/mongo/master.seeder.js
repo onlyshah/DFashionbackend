@@ -1,27 +1,17 @@
-// Master Seeder Script
-// Usage: node scripts/master.seeder.js
-// Routes to appropriate seeder based on DB_MODE
-// DB_MODE values: postgres | mongo | both
+#!/usr/bin/env node
+/**
+ * 🌱 MongoDB Master Seeder - Simplified Version
+ * Direct execution of MongoDB seeders from scripts/mongo directory
+ * No complex routing, no server dependency loading
+ */
 
 require('dotenv').config();
-const { execSync } = require('child_process');
+const mongoose = require('mongoose');
 const path = require('path');
+const fs = require('fs');
 
-// DATABASE MODE: postgres | mongo | both
-const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
-const VALID_MODES = ['postgres', 'mongo', 'both'];
-if (!VALID_MODES.includes(DB_MODE)) {
-  console.error(`❌ Invalid DB_MODE: "${DB_MODE}". Must be one of: ${VALID_MODES.join(', ')}`);
-  process.exit(1);
-}
-
-const runPostgres = DB_MODE === 'postgres' || DB_MODE === 'both';
-const runMongo = DB_MODE === 'mongo' || DB_MODE === 'both';
-const DRY_RUN = (process.env.MASTER_DRY_RUN || '').toLowerCase() === '1' || (process.env.MASTER_DRY_RUN || '').toLowerCase() === 'true';
-const AUTO_DETECT = (process.env.MASTER_AUTO_DETECT || '').toLowerCase() === '1' || (process.env.MASTER_AUTO_DETECT || '').toLowerCase() === 'true';
-
-// PostgreSQL Master Seeder (handles all Postgres tables)
-const postgresSeeder = 'PostgreMaster.js';
+// Configuration
+const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/dfashion';
 
 // MongoDB seeders (Mongoose-based)
 const mongooseSeedersList = [
@@ -368,3 +358,4 @@ const runSeeders = async () => {
     process.exit(1);
   }
 })();
+

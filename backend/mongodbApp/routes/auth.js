@@ -31,9 +31,7 @@ const verifyToken = async (req, res, next) => {
     const token = req.headers.authorization?.split(' ')[1];
     if (!token) return res.status(401).json({ success: false, message: 'No token provided' });
     const decoded = jwt.verify(token, JWT_SECRET);
-    const user = await controller.getUserById(decoded.userId);
-    if (!user || (user.isActive !== undefined && !user.isActive)) return res.status(401).json({ success: false, message: 'Invalid or inactive user' });
-    req.user = user;
+    req.user = decoded;
     next();
   } catch (err) {
     return res.status(401).json({ success: false, message: 'Invalid or expired token' });

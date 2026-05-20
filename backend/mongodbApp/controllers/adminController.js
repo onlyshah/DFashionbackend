@@ -1,43 +1,59 @@
-/**
- * Admin Controller - Stub for routing
- */
+﻿const mongoose = require('mongoose');
+const User = require('../models/User');
+const Order = require('../models/Order');
+const Product = require('../models/Product');
 
-const mockHandler = async (req, res) => {
-  res.json({ success: true, message: 'Admin endpoint', data: {} });
+// MongoDB/Mongoose Implementation
+
+exports.getDashboardStatsFromDB = async (req, res) => {
+  try {
+    const totalUsers = await User.countDocuments();
+    const totalOrders = await Order.countDocuments();
+    const totalProducts = await Product.countDocuments();
+    
+    res.status(200).json({ 
+      success: true,
+      data: {
+        totalUsers,
+        totalOrders,
+        totalProducts,
+        stats: {}
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 };
 
-// Dashboard
-exports.getDashboardStatsFromDB = mockHandler;
-exports.getMetrics = mockHandler;
+exports.getDashboard = async (req, res) => {
+  try {
+    res.status(200).json({ message: 'getDashboard called', data: [] });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
-// Generic handlers
-exports.getAll = mockHandler;
-exports.getById = mockHandler;
-exports.create = mockHandler;
-exports.update = mockHandler;
-exports.delete = mockHandler;
+exports.getStats = async (req, res) => {
+  try {
+    res.status(200).json({ message: 'getStats called', data: [] });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
-// Categories
-exports.getAllCategories = mockHandler;
-exports.getCategoryById = mockHandler;
-exports.createCategory = mockHandler;
-exports.updateCategory = mockHandler;
-exports.deleteCategory = mockHandler;
+exports.getUsers = async (req, res) => {
+  try {
+    res.status(200).json({ message: 'getUsers called', data: [] });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
-// Products
-exports.getAllProducts = mockHandler;
-exports.getProductById = mockHandler;
-exports.createProduct = mockHandler;
-exports.updateProduct = mockHandler;
-exports.deleteProduct = mockHandler;
+exports.getOrders = async (req, res) => {
+  try {
+    res.status(200).json({ message: 'getOrders called', data: [] });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
 
-// Users
-exports.getAllUsers = mockHandler;
-exports.getUserById = mockHandler;
-exports.updateUser = mockHandler;
-exports.deleteUser = mockHandler;
-
-// Orders
-exports.getAllOrders = mockHandler;
-exports.getOrderById = mockHandler;
-exports.updateOrderStatus = mockHandler;

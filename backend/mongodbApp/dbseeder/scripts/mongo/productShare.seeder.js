@@ -1,7 +1,7 @@
 // Product Share Seeder Script
 require('dotenv').config();
 const mongoose = require('mongoose');
-const ProductShare = require('../models/ProductShare');
+const ProductShare = require('../../../models/ProductShare');
 
 const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
 if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
@@ -78,3 +78,4 @@ seedProductShares().catch(err => {
   console.error('Seeding failed:', err);
   process.exit(1);
 });
+

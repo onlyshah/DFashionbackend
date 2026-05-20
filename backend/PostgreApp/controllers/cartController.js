@@ -605,8 +605,81 @@ exports.getCartItemCount = exports.getCartCount;
  */
 exports.getCartByVendors = async (req, res) => {
   try {
-    // TODO: Group cart items by vendor
-    return ApiResponse.success(res, {}, 'Cart by vendors retrieved');
+    const userId = req.user?.id;
+    const { sequelize } = require('../models');
+    const hasProductImagesTable = await hasTable(sequelize, 'product_images');
+
+    // Get cart and group items by vendor
+    const cartItems = await sequelize.query(
+      `SELECT ci.id, ci.quantity, ci.price, ci.product_id,
+              ci.selected_color, ci.selected_size,
+              p.id as product_id, p.name, p.price as product_price, p.vendor_id,
+              v.name as vendor_name, v.id as vendor_id,
+              ${buildImagesSelectClause(hasProductImagesTable)}
+       FROM cart_items ci
+       INNER JOIN carts c ON ci.cart_id = c.id
+       LEFT JOIN products p ON ci.product_id = p.id
+       LEFT JOIN vendors v ON p.vendor_id = v.id
+       WHERE c.user_id = :userId
+       ORDER BY v.id`,
+      { replacements: { userId }, type: sequelize.QueryTypes.SELECT }
+    );
+
+    if (!cartItems || cartItems.length === 0) {
+      return ApiResponse.success(res, {
+        vendors: [],
+        summary: { vendorCount: 0, itemCount: 0, subtotal: 0 }
+      }, 'Cart is empty');
+    }
+
+    // Group items by vendor
+    const vendorMap = {};
+    let totalSubtotal = 0;
+
+    cartItems.forEach(item => {
+      const vendorId = item.vendor_id || 'default';
+      if (!vendorMap[vendorId]) {
+        vendorMap[vendorId] = {
+          vendorId,
+          vendorName: item.vendor_name || 'Unknown Vendor',
+          items: [],
+          subtotal: 0
+        };
+      }
+
+      const itemSubtotal = (item.product_price || item.price) * item.quantity;
+      vendorMap[vendorId].items.push({
+        id: item.id,
+        product: {
+          id: item.product_id,
+          name: item.name,
+          price: item.product_price,
+          images: item.images
+        },
+        quantity: item.quantity,
+        price: item.product_price || item.price,
+        selectedColor: item.selected_color,
+        selectedSize: item.selected_size,
+        subtotal: itemSubtotal
+      });
+
+      vendorMap[vendorId].subtotal += itemSubtotal;
+      totalSubtotal += itemSubtotal;
+    });
+
+    const vendors = Object.values(vendorMap);
+
+    return ApiResponse.success(res, {
+      vendors: vendors,
+      summary: {
+        vendorCount: vendors.length,
+        itemCount: cartItems.length,
+        subtotal: parseFloat(totalSubtotal.toFixed(2)),
+        taxAmount: parseFloat((totalSubtotal * TAX_RATE).toFixed(2)),
+        shippingCost: totalSubtotal > FREE_SHIPPING_THRESHOLD ? 0 : STANDARD_SHIPPING,
+        totalAmount: parseFloat((totalSubtotal + (totalSubtotal * TAX_RATE) + (totalSubtotal > FREE_SHIPPING_THRESHOLD ? 0 : STANDARD_SHIPPING)).toFixed(2))
+      }
+    }, 'Cart grouped by vendors');
   } catch (error) {
     console.error('[CartController-Postgres] getCartByVendors error:', error);
     return ApiResponse.serverError(res, error);
@@ -618,8 +691,79 @@ exports.getCartByVendors = async (req, res) => {
  */
 exports.moveToWishlist = async (req, res) => {
   try {
-    // TODO: Move cart item to wishlist
-    return ApiResponse.success(res, {}, 'Item moved to wishlist');
+    const { itemId, cartItemId } = req.params;
+    const { productId } = req.body;
+    const userId = req.user?.id;
+
+    const itemToMove = itemId || cartItemId;
+
+    if (!itemToMove && !productId) {
+      return ApiResponse.error(res, 'Item ID or product ID is required', 400);
+    }
+
+    const { sequelize } = require('../models');
+    const Wishlist = require('../models').Wishlist;
+
+    // Get cart item
+    let product;
+    if (itemToMove) {
+      const cartItemResult = await sequelize.query(
+        `SELECT ci.product_id, c.id as cart_id
+         FROM cart_items ci
+         INNER JOIN carts c ON ci.cart_id = c.id
+         WHERE ci.id = :itemId AND c.user_id = :userId`,
+        { replacements: { itemId: itemToMove, userId }, type: sequelize.QueryTypes.SELECT }
+      );
+
+      if (!cartItemResult.length) {
+        return ApiResponse.notFound(res, 'Cart item', 'CART_ITEM_NOT_FOUND');
+      }
+
+      product = cartItemResult[0];
+
+      // Delete from cart
+      await sequelize.query(
+        'DELETE FROM cart_items WHERE id = :itemId',
+        { replacements: { itemId: itemToMove } }
+      );
+    } else {
+      product = { product_id: productId };
+
+      // Delete from cart by product ID
+      const cartItemResult = await sequelize.query(
+        `SELECT ci.id FROM cart_items ci
+         INNER JOIN carts c ON ci.cart_id = c.id
+         WHERE ci.product_id = :productId AND c.user_id = :userId`,
+        { replacements: { productId, userId }, type: sequelize.QueryTypes.SELECT }
+      );
+
+      if (cartItemResult.length > 0) {
+        await sequelize.query(
+          'DELETE FROM cart_items WHERE id IN (:ids)',
+          { replacements: { ids: cartItemResult.map(r => r.id) } }
+        );
+      }
+    }
+
+    // Add to wishlist
+    if (Wishlist && Wishlist._model) {
+      const existing = await Wishlist._model.findOne({
+        where: { userId, productId: product.product_id }
+      });
+
+      if (!existing) {
+        await Wishlist._model.create({
+          userId,
+          productId: product.product_id,
+          addedAt: new Date()
+        });
+      }
+    }
+
+    return ApiResponse.success(res, {
+      message: 'Item moved to wishlist',
+      productId: product.product_id
+    }, 'Item successfully moved to wishlist');
   } catch (error) {
     console.error('[CartController-Postgres] moveToWishlist error:', error);
     return ApiResponse.serverError(res, error);
@@ -631,8 +775,67 @@ exports.moveToWishlist = async (req, res) => {
  */
 exports.recalculateCart = async (req, res) => {
   try {
-    // TODO: Recalculate cart totals and discounts
-    return ApiResponse.success(res, {}, 'Cart recalculated');
+    const userId = req.user?.id;
+    const { appliedCoupon, discountPercentage } = req.body;
+
+    const { sequelize } = require('../models');
+
+    // Get cart items
+    const cartItems = await sequelize.query(
+      `SELECT ci.id, ci.quantity, ci.price, ci.product_id,
+              p.price as product_price, p.discount_percentage
+       FROM cart_items ci
+       INNER JOIN carts c ON ci.cart_id = c.id
+       LEFT JOIN products p ON ci.product_id = p.id
+       WHERE c.user_id = :userId`,
+      { replacements: { userId }, type: sequelize.QueryTypes.SELECT }
+    );
+
+    if (!cartItems || cartItems.length === 0) {
+      return ApiResponse.success(res, {
+        summary: {
+          itemCount: 0,
+          subtotal: 0,
+          discount: 0,
+          taxAmount: 0,
+          shippingCost: STANDARD_SHIPPING,
+          totalAmount: STANDARD_SHIPPING
+        }
+      }, 'Cart is empty');
+    }
+
+    // Calculate subtotal
+    let subtotal = 0;
+    cartItems.forEach(item => {
+      const price = item.product_price || item.price;
+      const itemDiscount = item.discount_percentage ? (price * item.discount_percentage / 100) : 0;
+      subtotal += (price - itemDiscount) * item.quantity;
+    });
+
+    // Apply coupon discount if provided
+    let discountAmount = 0;
+    if (appliedCoupon) {
+      if (discountPercentage) {
+        discountAmount = subtotal * (discountPercentage / 100);
+      }
+    }
+
+    const finalSubtotal = subtotal - discountAmount;
+    const taxAmount = finalSubtotal * TAX_RATE;
+    const shippingCost = finalSubtotal > FREE_SHIPPING_THRESHOLD ? 0 : STANDARD_SHIPPING;
+    const totalAmount = finalSubtotal + taxAmount + shippingCost;
+
+    return ApiResponse.success(res, {
+      summary: {
+        itemCount: cartItems.length,
+        subtotal: parseFloat(subtotal.toFixed(2)),
+        discount: parseFloat(discountAmount.toFixed(2)),
+        finalSubtotal: parseFloat(finalSubtotal.toFixed(2)),
+        taxAmount: parseFloat(taxAmount.toFixed(2)),
+        shippingCost: shippingCost,
+        totalAmount: parseFloat(totalAmount.toFixed(2))
+      }
+    }, 'Cart recalculated');
   } catch (error) {
     console.error('[CartController-Postgres] recalculateCart error:', error);
     return ApiResponse.serverError(res, error);
@@ -644,8 +847,56 @@ exports.recalculateCart = async (req, res) => {
  */
 exports.debugCart = async (req, res) => {
   try {
-    // TODO: Return debug information about cart
-    return ApiResponse.success(res, {}, 'Cart debug info');
+    const userId = req.user?.id;
+    const { sequelize } = require('../models');
+
+    // Get cart info
+    const cart = await sequelize.query(
+      'SELECT id, user_id, created_at FROM carts WHERE user_id = :userId',
+      { replacements: { userId }, type: sequelize.QueryTypes.SELECT }
+    );
+
+    if (!cart.length) {
+      return ApiResponse.success(res, {
+        debug: {
+          cartExists: false,
+          cartId: null,
+          itemsCount: 0,
+          tables: {}
+        }
+      }, 'Cart debug info');
+    }
+
+    // Get items count
+    const itemsCount = await sequelize.query(
+      'SELECT COUNT(*)::int as count FROM cart_items WHERE cart_id = :cartId',
+      { replacements: { cartId: cart[0].id }, type: sequelize.QueryTypes.SELECT }
+    );
+
+    // Check table existence
+    const hasCartItemsTable = await hasTable(sequelize, 'cart_items');
+    const hasProductsTable = await hasTable(sequelize, 'products');
+    const hasWishlistsTable = await hasTable(sequelize, 'wishlists');
+
+    return ApiResponse.success(res, {
+      debug: {
+        cartExists: true,
+        cartId: cart[0].id,
+        userId: cart[0].user_id,
+        itemsCount: itemsCount[0]?.count || 0,
+        createdAt: cart[0].created_at,
+        tables: {
+          cartItems: hasCartItemsTable,
+          products: hasProductsTable,
+          wishlists: hasWishlistsTable
+        },
+        environment: {
+          taxRate: TAX_RATE,
+          freeShippingThreshold: FREE_SHIPPING_THRESHOLD,
+          standardShipping: STANDARD_SHIPPING
+        }
+      }
+    }, 'Cart debug information');
   } catch (error) {
     console.error('[CartController-Postgres] debugCart error:', error);
     return ApiResponse.serverError(res, error);

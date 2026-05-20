@@ -3,9 +3,9 @@
 
 require('dotenv').config();
 const mongoose = require('mongoose');
-const Role = require('../models/Role');
-const Module = require('../models/Module');
-const User = require('../models/User');
+const Role = require('../../../models/Role');
+const Module = require('../../../models/Module');
+const User = require('../../../models/User');
 
 const DB_MODE = (process.env.DB_MODE || 'postgres').toLowerCase().trim();
 if (DB_MODE !== 'mongo' && DB_MODE !== 'both') {
@@ -52,3 +52,4 @@ seedRoles().catch(err => {
   console.error('Seeding failed:', err);
   process.exit(1);
 });
+

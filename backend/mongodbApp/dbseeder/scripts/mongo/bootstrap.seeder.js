@@ -77,3 +77,4 @@ seedBootstrapData().catch(err => {
   console.error('Bootstrap seeding failed:', err);
   process.exit(1);
 });
+
